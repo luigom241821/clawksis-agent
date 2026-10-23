@@ -82,6 +82,14 @@ python tools/upstream/resolve_side.py --prefer theirs --respect-fork-deletions \
   solo en contextos de HOME (`Path.home() / ".hermes"`, `$HOME/.hermes`,
   `join(homedir(), '.hermes')`, `/root/.hermes`...); la config local de un
   proyecto (`<repo>/.clawk/`, `.clawk.md`) queda como `.clawk`.
+  Tambien con subruta (`home / ".hermes/logs"`) y en el filtro del PATH
+  (`os.get_exec_path() ... ".hermes" not in Path(p).parts`); `HOME_DIR_FILES`
+  lista archivos donde todo `.hermes` es el HOME (la regla HX001 de code health).
+- Headers HTTP: `x-hermes-foo` -> `x-clawksis-foo` (como `X-Hermes-Foo` ->
+  `X-Clawksis-Foo`; los nombres de header no distinguen mayusculas).
+- Wake words de photon/bluebubbles: `@?hermes\b` -> `@?clawk(?:sis)?\b`.
+- `VERBATIM` en `sync.py`: datos de un archivo puntual que no se rebrandean
+  (vectores SigV4 de `test_release_r2.py`, URLs de `test_release_tags.py`).
 - Simbolo de marca: `⚕`/`☤` -> `∇`.
 - Modulos-libreria de Nous (`clawk_cli/*nous*.py`, `agent/nous_*.py`,
   `agent/billing_usage.py`, `clawk_cli/cli_billing_mixin.py`): se sincronizan

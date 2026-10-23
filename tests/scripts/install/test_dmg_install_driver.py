@@ -12,17 +12,20 @@ DRIVER = Path(__file__).resolve().parents[2] / "install/e2e-assets/drive-dmg-ins
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("missing,expected", [
-    ("", True),
-    ("legacy", True),
-    ("checkout", False),
-    ("launcher", False),
-    ("app", False),
-    ("completion", False),
-    ("historical", True),
-    ("marker-only", False),
-    ("wrong-root-log", False),
-])
+@pytest.mark.parametrize(
+    "missing,expected",
+    [
+        ("", True),
+        ("legacy", True),
+        ("checkout", False),
+        ("launcher", False),
+        ("app", False),
+        ("completion", False),
+        ("historical", True),
+        ("marker-only", False),
+        ("wrong-root-log", False),
+    ],
+)
 def test_dmg_driver_requires_complete_pm_source_install(tmp_path, missing, expected):
     root = tmp_path / "installed source"
     root.mkdir()
@@ -63,18 +66,32 @@ def test_dmg_driver_requires_complete_pm_source_install(tmp_path, missing, expec
     home = tmp_path / "home"
     home.mkdir()
     if missing not in {"completion", "marker-only"}:
-        logs = home / ".clawk/logs"
+        logs = home / ".clawksis/logs"
         logs.mkdir(parents=True)
-        logged_root = tmp_path / "other-install" if missing == "wrong-root-log" else root
+        logged_root = (
+            tmp_path / "other-install" if missing == "wrong-root-log" else root
+        )
         (logs / "bootstrap-installer.log").write_text(
             f"INFO clawk_bootstrap_lib::bootstrap: bootstrap complete install_root={logged_root}\n",
             encoding="utf-8",
         )
     result = subprocess.run(
-        ["bash", str(DRIVER), "--app-bin", str(app_bin), "--install-dir", str(root),
-         "--install-timeout-secs", "2", "--proof-dir", str(tmp_path / "proof")],
+        [
+            "bash",
+            str(DRIVER),
+            "--app-bin",
+            str(app_bin),
+            "--install-dir",
+            str(root),
+            "--install-timeout-secs",
+            "2",
+            "--proof-dir",
+            str(tmp_path / "proof"),
+        ],
         env=dict(os.environ, HOME=str(home), PATH=f"{mocks}:{os.environ['PATH']}"),
-        capture_output=True, text=True, timeout=15,
+        capture_output=True,
+        text=True,
+        timeout=15,
         check=False,
     )
     assert (result.returncode == 0) is expected, result.stdout + result.stderr

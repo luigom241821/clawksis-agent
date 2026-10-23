@@ -1022,7 +1022,7 @@ function isHttpUrl(value) {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (!tokenOk(req.headers["x-clawk-sidecar-token"])) {
+  if (!tokenOk(req.headers["x-clawksis-sidecar-token"])) {
     return unauthorized(res);
   }
   // Long-lived inbound NDJSON stream.

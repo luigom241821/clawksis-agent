@@ -26,7 +26,9 @@ def test_every_stable_selector_rejects_legacy_calver_tags():
         assert not _valid_tag(tag, "stable")
         with pytest.raises(DockerReleaseError):
             require_stable_tag(tag)
-    assert _valid_tag("v1.0.0", "stable") and require_stable_tag("v999.0.0") == "v999.0.0"
+    assert (
+        _valid_tag("v1.0.0", "stable") and require_stable_tag("v999.0.0") == "v999.0.0"
+    )
     with pytest.raises(ValueError):
         compare("1.0.0", "2026.9.21")
 
@@ -35,52 +37,75 @@ def test_every_stable_selector_rejects_legacy_calver_tags():
 def release_repo(tmp_path, monkeypatch):
     from tests.scripts.test_release_build_commit import git
 
-    monkeypatch.setenv('GIT_CONFIG_GLOBAL', str(tmp_path / 'absent-config'))
-    monkeypatch.setenv('GIT_CONFIG_NOSYSTEM', '1')
-    git(tmp_path, 'init', '-q', '-b', 'main')
-    git(tmp_path, 'config', 'user.name', 'Fixture')
-    git(tmp_path, 'config', 'user.email', 'fixture@example.invalid')
-    git(tmp_path, 'commit', '--allow-empty', '-qm', 'fixture')
-    monkeypatch.setattr(release, 'REPO_ROOT', tmp_path)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "absent-config"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Fixture")
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git(tmp_path, "commit", "--allow-empty", "-qm", "fixture")
+    monkeypatch.setattr(release, "REPO_ROOT", tmp_path)
     return lambda *args: git(tmp_path, *args)
 
 
 def test_canary_tag_order_and_remote_selection(release_repo):
     git = release_repo
     assert release.get_last_canary_tag() is None
-    for tag in ('v2026.7.7', 'v2026.7.20'):
-        git('tag', tag)
-    for tag in ('v0.9.0', 'v0.20.0', 'v0.19.0', 'v0.20.0+canary.20260818T090000Z',
-                'v0.20.0+canary.20260818T171500Z'):
-        git('tag', tag)
-    assert release.get_last_canary_tag() == 'v0.20.0+canary.20260818T171500Z'
-    with pytest.raises(SystemExit, match='no git remotes'):
+    for tag in ("v2026.7.7", "v2026.7.20"):
+        git("tag", tag)
+    for tag in (
+        "v0.9.0",
+        "v0.20.0",
+        "v0.19.0",
+        "v0.20.0+canary.20260818T090000Z",
+        "v0.20.0+canary.20260818T171500Z",
+    ):
+        git("tag", tag)
+    assert release.get_last_canary_tag() == "v0.20.0+canary.20260818T171500Z"
+    with pytest.raises(SystemExit, match="no git remotes"):
         release.resolve_push_remote(None)
-    git('remote', 'add', 'origin', 'https://github.com/o/r')
-    assert release.resolve_push_remote(None) == 'origin'
-    git('remote', 'add', 'fork', 'https://github.com/f/r')
-    with pytest.raises(SystemExit, match='pass --remote'):
+    git("remote", "add", "origin", "https://github.com/o/r")
+    assert release.resolve_push_remote(None) == "origin"
+    git("remote", "add", "fork", "https://github.com/f/r")
+    with pytest.raises(SystemExit, match="pass --remote"):
         release.resolve_push_remote(None)
-    assert release.resolve_push_remote('fork') == 'fork'
-    with pytest.raises(SystemExit, match='not configured'):
-        release.resolve_push_remote('upstream')
+    assert release.resolve_push_remote("fork") == "fork"
+    with pytest.raises(SystemExit, match="not configured"):
+        release.resolve_push_remote("upstream")
 
 
 def test_github_repo_parsed_from_ssh_and_https_urls(tmp_path, release_repo):
     urls = {
         "fork": "git@github.com:ethernet8023/clawksis-agent.git",
-        "origin": "https://github.com/samuelgradientai-sys/clawksis-agent",
+        "origin": "https://github.com/NousResearch/hermes-agent",
         "gitlab": "git@gitlab.com:someone/elsewhere.git",
     }
     for name, url in urls.items():
-        subprocess.run(['git', 'config', f'remote.{name}.url', url], cwd=tmp_path, check=True)
+        subprocess.run(
+            ["git", "config", f"remote.{name}.url", url], cwd=tmp_path, check=True
+        )
 
     assert release.remote_github_repo("fork") == "ethernet8023/clawksis-agent"
-    assert release.remote_github_repo("origin") == "samuelgradientai-sys/clawksis-agent"
+    assert release.remote_github_repo("origin") == "NousResearch/hermes-agent"
     assert release.remote_github_repo("gitlab") is None
-    subprocess.run(['git', 'config', 'url.https://github.com/fork/.pushInsteadOf',
-                    'https://github.com/NousResearch/'], cwd=tmp_path, check=True)
-    assert release.remote_github_repo('origin') == 'fork/clawksis-agent'
-    subprocess.run(['git', 'config', 'remote.origin.pushurl', 'ssh://git@github.com:22/other/repo.git'],
-                   cwd=tmp_path, check=True)
-    assert release.remote_github_repo('origin') == 'other/repo'
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "url.https://github.com/fork/.pushInsteadOf",
+            "https://github.com/NousResearch/",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert release.remote_github_repo("origin") == "fork/hermes-agent"
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "remote.origin.pushurl",
+            "ssh://git@github.com:22/other/repo.git",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert release.remote_github_repo("origin") == "other/repo"

@@ -108,7 +108,7 @@ def test_correlation_ids_go_only_with_send_consent(send):
     )
     assert first["x-request-id"] != second["x-request-id"]  # one id per HTTP attempt
     assert not any(
-        k.startswith("x-clawk-") for k in first
+        k.startswith("x-clawksis-") for k in first
     )  # the gateway strips only x-nous-
 
 

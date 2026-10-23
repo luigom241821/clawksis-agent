@@ -174,12 +174,14 @@ def _ratchet_repo(tmp_path: Path, switch: str | None = None) -> tuple[Path, str]
                 '"id": "P05",', '"id": "P05",\n      "path_regex": "^nowhere/",'
             ),
         ),
-        # the engine itself, edited to exempt pkg/ from PS-P05
+        # the engine itself, edited to exempt pkg/ from PS-P05 (whitespace-agnostic: the
+        # fork ruff-formats config.py one argument per line)
         (
             "scripts/code_health/config.py",
-            lambda t: t.replace(
-                'exclude=SINGLE_PROFILE, blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"',
-                'exclude=SINGLE_PROFILE + ("pkg/*",), blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"',
+            lambda t: re.sub(
+                r'exclude=SINGLE_PROFILE(,\s*blocking=WARN_UNTIL_REPLAYED,\s*pattern_id="P05")',
+                r'exclude=SINGLE_PROFILE + ("pkg/*",)\1',
+                t,
             ),
         ),
     ],

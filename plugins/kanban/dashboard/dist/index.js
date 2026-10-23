@@ -283,7 +283,7 @@
   }
 
   const API = "/api/plugins/kanban";
-  const MIME_TASK = "text/x-clawk-task";
+  const MIME_TASK = "text/x-clawksis-task";
 
   // Docs link — surfaced as a `?` icon next to the board switcher and as
   // `title=` hints on unlabelled controls. Kept in one place so rebrands or

@@ -178,6 +178,13 @@ _HOME_CTX = [
     r"(Path\.home\(\)\s*/\s*)([\"']){old}\2",
     # <algo>home<algo> / ".hermes"  (fake_home, tmp_home, home, real_home ...)
     r"(\b\w*[Hh][Oo][Mm][Ee]\w*\)?\s*/\s*)([\"']){old}\2",
+    # Lo mismo con subruta en el literal: Path.home() / ".hermes/profiles",
+    # home / ".hermes/logs" (la comilla va en el grupo 1: no se cierra tras el nombre).
+    r"(Path\.home\(\)\s*/\s*[\"'])(){old}(?=/)",
+    r"(\b\w*[Hh][Oo][Mm][Ee]\w*\)?\s*/\s*[\"'])(){old}(?=/)",
+    # Filtro de entradas del PATH: `for p in os.get_exec_path() if ".hermes" not in
+    # Path(p).parts` saca el store de herramientas de PM (~/.hermes/tools/...).
+    r"(\bget_exec_path\(\)[^\n]*?)([\"']){old}\2",
     # join(homedir(), '.hermes') / join(home, ".hermes") / expanduser("~"), ".hermes"
     r"(\b\w*(?:[Hh]ome(?:[Dd]ir)?|expanduser)\w*(?:\([^()]*\))?\s*,\s*)([\"']){old}\2",
     # process.env.HOME || '~', '.hermes'
@@ -196,6 +203,45 @@ def home_fix(text: str, old: str = ".hermes", new: str = ".clawksis") -> str:
         rx = re.compile(pat.replace("{old}", esc) + r"(?![\w.-])")
         text = rx.sub(lambda m: m.group(1) + m.group(2) + new + m.group(2), text)
     return text
+
+
+# Archivos de upstream donde ``.hermes`` es SIEMPRE la carpeta HOME del usuario
+# (nunca la config local de un proyecto), aunque no aparezca en un contexto que
+# ``home_fix`` reconozca: ``.hermes`` -> ``.clawksis`` en todo el archivo.
+HOME_DIR_FILES = {
+    # HX001 (code health): detecta el HOME hardcodeado comparando la componente
+    # de ruta con ``.hermes``; en el fork el HOME es ``.clawksis``.
+    "scripts/code_health/py_rules.py",
+}
+
+# Nombres de header HTTP: el blanket rebrandea ``X-Hermes-Foo`` -> ``X-Clawksis-Foo``
+# pero ``x-hermes-foo`` -> ``x-clawk-foo``, que es OTRO header (los nombres no
+# distinguen mayusculas). Ej.: el sidecar de Photon leia ``x-clawk-sidecar-token``
+# mientras el adapter enviaba ``X-Clawksis-Sidecar-Token`` (401 en cada request).
+# Se alinea la forma en minusculas (y los MIME ``application/x-hermes-*``, de paso
+# coherentes entre si) con ``x-clawksis-``.
+_HEADER_RE = re.compile(r"(?<![\w-])([Xx]-)hermes-")
+
+# Wake words por defecto de los adapters iMessage (photon, bluebubbles):
+# ``(?<![\w@])@?hermes\b`` es el nombre del producto, que en el fork tiene dos
+# formas ("Clawksis" y el comando "clawk"); el blanket dejaba solo ``clawk``.
+_WAKE_WORD_RE = re.compile(r"(?<=@\?)hermes(?=\\[sb])")
+
+# Datos que DEBEN quedar verbatim en un archivo puntual (el rebrand los
+# corromperia): se stashean igual que los IDs de modelo. Clave = path de upstream.
+VERBATIM = {
+    # Vectores SigV4 fijados contra botocore: la firma cubre el path
+    # (/hermes-releases/HermesBundled-...), rebrandear el path invalida la firma.
+    "tests/scripts/test_release_r2.py": re.compile(
+        r"(?s)@pytest\.mark\.parametrize\('method,path,query,payload,scope,signature'"
+        r".*?\ndef test_independent_sigv4_vectors\b.*?Signature=\{signature\}'\)"
+    ),
+    # remote_github_repo con pushInsteadOf 'https://github.com/NousResearch/' -> fork/:
+    # la URL y el resultado esperado deben seguir nombrando el org reescrito.
+    "tests/scripts/test_release_tags.py": re.compile(
+        r"\b(?:NousResearch|fork)/hermes-agent\b"
+    ),
+}
 
 
 # Solo estos tipos de archivo se rebrandean en contenido (igual que rebrand.sh).
@@ -307,8 +353,14 @@ def rebrand(content: bytes, path: str) -> bytes:
         stash[key] = m.group(0)
         return key
 
+    if path in VERBATIM:
+        text = VERBATIM[path].sub(_stash, text)
     text = _MODEL_ID_RE.sub(_stash, text)
     text = home_fix(text)
+    if path in HOME_DIR_FILES:
+        text = text.replace(".hermes", ".clawksis")
+    text = _HEADER_RE.sub(r"\1clawksis-", text)
+    text = _WAKE_WORD_RE.sub("clawk(?:sis)?", text)
     for old, new in CONTENT_MAP:
         text = text.replace(old, new)
     for key, orig in stash.items():

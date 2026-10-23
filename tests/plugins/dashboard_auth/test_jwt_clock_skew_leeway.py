@@ -30,9 +30,17 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 import plugins.dashboard_auth._shared as shared
-import plugins.dashboard_auth.nous as nous_plugin
 import plugins.dashboard_auth.self_hosted as oidc_plugin
 from clawk_cli.dashboard_auth import InvalidCodeError, ProviderError
+
+try:
+    import plugins.dashboard_auth.nous as nous_plugin
+except ImportError:  # Clawksis es BYOK: el login Nous del dashboard no se distribuye
+    nous_plugin = None
+
+_NEEDS_NOUS = pytest.mark.skipif(
+    nous_plugin is None, reason="Clawksis es BYOK: sin el login Nous del dashboard"
+)
 
 _ISSUER = "https://auth.example.com/application/o/clawk"
 _CLIENT_ID = "clawksis-dashboard"
@@ -77,8 +85,19 @@ def _mint_token(
 ) -> str:
     """A minimal signed JWT whose ``iat`` is ``iat_offset`` seconds in the future."""
     now = int(time.time())
-    claims = {"iss": iss, "aud": aud, "sub": "usr_abc", "iat": now + iat_offset, "exp": now + ttl_seconds}
-    return pyjwt.encode(claims, rsa_keypair["private_pem"], algorithm="RS256", headers={"kid": rsa_keypair["kid"]})
+    claims = {
+        "iss": iss,
+        "aud": aud,
+        "sub": "usr_abc",
+        "iat": now + iat_offset,
+        "exp": now + ttl_seconds,
+    }
+    return pyjwt.encode(
+        claims,
+        rsa_keypair["private_pem"],
+        algorithm="RS256",
+        headers={"kid": rsa_keypair["kid"]},
+    )
 
 
 def _self_hosted_provider(rsa_keypair, *, leeway: float | None = None) -> Any:
@@ -114,22 +133,34 @@ class TestDefaultLeewayAbsorbsClockSkew:
     SKEW = 30  # seconds of issuer-ahead skew, well inside the 60s default
 
     def test_shared_verify_jwt(self, rsa_keypair):
-        token = _mint_token(rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.SKEW)
+        token = _mint_token(
+            rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.SKEW
+        )
         claims = shared.verify_jwt(
-            token, _fake_jwks_client(rsa_keypair), algorithms=["RS256"],
-            audience=_CLIENT_ID, issuer=_ISSUER, label="ID token")
+            token,
+            _fake_jwks_client(rsa_keypair),
+            algorithms=["RS256"],
+            audience=_CLIENT_ID,
+            issuer=_ISSUER,
+            label="ID token",
+        )
         assert claims["sub"] == "usr_abc"
 
     def test_self_hosted_verify_session(self, rsa_keypair):
         provider = _self_hosted_provider(rsa_keypair)
-        token = _mint_token(rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.SKEW)
+        token = _mint_token(
+            rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.SKEW
+        )
         session = provider.verify_session(access_token=token)
         assert session is not None
         assert session.user_id == "usr_abc"
 
+    @_NEEDS_NOUS
     def test_nous_verify_session(self, rsa_keypair):
         provider = _nous_provider(rsa_keypair)
-        token = _mint_token(rsa_keypair, iss=_PORTAL, aud="agent:inst123", iat_offset=self.SKEW)
+        token = _mint_token(
+            rsa_keypair, iss=_PORTAL, aud="agent:inst123", iat_offset=self.SKEW
+        )
         session = provider.verify_session(access_token=token)
         assert session is not None
         assert session.user_id == "usr_abc"
@@ -149,20 +180,32 @@ class TestImmatureSignatureClassification:
     HUGE_SKEW = 3600  # an hour ahead: far beyond any sane leeway
 
     def test_shared_verify_jwt_raises_invalid_code(self, rsa_keypair):
-        token = _mint_token(rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.HUGE_SKEW)
+        token = _mint_token(
+            rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.HUGE_SKEW
+        )
         with pytest.raises(InvalidCodeError, match="not yet valid"):
             shared.verify_jwt(
-                token, _fake_jwks_client(rsa_keypair), algorithms=["RS256"],
-                audience=_CLIENT_ID, issuer=_ISSUER, label="ID token")
+                token,
+                _fake_jwks_client(rsa_keypair),
+                algorithms=["RS256"],
+                audience=_CLIENT_ID,
+                issuer=_ISSUER,
+                label="ID token",
+            )
 
     def test_self_hosted_verify_session_returns_none(self, rsa_keypair):
         provider = _self_hosted_provider(rsa_keypair)
-        token = _mint_token(rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.HUGE_SKEW)
+        token = _mint_token(
+            rsa_keypair, iss=_ISSUER, aud=_CLIENT_ID, iat_offset=self.HUGE_SKEW
+        )
         assert provider.verify_session(access_token=token) is None
 
+    @_NEEDS_NOUS
     def test_nous_verify_session_returns_none(self, rsa_keypair):
         provider = _nous_provider(rsa_keypair)
-        token = _mint_token(rsa_keypair, iss=_PORTAL, aud="agent:inst123", iat_offset=self.HUGE_SKEW)
+        token = _mint_token(
+            rsa_keypair, iss=_PORTAL, aud="agent:inst123", iat_offset=self.HUGE_SKEW
+        )
         assert provider.verify_session(access_token=token) is None
 
 
@@ -176,7 +219,9 @@ class TestParseLeeway:
         assert shared.parse_leeway(None) == shared.DEFAULT_TOKEN_LEEWAY_SECONDS
         assert shared.parse_leeway("") == shared.DEFAULT_TOKEN_LEEWAY_SECONDS
 
-    @pytest.mark.parametrize("bad", ["not-a-number", "-5", "nan", "inf", "-inf", float("nan"), float("inf")])
+    @pytest.mark.parametrize(
+        "bad", ["not-a-number", "-5", "nan", "inf", "-inf", float("nan"), float("inf")]
+    )
     def test_invalid_fails_closed_to_zero(self, bad):
         assert shared.parse_leeway(bad) == 0.0
 
@@ -210,23 +255,41 @@ class TestSelfHostedConfig:
             monkeypatch.delenv(var, raising=False)
 
     def test_leeway_from_config_yaml(self, monkeypatch, rsa_keypair):
-        _patch_oauth_config(monkeypatch, {"self_hosted": {
-            "issuer": _ISSUER, "client_id": _CLIENT_ID, "id_token_leeway": 300}})
+        _patch_oauth_config(
+            monkeypatch,
+            {
+                "self_hosted": {
+                    "issuer": _ISSUER,
+                    "client_id": _CLIENT_ID,
+                    "id_token_leeway": 300,
+                }
+            },
+        )
         ctx = MagicMock()
         oidc_plugin.register(ctx)
         registered = ctx.register_dashboard_auth_provider.call_args.args[0]
         assert registered._id_token_leeway == 300.0
 
     def test_unset_leeway_uses_default(self, monkeypatch):
-        _patch_oauth_config(monkeypatch, {"self_hosted": {"issuer": _ISSUER, "client_id": _CLIENT_ID}})
+        _patch_oauth_config(
+            monkeypatch, {"self_hosted": {"issuer": _ISSUER, "client_id": _CLIENT_ID}}
+        )
         ctx = MagicMock()
         oidc_plugin.register(ctx)
         registered = ctx.register_dashboard_auth_provider.call_args.args[0]
         assert registered._id_token_leeway == shared.DEFAULT_TOKEN_LEEWAY_SECONDS
 
     def test_invalid_config_leeway_fails_closed(self, monkeypatch, rsa_keypair):
-        _patch_oauth_config(monkeypatch, {"self_hosted": {
-            "issuer": _ISSUER, "client_id": _CLIENT_ID, "id_token_leeway": "garbage"}})
+        _patch_oauth_config(
+            monkeypatch,
+            {
+                "self_hosted": {
+                    "issuer": _ISSUER,
+                    "client_id": _CLIENT_ID,
+                    "id_token_leeway": "garbage",
+                }
+            },
+        )
         ctx = MagicMock()
         oidc_plugin.register(ctx)
         registered = ctx.register_dashboard_auth_provider.call_args.args[0]
@@ -239,13 +302,16 @@ class TestSelfHostedConfig:
         assert provider.verify_session(access_token=token) is None
 
 
+@_NEEDS_NOUS
 class TestNousConfig:
     @pytest.fixture(autouse=True)
     def clear_env(self, monkeypatch):
         monkeypatch.delenv("CLAWK_DASHBOARD_OAUTH_CLIENT_ID", raising=False)
 
     def test_leeway_from_config_yaml(self, monkeypatch):
-        _patch_oauth_config(monkeypatch, {"client_id": "agent:inst123", "token_leeway": 120})
+        _patch_oauth_config(
+            monkeypatch, {"client_id": "agent:inst123", "token_leeway": 120}
+        )
         ctx = MagicMock()
         nous_plugin.register(ctx)
         registered = ctx.register_dashboard_auth_provider.call_args.args[0]
@@ -259,7 +325,9 @@ class TestNousConfig:
         assert registered._token_leeway == shared.DEFAULT_TOKEN_LEEWAY_SECONDS
 
     def test_invalid_config_leeway_fails_closed(self, monkeypatch):
-        _patch_oauth_config(monkeypatch, {"client_id": "agent:inst123", "token_leeway": -3})
+        _patch_oauth_config(
+            monkeypatch, {"client_id": "agent:inst123", "token_leeway": -3}
+        )
         ctx = MagicMock()
         nous_plugin.register(ctx)
         registered = ctx.register_dashboard_auth_provider.call_args.args[0]

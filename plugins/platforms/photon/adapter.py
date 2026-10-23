@@ -113,8 +113,8 @@ _RICHLINK_PREVIEW_ATTACHMENT_SUFFIX = ".pluginpayloadattachment"
 _TYPING_COOLDOWN_SECONDS = 5.0  # per chat; reduces gRPC pressure during overflow
 # Group-chat wake words — same defaults as BlueBubbles so both iMessage adapters gate alike.
 _DEFAULT_MENTION_PATTERNS = [
-    r"(?<![\w@])@?clawksis\s+agent\b[,:\-]?",
-    r"(?<![\w@])@?clawksis\b[,:\-]?",
+    r"(?<![\w@])@?clawk(?:sis)?\s+agent\b[,:\-]?",
+    r"(?<![\w@])@?clawk(?:sis)?\b[,:\-]?",
 ]
 # Shared/free-tier lines can only reply to conversations the target initiated.
 _TARGET_NOT_ALLOWED_MESSAGE = (

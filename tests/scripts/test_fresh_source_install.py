@@ -4,6 +4,7 @@ The bootstrap toolchain is prepared from this host's real Python/uv; this is
 not a zero-Python download test. PM acquires real tool archives on loopback,
 builds its unchanged runtime recipe and the tiny app, then publishes launchers.
 """
+
 import hashlib
 import json
 import os
@@ -25,7 +26,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("fault", [None, "missing-wheel", "bad-hash"])
-def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, served, fault):
+def test_current_installer_publishes_real_dependencies_and_warm_path(
+    tmp_path, served, fault
+):
     uv = shutil.which("uv")
     assert uv, "fresh-install acceptance requires real uv"
     python = Path(sys._base_executable).resolve()
@@ -37,19 +40,33 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
     arch = {"x64": "x86_64", "arm64": "aarch64"}[current_target().split("-")[1]]
     bootstrap = managed / f"cpython-{version}-linux-{arch}-gnu"
     (bootstrap / "bin").mkdir(parents=True)
-    shutil.copytree(sysconfig.get_path("stdlib"), bootstrap / f"lib/python{minor}",
-                    ignore=shutil.ignore_patterns("site-packages", "__pycache__"))
+    shutil.copytree(
+        sysconfig.get_path("stdlib"),
+        bootstrap / f"lib/python{minor}",
+        ignore=shutil.ignore_patterns("site-packages", "__pycache__"),
+    )
     for path in bootstrap.rglob("*"):
         path.chmod(0o755 if path.is_dir() else 0o644)
     shutil.copy2(python, bootstrap / f"bin/python{minor}")
     (bootstrap / "bin/python3").symlink_to(f"python{minor}")
-    env = {"PATH": os.environ["PATH"], "HOME": str(home), "LANG": "C.UTF-8",
-           "CLAWK_HOME": str(home / ".clawksis"), "UV_PYTHON_INSTALL_DIR": str(managed),
-           "UV_PYTHON_DOWNLOADS": "never", "UV_CACHE_DIR": str(tmp_path / "cache")}
+    env = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(home),
+        "LANG": "C.UTF-8",
+        "CLAWK_HOME": str(home / ".clawksis"),
+        "UV_PYTHON_INSTALL_DIR": str(managed),
+        "UV_PYTHON_DOWNLOADS": "never",
+        "UV_CACHE_DIR": str(tmp_path / "cache"),
+    }
+    # Clawksis: a full install also adds the Claude Code / Codex CLIs through npm
+    # (install_agent_clis, best effort); opt out so the npm canary guards the rest.
+    env["SKIP_THIRDPARTY_CLIS"] = "true"
     canary = tmp_path / "ambient-bin"
     canary.mkdir()
     npm_called = tmp_path / "npm-called"
-    (canary / "npm").write_text(f'#!/bin/sh\nprintf called > "{npm_called}"\nexit 99\n', encoding="utf-8")
+    (canary / "npm").write_text(
+        f'#!/bin/sh\nprintf called > "{npm_called}"\nexit 99\n', encoding="utf-8"
+    )
     (canary / "npm").chmod(0o755)
     env["PATH"] = str(canary) + os.pathsep + env["PATH"]
     for key in ("SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"):
@@ -57,7 +74,15 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
             env[key] = os.environ[key]
 
     def run(argv, *, cwd=tmp_path, expected=0):
-        result = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, timeout=180, check=False)
+        result = subprocess.run(
+            argv,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
         assert result.returncode == expected, result.stdout + result.stderr
         return result
 
@@ -66,16 +91,30 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
     source = tmp_path / "fixture source"
     source.mkdir()
     for name in ("pm", "clawk_cli", "clawk_platform"):
-        shutil.copytree(ROOT / name, source / name, ignore=shutil.ignore_patterns("__pycache__"))
-    for name in ("utils.py", "clawk_constants.py", "clawk_dir_acl.py", "clawk_yaml.py", "clawk_bootstrap.py",
-                 "setup-clawk.sh"):
+        shutil.copytree(
+            ROOT / name, source / name, ignore=shutil.ignore_patterns("__pycache__")
+        )
+    for name in (
+        "utils.py",
+        "clawk_constants.py",
+        "clawk_dir_acl.py",
+        "clawk_yaml.py",
+        "clawk_bootstrap.py",
+        "setup-clawk.sh",
+    ):
         shutil.copy2(ROOT / name, source / name)
     # The CLI's user-facing text resolves through the i18n kernel (agent.i18n + the English catalog),
     # and its config/env layer consults the stdlib-only safe-worker policy; the rest of agent/ stays
     # out so the tail cannot grow a dependency on the agent runtime.
     (source / "agent").mkdir()
-    for name in ("__init__.py", "jiter_preload.py", "i18n.py", "i18n_layers.py", "i18n_languages.py",
-                 "safe_worker_policy.py"):
+    for name in (
+        "__init__.py",
+        "jiter_preload.py",
+        "i18n.py",
+        "i18n_layers.py",
+        "i18n_languages.py",
+        "safe_worker_policy.py",
+    ):
         shutil.copy2(ROOT / "agent" / name, source / "agent" / name)
     (source / "locales").mkdir()
     shutil.copy2(ROOT / "locales/en.yaml", source / "locales/en.yaml")
@@ -83,14 +122,17 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
     wheels.mkdir()
     _wheel(wheels, "installer_probe", "1.0")
     recipe = tomllib.loads((source / "pm/pyproject.toml").read_text())
-    yaml_dep = next(d for d in recipe["project"]["dependencies"] if d.startswith("ruamel.yaml"))
+    yaml_dep = next(
+        d for d in recipe["project"]["dependencies"] if d.startswith("ruamel.yaml")
+    )
     (source / "pyproject.toml").write_text(
         '[project]\nname="installer-fixture"\nversion="1"\nrequires-python=">=3.14"\n'
         f'dependencies=["installer-probe==1.0",{json.dumps(yaml_dep)}]\n'
-        '[project.optional-dependencies]\nall=[]\n[dependency-groups]\ndev=[]\ntest=[]\n'
-        '[tool.uv]\npackage=false\n'
+        "[project.optional-dependencies]\nall=[]\n[dependency-groups]\ndev=[]\ntest=[]\n"
+        "[tool.uv]\npackage=false\n"
         '[tool.uv.sources]\ninstaller-probe={path="wheels/installer_probe-1.0-py3-none-any.whl"}\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     run([uv, "lock", "--python", str(python)], cwd=source)
     # Only the application is a fixture; the shell, PM, bootstrap and writer run unchanged.
     # Completion still imports the CLI's checkout root during post-install maintenance.
@@ -99,48 +141,88 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
         "from pathlib import Path\n"
         "PROJECT_ROOT = Path(__file__).resolve().parents[1]\n"
         "def main():\n print(json.dumps({'module':installer_probe.__file__, 'argv':sys.argv[1:]}))\n"
-        "if __name__ == '__main__': main()\n", encoding="utf-8")
+        "if __name__ == '__main__': main()\n",
+        encoding="utf-8",
+    )
     docroot, url = served
     (source / "pm/artifact-mirror.json").write_text(
-        json.dumps({"origin": url, "prefix": "mirror/"}, indent=2), encoding="utf-8")
+        json.dumps({"origin": url, "prefix": "mirror/"}, indent=2), encoding="utf-8"
+    )
     pins = {}
     for name, files in {
         "python": [(bootstrap, "python")],
-        "uv": [(Path(uv).resolve(), "uv-dist/uv"), (Path(uv).resolve().with_name("uvx"), "uv-dist/uvx")],
+        "uv": [
+            (Path(uv).resolve(), "uv-dist/uv"),
+            (Path(uv).resolve().with_name("uvx"), "uv-dist/uvx"),
+        ],
     }.items():
         archive = docroot / f"{name}.tar.gz"
         with tarfile.open(archive, "w:gz", compresslevel=1, dereference=True) as tar:
             for path, destination in files:
                 tar.add(path, arcname=destination)
-        pins[name] = {"version": version if name == "python" else run([uv, "--version"]).stdout.split()[1],
-                      "artifacts": {current_target(): {"url": f"{url}/{archive.name}",
-                      "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}}}
+        pins[name] = {
+            "version": version
+            if name == "python"
+            else run([uv, "--version"]).stdout.split()[1],
+            "artifacts": {
+                current_target(): {
+                    "url": f"{url}/{archive.name}",
+                    "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                }
+            },
+        }
     if fault == "bad-hash":
         pins["python"]["artifacts"][current_target()]["sha256"] = "0" * 64
     if fault == "missing-wheel":
         next(wheels.glob("*.whl")).unlink()
-    (source / "pm/lock.json").write_text(json.dumps({"schema": 1, "packages": pins}, indent=2), encoding="utf-8")
+    (source / "pm/lock.json").write_text(
+        json.dumps({"schema": 1, "packages": pins}, indent=2), encoding="utf-8"
+    )
     run(["git", "init", "-b", "fixture"], cwd=source)
     run(["git", "add", "."], cwd=source)
-    run(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-         "commit", "-m", "fixture"], cwd=source)
+    run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-m",
+            "fixture",
+        ],
+        cwd=source,
+    )
     commit = run(["git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
     install = tmp_path / "installed source"
     env["CLAWK_REPO_URL"] = str(source)
-    command = ["bash", str(ROOT / "scripts/install.sh"), "--dir", str(install),
-               "--branch", "fixture", "--commit", commit, "--non-interactive", "--json"]
+    command = [
+        "bash",
+        str(ROOT / "scripts/install.sh"),
+        "--dir",
+        str(install),
+        "--branch",
+        "fixture",
+        "--commit",
+        commit,
+        "--non-interactive",
+        "--json",
+    ]
     result = run(command, expected=1 if fault else 0)
     assert not npm_called.exists()
     if fault:
         assert not (install / ".clawk-bootstrap-complete").exists()
         assert not (home / ".local/bin/clawk").exists()
-        for facts in (home / ".clawk/installs").glob("*/facts.json"):
+        for facts in (home / ".clawksis/installs").glob("*/facts.json"):
             assert "venv" not in json.loads(facts.read_text())["packages"]
         assert '"stage":"python-deps"' in result.stdout
         return
     assert '"stage":"python-deps"' in result.stdout
-    assert json.loads((install / ".clawk-bootstrap-complete").read_text())["pinnedCommit"] == commit
-    facts = next((home / ".clawk/installs").glob("*/facts.json"))
+    assert (
+        json.loads((install / ".clawk-bootstrap-complete").read_text())["pinnedCommit"]
+        == commit
+    )
+    facts = next((home / ".clawksis/installs").glob("*/facts.json"))
     selection = json.loads(facts.read_text())["packages"]["venv"]
     launcher = home / ".local/bin/clawk"
     child = json.loads(run([str(launcher), "from elsewhere"]).stdout)
@@ -150,7 +232,9 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
     # The developer setup path publishes through the same writer after real PM.
     launcher.unlink()
     run(["bash", str(install / "setup-clawk.sh")])
-    assert json.loads(run([str(launcher), "from setup"]).stdout)["argv"] == ["from setup"]
+    assert json.loads(run([str(launcher), "from setup"]).stdout)["argv"] == [
+        "from setup"
+    ]
     # Warm path publication must work with all acquisition inputs unavailable.
     shutil.rmtree(docroot)
     shutil.rmtree(install / "wheels")

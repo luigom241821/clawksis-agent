@@ -13,7 +13,14 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 import itertools
 
-from scripts.code_health.py_ast import _FUNCS, Ctx, _call_name, _deferred_parts, _dotted, _eager
+from scripts.code_health.py_ast import (
+    _FUNCS,
+    Ctx,
+    _call_name,
+    _deferred_parts,
+    _dotted,
+    _eager,
+)
 from scripts.code_health.py_rules_sleep import wall_clock_sleep
 
 _CAPTURE_CALLS = {
@@ -32,7 +39,12 @@ _CAPTURE_CALLS = {
     "_env_int",
     "_env_bool",
 }
-_SYNC_CONFIG_CALLS = {"load_config", "save_config", "read_raw_config", "load_config_readonly"}
+_SYNC_CONFIG_CALLS = {
+    "load_config",
+    "save_config",
+    "read_raw_config",
+    "load_config_readonly",
+}
 _SUBPROCESS_WAITS = {"run", "call", "check_call", "check_output"}
 # health: allow HX003 -- the detector's own pattern list
 _SHELL_IDENTITY = ("pgrep -f", "ps aux", "ps -ef", "ps -eo")
@@ -58,8 +70,11 @@ class _Scope:
                     scope = scope.parent
                 return scope
             outer = scope.parent  # nonlocal: the nearest enclosing function that has it
-            while outer is not None and outer.parent is not None and (
-                    outer.kind == "class" or not outer.binds(name)):
+            while (
+                outer is not None
+                and outer.parent is not None
+                and (outer.kind == "class" or not outer.binds(name))
+            ):
                 outer = outer.parent
             if outer is None or outer.parent is None:
                 return scope
@@ -77,7 +92,9 @@ class _Scope:
         while scope is not None:
             if scope is self or scope.kind != "class":
                 if name in scope.declared:
-                    if name in scope.others:  # rebound before its outer binding was seen
+                    if (
+                        name in scope.others
+                    ):  # rebound before its outer binding was seen
                         return None
                     scope = scope.owner(name)
                     return scope.imports.get(name) if name not in scope.others else None
@@ -144,20 +161,35 @@ class _Binder(ast.NodeVisitor):
                 self._bind(value)
         super().generic_visit(node)
 
-    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> None:
+    def _visit_function(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
+    ) -> None:
         """Decorators, defaults and annotations run in the enclosing scope; the body does not."""
         args = node.args
-        every = [*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg]
+        every = [
+            *args.posonlyargs,
+            *args.args,
+            *args.kwonlyargs,
+            args.vararg,
+            args.kwarg,
+        ]
         params = [a for a in every if a is not None]
         returns = getattr(node, "returns", None)
-        outer = [*getattr(node, "decorator_list", []), *args.defaults,
-                 *(d for d in args.kw_defaults if d is not None),
-                 *(a.annotation for a in params if a.annotation), *([returns] if returns else [])]
+        outer = [
+            *getattr(node, "decorator_list", []),
+            *args.defaults,
+            *(d for d in args.kw_defaults if d is not None),
+            *(a.annotation for a in params if a.annotation),
+            *([returns] if returns else []),
+        ]
         for expr in outer:
             self.visit(expr)
         if not isinstance(node, ast.Lambda):
             self._bind(node.name)
-        self._enter("function", [*params, *(node.body if isinstance(node.body, list) else [node.body])])
+        self._enter(
+            "function",
+            [*params, *(node.body if isinstance(node.body, list) else [node.body])],
+        )
 
     visit_FunctionDef = visit_AsyncFunctionDef = visit_Lambda = _visit_function
 
@@ -170,15 +202,25 @@ class _Binder(ast.NodeVisitor):
         self._bind(node.name)
         self._enter("class", node.body)
 
-    def _visit_comprehension(self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp) -> None:
+    def _visit_comprehension(
+        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ) -> None:
         """The first iterable runs outside; targets, conditions and elements run inside."""
         first, *rest = node.generators
         self.visit(first.iter)
-        elements = [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
-        inner = [first.target, *first.ifs, *(n for g in rest for n in (g.iter, g.target, *g.ifs))]
+        elements = (
+            [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+        )
+        inner = [
+            first.target,
+            *first.ifs,
+            *(n for g in rest for n in (g.iter, g.target, *g.ifs)),
+        ]
         self._enter("comprehension", [*inner, *elements])
 
-    visit_ListComp = visit_SetComp = visit_DictComp = visit_GeneratorExp = _visit_comprehension
+    visit_ListComp = visit_SetComp = visit_DictComp = visit_GeneratorExp = (
+        _visit_comprehension
+    )
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         # A walrus in a comprehension binds in the enclosing function (PEP 572).
@@ -249,7 +291,11 @@ def _env_write_names(node: ast.AST) -> list[str]:
     """Env var names a node SETS: ``os.environ["X"] = ...``, ``setdefault``, ``update``, ``putenv``."""
     if isinstance(node, ast.Subscript) and not isinstance(node.ctx, ast.Load):
         key = node.slice
-        if _dotted(node.value) == "os.environ" and isinstance(key, ast.Constant) and isinstance(key.value, str):
+        if (
+            _dotted(node.value) == "os.environ"
+            and isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+        ):
             return [key.value]
         return []
     if not isinstance(node, ast.Call):
@@ -262,17 +308,24 @@ def _env_write_names(node: ast.AST) -> list[str]:
         keys = [kw.arg for kw in node.keywords if kw.arg]
         for arg in node.args:
             if isinstance(arg, ast.Dict):
-                keys += [k.value for k in arg.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)]
+                keys += [
+                    k.value
+                    for k in arg.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)
+                ]
         return keys
     return []
 
 
 def _clawk_home_path(text: str, prefix: str = "") -> bool:
-    """``text`` (after ``prefix``) starts with the exact ``.clawk`` path component, so
-    ``.clawk/x`` matches and ``.clawk-profile-exports`` does not."""
+    """``text`` (after ``prefix``) starts with the exact ``.clawksis`` path component, so
+    ``.clawksis/x`` matches and ``.clawksis-profile-exports`` does not."""
     if not text.startswith(prefix):
         return False
-    return re.split(r"[/\\]", text[len(prefix):].lstrip("/\\"), maxsplit=1)[0] == ".clawk"
+    return (
+        re.split(r"[/\\]", text[len(prefix) :].lstrip("/\\"), maxsplit=1)[0]
+        == ".clawksis"
+    )
 
 
 def hardcoded_home(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
@@ -290,7 +343,11 @@ def hardcoded_home(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
         elif isinstance(node, ast.Call):
             name = _call_name(node)
             arg = _str_arg(node)
-            if arg and _clawk_home_path(arg, "~/") and name.endswith(("expanduser", "Path")):
+            if (
+                arg
+                and _clawk_home_path(arg, "~/")
+                and name.endswith(("expanduser", "Path"))
+            ):
                 yield node.lineno
 
 
@@ -305,8 +362,11 @@ def new_env_var(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
 
 def argv_identity(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
     # A docstring or bare string statement is prose about the pattern, not a command.
-    prose = {id(n.value) for n in ast.walk(tree)
-             if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)}
+    prose = {
+        id(n.value)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)
+    }
     for node in ast.walk(tree):
         if isinstance(node, ast.Compare) and len(node.ops) == 1:
             if isinstance(node.ops[0], (ast.In, ast.NotIn)):
@@ -315,7 +375,11 @@ def argv_identity(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
                 if isinstance(left, ast.Constant) and isinstance(left.value, str):
                     if "cmdline" in target:
                         yield node.lineno
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in prose:
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in prose
+        ):
             if any(cmd in node.value for cmd in _SHELL_IDENTITY):
                 yield node.lineno
 
@@ -360,7 +424,11 @@ def _capture_lines(expr: ast.AST) -> Iterator[int]:
 def _main_guard(stmt: ast.stmt) -> str | None:
     """``"=="``/``"!="`` for ``if __name__ <op> "__main__":``, else None."""
     test = stmt.test if isinstance(stmt, ast.If) else None
-    if not (isinstance(test, ast.Compare) and len(test.ops) == 1 and len(test.comparators) == 1):
+    if not (
+        isinstance(test, ast.Compare)
+        and len(test.ops) == 1
+        and len(test.comparators) == 1
+    ):
         return None
     sides = {ast.unparse(test.left), ast.unparse(test.comparators[0])}
     if sides != {"__name__", "'__main__'"}:
@@ -399,14 +467,22 @@ def _import_time_statements(body: list[ast.stmt]) -> Iterator[ast.stmt]:
 
 
 def _postponed_annotations(tree: ast.Module) -> bool:
-    return any(isinstance(stmt, ast.ImportFrom) and stmt.module == "__future__"
-               and any(alias.name == "annotations" for alias in stmt.names) for stmt in tree.body)
+    return any(
+        isinstance(stmt, ast.ImportFrom)
+        and stmt.module == "__future__"
+        and any(alias.name == "annotations" for alias in stmt.names)
+        for stmt in tree.body
+    )
 
 
 def _annotations(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.expr]:
     args = func.args
     params = [*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg]
-    return [n for n in (*(p.annotation for p in params if p is not None), func.returns) if n is not None]
+    return [
+        n
+        for n in (*(p.annotation for p in params if p is not None), func.returns)
+        if n is not None
+    ]
 
 
 def _import_time_exprs(stmt: ast.stmt, postponed: bool) -> Iterator[ast.AST]:
@@ -416,7 +492,11 @@ def _import_time_exprs(stmt: ast.stmt, postponed: bool) -> Iterator[ast.AST]:
     supported interpreters (3.11-3.13; 3.14 defers them, PEP 649) unless the module has
     ``from __future__ import annotations``; an annotated assignment's value always runs."""
     if isinstance(stmt, ast.ClassDef):
-        yield from (*stmt.decorator_list, *stmt.bases, *(kw.value for kw in stmt.keywords))
+        yield from (
+            *stmt.decorator_list,
+            *stmt.bases,
+            *(kw.value for kw in stmt.keywords),
+        )
     elif isinstance(stmt, ast.AnnAssign):
         yield from (n for n in (stmt.target, stmt.value) if n is not None)
         if not postponed:
@@ -465,7 +545,9 @@ def _finite(node: ast.AST | None) -> bool:
     return True
 
 
-def _deadline(call: ast.Call, name: str = "timeout", position: int | None = None) -> bool:
+def _deadline(
+    call: ast.Call, name: str = "timeout", position: int | None = None
+) -> bool:
     """True when ``call`` passes a finite deadline: ``name=<not None>``, the positional slot,
     or ``**opts`` (an unknown mapping is trusted; a literal one must name the deadline)."""
     if position is not None and len(call.args) > position:
@@ -512,8 +594,13 @@ def _bounded_calls(tree: ast.Module) -> set[int]:
     bounded: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and _call_name(node) in _WAIT_FOR:
-            awaitable = node.args[0] if node.args else next(
-                (kw.value for kw in node.keywords if kw.arg in ("fut", "aw")), None)
+            awaitable = (
+                node.args[0]
+                if node.args
+                else next(
+                    (kw.value for kw in node.keywords if kw.arg in ("fut", "aw")), None
+                )
+            )
             if awaitable is not None and _deadline(node, "timeout", 1):
                 bounded.add(id(awaitable))
         elif isinstance(node, ast.AsyncWith):
@@ -546,7 +633,9 @@ def _own_nodes(scope: ast.AST) -> Iterator[ast.AST]:
             stack.extend(ast.iter_child_nodes(node))
 
 
-def _scopes(tree: ast.Module) -> Iterator[tuple[ast.AST, ast.AST | None, list[ast.AST]]]:
+def _scopes(
+    tree: ast.Module,
+) -> Iterator[tuple[ast.AST, ast.AST | None, list[ast.AST]]]:
     """``(scope, enclosing scope, its own nodes)`` for the module and every def/lambda/class."""
     todo: list[tuple[ast.AST, ast.AST | None]] = [(tree, None)]
     while todo:
@@ -562,13 +651,18 @@ def _binding_pairs(node: ast.AST) -> list[tuple[ast.AST, ast.AST | None]]:
     if isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
         return [(node.target, node.value)]
     if isinstance(node, (ast.With, ast.AsyncWith)):
-        return [(i.optional_vars, i.context_expr) for i in node.items if i.optional_vars]
+        return [
+            (i.optional_vars, i.context_expr) for i in node.items if i.optional_vars
+        ]
     return []
 
 
 def _pos(node: ast.AST, end: bool = False) -> tuple[int, int]:
     if end:
-        return (getattr(node, "end_lineno", 0) or 0, getattr(node, "end_col_offset", 0) or 0)
+        return (
+            getattr(node, "end_lineno", 0) or 0,
+            getattr(node, "end_col_offset", 0) or 0,
+        )
     return (getattr(node, "lineno", 0), getattr(node, "col_offset", 0))
 
 
@@ -578,7 +672,9 @@ class _HandleScope:
     is_class: bool
     owner: int  # id of the class (or module) whose methods share ``self._proc``-style handles
     # name -> [(position the binding takes effect, "sync"/"async"/None for anything else)]
-    names: dict[str, list[tuple[tuple[int, int], str | None]]] = field(default_factory=dict)
+    names: dict[str, list[tuple[tuple[int, int], str | None]]] = field(
+        default_factory=dict
+    )
 
     def kind(self, name: str, at: tuple[int, int]) -> str | None:
         """What ``name`` holds at ``at``: the innermost scope that binds it decides (a class
@@ -586,7 +682,11 @@ class _HandleScope:
         scope: _HandleScope | None = self
         while scope is not None:
             if (scope is self or not scope.is_class) and name in scope.names:
-                before = [k for pos, k in sorted(scope.names[name], key=lambda b: b[0]) if pos <= at]
+                before = [
+                    k
+                    for pos, k in sorted(scope.names[name], key=lambda b: b[0])
+                    if pos <= at
+                ]
                 return before[-1] if before else None
             scope = scope.parent
         return None
@@ -602,14 +702,18 @@ def _annotated_kind(annotation: ast.expr | None) -> str | None:
     return _PROCESS_TYPES.get(_dotted(annotation)) if annotation is not None else None
 
 
-def _record_bindings(scope: _HandleScope, node: ast.AST, attrs: dict[tuple[int, str], str]) -> None:
+def _record_bindings(
+    scope: _HandleScope, node: ast.AST, attrs: dict[tuple[int, str], str]
+) -> None:
     """Any binding of a plain name clears it (a loop variable, ``proc = None``, a parameter
     not annotated as a process); a spawn makes it a handle once the value is computed. An attribute handle is shared by
     the class's methods, so it is keyed by the class, not by the function that assigns it."""
     if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
         scope.names.setdefault(node.id, []).append((_pos(node), None))
     elif isinstance(node, ast.arg):
-        scope.names.setdefault(node.arg, []).append((_pos(node), _annotated_kind(node.annotation)))
+        scope.names.setdefault(node.arg, []).append(
+            (_pos(node), _annotated_kind(node.annotation))
+        )
     for target, value in _binding_pairs(node):
         kind = _spawn_kind(value)
         if kind is None or value is None:
@@ -631,8 +735,12 @@ def _process_kinds(tree: ast.Module) -> dict[int, str]:
     calls: list[tuple[ast.Call, ast.expr, _HandleScope]] = []
     for node, parent, own in _scopes(tree):
         outer = built.get(id(parent)) if parent is not None else None
-        owner = id(node) if outer is None or isinstance(node, ast.ClassDef) else outer.owner
-        scope = built[id(node)] = _HandleScope(outer, isinstance(node, ast.ClassDef), owner)
+        owner = (
+            id(node) if outer is None or isinstance(node, ast.ClassDef) else outer.owner
+        )
+        scope = built[id(node)] = _HandleScope(
+            outer, isinstance(node, ast.ClassDef), owner
+        )
         for child in own:
             _record_bindings(scope, child, attrs)
             if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
@@ -671,8 +779,11 @@ def _reaped_after_kill(tree: ast.Module, kinds: dict[int, str]) -> set[int]:
                 if not (isinstance(kill, ast.Call) and isinstance(wait, ast.Call)):
                     continue
                 head, _, leaf = _call_name(kill).rpartition(".")
-                if (leaf == "kill" and kinds.get(id(kill)) == "sync"
-                        and _call_name(wait) == f"{head}.wait"):
+                if (
+                    leaf == "kill"
+                    and kinds.get(id(kill)) == "sync"
+                    and _call_name(wait) == f"{head}.wait"
+                ):
                     reaped.add(id(wait))
     return reaped
 
@@ -684,10 +795,18 @@ def missing_timeout(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
         if not isinstance(node, ast.Call) or id(node) in bounded:
             continue
         head, _, leaf = _call_name(node).rpartition(".")
-        if head == "subprocess" and leaf in _SUBPROCESS_WAITS and not _deadline(node) or leaf == "urlopen" and not _deadline(node, "timeout", 2):
+        if (
+            head == "subprocess"
+            and leaf in _SUBPROCESS_WAITS
+            and not _deadline(node)
+            or leaf == "urlopen"
+            and not _deadline(node, "timeout", 2)
+        ):
             yield node.lineno
         elif leaf in _PROCESS_WAITS and id(node) in kinds:
-            if kinds[id(node)] == "async" or not _deadline(node, "timeout", _PROCESS_WAITS[leaf]):
+            if kinds[id(node)] == "async" or not _deadline(
+                node, "timeout", _PROCESS_WAITS[leaf]
+            ):
                 yield node.lineno
 
 
@@ -713,8 +832,10 @@ def _is_exc_gather(node: ast.AST | None) -> bool:
         node = node.value
     if not (isinstance(node, ast.Call) and _call_name(node) == "asyncio.gather"):
         return False
-    return any(kw.arg == "return_exceptions" and getattr(kw.value, "value", False) is True
-               for kw in node.keywords)
+    return any(
+        kw.arg == "return_exceptions" and getattr(kw.value, "value", False) is True
+        for kw in node.keywords
+    )
 
 
 def _names(target: ast.AST) -> set[str]:
@@ -732,7 +853,12 @@ def _from_results(node: ast.AST | None, results: set[str]) -> bool:
         return node.id in results
     if isinstance(node, ast.Subscript):
         return _from_results(node.value, results)
-    if isinstance(node, ast.Call) and _call_name(node) in ("zip", "enumerate", "list", "reversed"):
+    if isinstance(node, ast.Call) and _call_name(node) in (
+        "zip",
+        "enumerate",
+        "list",
+        "reversed",
+    ):
         return any(_from_results(arg, results) for arg in node.args)
     return False
 
@@ -745,7 +871,9 @@ def _projected(target: ast.AST, iterable: ast.AST, results: set[str]) -> set[str
     if isinstance(target, (ast.Tuple, ast.List)) and isinstance(iterable, ast.Call):
         name, elts, args = _call_name(iterable), target.elts, iterable.args
         if name == "zip" and len(elts) == len(args):
-            return set().union(*(_projected(e, a, results) for e, a in zip(elts, args, strict=True)))
+            return set().union(
+                *(_projected(e, a, results) for e, a in zip(elts, args, strict=True))
+            )
         if name == "enumerate" and len(elts) == 2 and args:
             return _projected(elts[1], args[0], results)
     return _names(target) if _from_results(iterable, results) else set()
@@ -757,8 +885,12 @@ def _result_names(func: ast.AST) -> set[str]:
     nodes = [n for stmt in func.body for n in _eager(stmt)]
     for _ in range(3):  # results -> loop vars -> unpacked loop vars
         for node in nodes:
-            if isinstance(node, (ast.Assign, ast.AnnAssign)) and _from_results(node.value, results):
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and _from_results(
+                node.value, results
+            ):
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
                 results |= set().union(*(_names(t) for t in targets))
             elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
                 results |= _projected(node.target, node.iter, results)
@@ -786,7 +918,11 @@ def gather_exception_check(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
 
 def bool_of_env(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _call_name(node) == "bool" and len(node.args) == 1:
+        if (
+            isinstance(node, ast.Call)
+            and _call_name(node) == "bool"
+            and len(node.args) == 1
+        ):
             arg = node.args[0]
             if isinstance(arg, (ast.Call, ast.Subscript)) and _env_read_name(arg):
                 yield node.lineno
@@ -827,22 +963,36 @@ def _context_names(own: list[ast.AST]) -> set[str]:
     copied: set[str] = set()
     targets: set[int] = set()
     for node in own:
-        if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(node.value, ast.Call):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(
+            node.value, ast.Call
+        ):
             if _call_name(node.value) == _COPY_CONTEXT:
-                names = [t for t in (node.targets if isinstance(node, ast.Assign) else [node.target])
-                         if isinstance(t, ast.Name)]
+                names = [
+                    t
+                    for t in (
+                        node.targets if isinstance(node, ast.Assign) else [node.target]
+                    )
+                    if isinstance(t, ast.Name)
+                ]
                 copied.update(t.id for t in names)
                 targets.update(id(t) for t in names)
-    rebound = {n.id for n in own if isinstance(n, ast.Name) and not isinstance(n.ctx, ast.Load)
-               and id(n) not in targets}
+    rebound = {
+        n.id
+        for n in own
+        if isinstance(n, ast.Name)
+        and not isinstance(n.ctx, ast.Load)
+        and id(n) not in targets
+    }
     return copied - rebound
 
 
 def _runs_in_copied_context(call: ast.Call, contexts: set[str]) -> bool:
     """``Thread(target=<ctx>.run, ...)`` with ``ctx`` a ``copy_context()``: the thread runs
     in the caller's context, which is what ``spawn_context_thread`` does."""
-    target = next((kw.value for kw in call.keywords if kw.arg == "target"),
-                  call.args[1] if len(call.args) > 1 else None)
+    target = next(
+        (kw.value for kw in call.keywords if kw.arg == "target"),
+        call.args[1] if len(call.args) > 1 else None,
+    )
     if not (isinstance(target, ast.Attribute) and target.attr == "run"):
         return False
     ctx = target.value
@@ -855,8 +1005,11 @@ def raw_thread(tree: ast.Module, ctx: Ctx) -> Iterable[int]:
     for _, _, own in _scopes(tree):
         contexts = _context_names(own)
         for node in own:
-            if (isinstance(node, ast.Call) and _call_name(node) == "threading.Thread"
-                    and not _runs_in_copied_context(node, contexts)):
+            if (
+                isinstance(node, ast.Call)
+                and _call_name(node) == "threading.Thread"
+                and not _runs_in_copied_context(node, contexts)
+            ):
                 yield node.lineno
 
 
