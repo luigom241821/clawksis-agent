@@ -1,3 +1,4 @@
+import { applyDocumentLocale, LOCALE_ENDONYMS } from "@clawk/shared/i18n";
 import {
   createContext,
   useContext,
@@ -7,7 +8,6 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-
 import type { Locale, Translations } from "./types";
 
 // English + Spanish ship in the main bundle as synchronous fallbacks (English is
@@ -34,54 +34,45 @@ const LOADERS: Partial<Record<Locale, () => Promise<Translations>>> = {
   pt: () => import("./pt").then((m) => m.pt),
   ru: () => import("./ru").then((m) => m.ru),
   hu: () => import("./hu").then((m) => m.hu),
+  ar: () => import("./ar").then((m) => m.ar),
 };
 
 // Cache of already-resolved translation objects, seeded with the eager locales.
 const LOADED: Partial<Record<Locale, Translations>> = { en, es };
 
+// Source of truth for the supported locale set, in picker order. It's tiny and
+// always loaded, unlike the translation objects.
+const SUPPORTED_LOCALES: Locale[] = [
+  "en",
+  "zh",
+  "zh-hant",
+  "ja",
+  "de",
+  "es",
+  "fr",
+  "tr",
+  "uk",
+  "af",
+  "ko",
+  "it",
+  "ga",
+  "pt",
+  "ru",
+  "hu",
+  "ar",
+];
 
+// Display metadata for the language picker — endonyms from @clawk/shared so the
+// desktop and web pickers can never disagree on a language's native name.
+export const LOCALE_META: Record<Locale, { name: string }> = Object.fromEntries(
+  SUPPORTED_LOCALES.map((id) => [id, { name: LOCALE_ENDONYMS[id] }]),
+) as Record<Locale, { name: string }>;
 
-// Display metadata for the language picker — endonym (native name) so users
-// recognize their language even if they don't speak the current UI language.
-// Exposed as a constant so the LanguageSwitcher and any future settings page
-// can share the same list. This is ALSO the source of truth for the supported
-// locale set (it's tiny and always loaded, unlike the translation objects).
-//
-// We intentionally do NOT pair locales with country flags. Languages are not
-// countries (English ≠ GB, Portuguese ≠ PT, Spanish ≠ ES, Chinese variants ≠
-// any single jurisdiction). Endonyms are unambiguous and avoid the political
-// mismapping that flag pairings inevitably create.
-export const LOCALE_META: Record<Locale, { name: string }> = {
-  en: { name: "English" },
-  zh: { name: "简体中文" },
-  "zh-hant": { name: "繁體中文" },
-  ja: { name: "日本語" },
-  de: { name: "Deutsch" },
-  es: { name: "Español" },
-  fr: { name: "Français" },
-  tr: { name: "Türkçe" },
-  uk: { name: "Українська" },
-  af: { name: "Afrikaans" },
-  ko: { name: "한국어" },
-  it: { name: "Italiano" },
-  ga: { name: "Gaeilge" },
-  pt: { name: "Português" },
-  ru: { name: "Русский" },
-  hu: { name: "Magyar" },
-};
-
-
-
-const SUPPORTED_LOCALES = Object.keys(LOCALE_META) as Locale[];
 const STORAGE_KEY = "clawk-locale";
-
-
 
 function isLocale(value: string): value is Locale {
   return (SUPPORTED_LOCALES as string[]).includes(value);
 }
-
-
 
 function getInitialLocale(): Locale {
   try {
@@ -102,23 +93,17 @@ function getInitialLocale(): Locale {
   return "en";
 }
 
-
-
 interface I18nContextValue {
   locale: Locale;
   setLocale: (l: Locale) => void;
   t: Translations;
 }
 
-
-
 const I18nContext = createContext<I18nContextValue>({
   locale: "en",
   setLocale: () => {},
   t: en,
 });
-
-
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(getInitialLocale);
@@ -163,6 +148,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    applyDocumentLocale(locale);
+  }, [locale]);
+
   const value = useMemo<I18nContextValue>(
     () => ({ locale, setLocale, t }),
     [locale, setLocale, t],
@@ -170,8 +159,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
-
-
 
 export function useI18n() {
   return useContext(I18nContext);

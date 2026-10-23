@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Desde el sync a Hermes v0.22.5: el lockfile (uv.lock) cubre solo Python 3.14
+# (politica de upstream: 3.11-3.13 son solo un puente de actualizacion) y las
+# herramientas de dev (ruff, pytest) viven en el dependency group `dev`, que uv
+# no instala por defecto (`default-groups = []`). uv va fijado a la version con
+# la que upstream genera el lock.
+
 jobs:
   lint:
     name: Lint (ruff)
@@ -13,28 +19,30 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v7
-      # ruff lives in the `dev` optional-dependency group, which `uv run`
-      # does not install by default — without this sync the step dies with
-      # "Failed to spawn: ruff / No such file or directory".
-      - run: uv sync --all-extras
+        with:
+          version: "0.13.5"
+      - run: uv sync --locked --python 3.14 --group dev
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
   test:
-    name: Tests
+    # La suite de upstream tiene ~6.800 archivos de test. Upstream la corre en
+    # 2 tandas sobre maquinas de 32 vCPU; aca se reparte en mas tandas sobre los
+    # runners de 4 vCPU. scripts/run_tests_parallel.py balancea las tandas con
+    # su cache de duraciones (LPT).
+    name: Tests (${{ matrix.slice }}/8)
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        slice: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v7
-      - run: uv sync --all-extras
-      # Per-file subprocess isolation (scripts/run_tests_parallel.py): the suite
-      # relies on process isolation — ~40 test files delete project modules from
-      # sys.modules to reload against a fresh env, which leaks across files under
-      # a single-process ``pytest tests/`` run and causes order-dependent
-      # failures (a later test holds a stale module while patch() targets a
-      # re-imported one). Running one ``pytest <file>`` subprocess per file is
-      # the isolation boundary the tests are written for.
-      - run: uv run python scripts/run_tests_parallel.py
+        with:
+          version: "0.13.5"
+      - run: uv sync --locked --python 3.14 --extra all --group dev --extra anthropic --extra mistral --extra fal --extra modal --extra daytona --extra parallel-web
+      # Aislamiento por archivo (un subproceso de pytest por archivo): muchos
+      # tests recargan modulos del proyecto y no comparten estado entre archivos.
+      - run: uv run python scripts/run_tests_parallel.py --slice ${{ matrix.slice }}/8

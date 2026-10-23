@@ -24,7 +24,7 @@ jobs:
       # Install ruff as a standalone tool so the blocking check below can be
       # invoked directly (no ``uv run`` prefix). The dev-group ruff is not on
       # PATH for a bare ``ruff`` call, so we pin it here.
-      - run: uv tool install ruff
+      - run: uv tool install ruff==0.15.10  # misma version que el group dev de pyproject
       # Blocking step — no --exit-zero, not masked by ``|| true``. A PLW1514
       # (or any selected-rule) violation fails the job and blocks merge.
       - name: ruff check (blocking)

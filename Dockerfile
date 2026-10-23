@@ -296,9 +296,11 @@ RUN python3 -m pm.build_env --source /opt/clawksis --python /usr/local/bin/pytho
 # dependencies. A stage of its own so the frontend stage keeps building its
 # Node dependencies in parallel with the Python ones.
 FROM python_deps AS icons
-COPY scripts/generate_icons.py scripts/
-COPY assets/ assets/
-RUN /opt/clawksis/.venv/bin/python -I scripts/generate_icons.py --source /opt/clawksis --out /tmp/clawk-icons
+# Clawksis: the web icons are the fork's own and are committed in web/public.
+# Upstream renders them from the Nous brand art (assets/nous-girl-*.svg), which
+# the fork does not ship, so the prepared-icons dir only carries the favicon
+# that scripts/build/web.mjs requires.
+COPY web/public/favicon.ico /tmp/clawk-icons/web/public/favicon.ico
 
 # Frontend dependencies never enter the runtime layers.
 FROM runtime_base AS frontend_build
