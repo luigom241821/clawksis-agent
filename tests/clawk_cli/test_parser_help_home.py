@@ -17,14 +17,16 @@ def sticky_profile_home(monkeypatch, tmp_path):
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.delenv("CLAWK_HOME", raising=False)
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "coder").mkdir(parents=True)
     (root / "active_profile").write_text("coder\n", encoding="utf-8")
     monkeypatch.setattr(clawk_constants, "_profile_fallback_warned", False)
     return root
 
 
-def test_building_the_parser_before_the_profile_override_stays_silent(sticky_profile_home, capsys):
+def test_building_the_parser_before_the_profile_override_stays_silent(
+    sticky_profile_home, capsys
+):
     from clawk_cli._parser import build_top_level_parser
 
     build_top_level_parser()
@@ -32,7 +34,9 @@ def test_building_the_parser_before_the_profile_override_stays_silent(sticky_pro
     assert "CLAWK_HOME fallback" not in capsys.readouterr().err
 
 
-def test_help_text_names_the_profile_config_once_the_process_is_re_homed(sticky_profile_home, monkeypatch):
+def test_help_text_names_the_profile_config_once_the_process_is_re_homed(
+    sticky_profile_home, monkeypatch
+):
     from clawk_cli._parser import _cfg_path
 
     monkeypatch.setenv("CLAWK_HOME", str(sticky_profile_home / "profiles" / "coder"))

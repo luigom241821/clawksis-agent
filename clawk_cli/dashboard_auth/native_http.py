@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from starlette.responses import JSONResponse
 
-HEADER = "x-clawk-gateway-ticket"
+HEADER = "x-clawksis-gateway-ticket"
 
 
 @contextmanager

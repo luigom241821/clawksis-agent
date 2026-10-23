@@ -1108,8 +1108,9 @@ def _processes_with_clawk_home_under(roots) -> list[int]:
                 environ = handle.read().split(b"\0")
         except OSError:
             continue
+        prefix = b"CLAWK_HOME="  # len(), not a literal offset: the rebrand changed its length
         home = next(
-            (item[12:] for item in environ if item.startswith(b"CLAWK_HOME=")), None
+            (item[len(prefix) :] for item in environ if item.startswith(prefix)), None
         )
         if not home:
             continue

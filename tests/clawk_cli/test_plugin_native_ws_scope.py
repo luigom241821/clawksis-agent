@@ -265,7 +265,7 @@ def test_grant_scope_is_restored_when_the_connection_ends_abnormally(daemon, end
         "root_path": "",
         "query_string": b"",
         "app": web_server.app,
-        "headers": [(b"x-clawk-gateway-ticket", _grant(daemon.beta).encode())],
+        "headers": [(b"x-clawksis-gateway-ticket", _grant(daemon.beta).encode())],
         "clawk.gateway_socket_peer": ("127.0.0.1", 50000),
     }
 

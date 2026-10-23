@@ -20,7 +20,7 @@ else
 
       GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" ~/.clawksis/.env | head -1 | cut -d= -f2 | tr -d '\n\r')
     elif grep -q "github.com" ~/.git-credentials 2>/dev/null; then
-      GITHUB_TOKEN=$(uv run python "${CLAWK_HOME:-$HOME/.clawk}/skills/github/github-auth/scripts/git-credential-token.py")
+      GITHUB_TOKEN=$(uv run python "${CLAWK_HOME:-$HOME/.clawksis}/skills/github/github-auth/scripts/git-credential-token.py")
     fi
   fi
 fi

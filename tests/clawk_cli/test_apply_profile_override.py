@@ -28,7 +28,8 @@ import pytest
 @pytest.fixture(autouse=True)
 def _platform_home(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "clawk_constants._get_platform_default_clawk_home", lambda: tmp_path / ".clawk"
+        "clawk_constants._get_platform_default_clawk_home",
+        lambda: tmp_path / ".clawksis",
     )
 
 
@@ -109,7 +110,7 @@ def test_missing_sticky_profile_allows_recovery_commands(
     argv,
     exported_home,
 ):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     result = _run_apply_profile_override(
         tmp_path,
         monkeypatch,
@@ -159,7 +160,7 @@ def test_missing_profile_still_blocks_other_or_explicit_commands(
         _run_apply_profile_override(
             tmp_path,
             monkeypatch,
-            clawk_home=str(tmp_path / ".clawk"),
+            clawk_home=str(tmp_path / ".clawksis"),
             active_profile="ray",
             create_active_profile=False,
             argv=argv,
@@ -284,7 +285,7 @@ class TestSupervisedChildIgnoresStickyProfile:
         """A supervised named-profile slot passes ``-p <name>`` explicitly;
         that must still resolve (the sentinel guard only skips the sticky
         active_profile fallback, never an explicit flag)."""
-        clawk_root = tmp_path / ".clawk"
+        clawk_root = tmp_path / ".clawksis"
         clawk_root.mkdir(parents=True, exist_ok=True)
         (clawk_root / "active_profile").write_text("briefer", encoding="utf-8")
         for name in ("briefer", "coder"):
@@ -321,7 +322,7 @@ class TestGeneralizedSupervisorMarkers:
     """
 
     def _root_home(self, tmp_path):
-        clawk_root = tmp_path / ".clawk"
+        clawk_root = tmp_path / ".clawksis"
         clawk_root.mkdir(parents=True, exist_ok=True)
         return clawk_root
 
@@ -447,7 +448,7 @@ class TestS6ContainerGatewayRun:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setattr("clawk_cli.service_manager._s6_running", lambda: True)
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         result = _run_apply_profile_override(
             tmp_path,
             monkeypatch,
@@ -461,7 +462,7 @@ class TestS6ContainerGatewayRun:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setattr("clawk_cli.service_manager._s6_running", lambda: True)
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         for argv in (["clawk", "gateway", "run", "--no-supervise"], ["clawk", "chat"]):
             result = _run_apply_profile_override(
                 tmp_path,
@@ -479,7 +480,7 @@ def test_module_entry_keeps_an_explicit_default_profile_over_the_sticky_one(tmp_
     the stripped argv and fall to the sticky profile."""
     import subprocess
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "work").mkdir(parents=True)
     (root / "profiles" / "work" / "config.yaml").write_text("{}\n", encoding="utf-8")
     (root / "active_profile").write_text("work\n", encoding="utf-8")

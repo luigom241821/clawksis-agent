@@ -936,7 +936,7 @@ def _load_global_auth_store() -> dict[str, Any]:
     if cache_key is not None and cached is not None and cached[:2] == cache_key:
         return cached[2]
     if os.environ.get("PYTEST_CURRENT_TEST") and os.environ.get("HOME"):
-        real_root = Path(os.environ["HOME"]) / ".clawk" / "auth.json"
+        real_root = Path(os.environ["HOME"]) / ".clawksis" / "auth.json"
         try:
             if os.path.normcase(os.path.abspath(global_path)) == os.path.normcase(
                 os.path.abspath(real_root)

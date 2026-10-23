@@ -31,7 +31,7 @@ elif [ -f "$HOME/.clawksis/.env" ] && grep -q "^GITHUB_TOKEN=" "$HOME/.clawksis/
         GH_AUTH_METHOD="curl"
     fi
 elif [ -f "$HOME/.git-credentials" ]; then
-    GITHUB_TOKEN=$(uv run python3 "${CLAWK_HOME:-$HOME/.clawk}/skills/github/github-auth/scripts/git-credential-token.py")
+    GITHUB_TOKEN=$(uv run python3 "${CLAWK_HOME:-$HOME/.clawksis}/skills/github/github-auth/scripts/git-credential-token.py")
     if [ -n "$GITHUB_TOKEN" ]; then
         GH_AUTH_METHOD="curl"
     fi

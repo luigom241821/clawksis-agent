@@ -20,7 +20,8 @@ def test_suffix_scopes_default_home_and_profiles(tmp_path, suffix):
     env = dict(os.environ)
     env.pop("CLAWK_HOME", None)
     env.update(
-        HOME=str(tmp_path), USERPROFILE=str(tmp_path),
+        HOME=str(tmp_path),
+        USERPROFILE=str(tmp_path),
         LOCALAPPDATA=str(tmp_path / "AppData" / "Local"),
         CLAWK_DATA_DIR_SUFFIX=suffix,
     )
@@ -44,19 +45,37 @@ result.append(str(get_default_clawk_root()))
 print(json.dumps(result))
 """
     result = subprocess.run(
-        [sys.executable, "-c", script], env=env,
+        [sys.executable, "-c", script],
+        env=env,
         cwd=Path(__file__).resolve().parents[2],
-        text=True, capture_output=True,
+        text=True,
+        capture_output=True,
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    base = tmp_path / "AppData" / "Local" / "clawk" if sys.platform == "win32" else tmp_path / ".clawk"
+    base = (
+        tmp_path / "AppData" / "Local" / "clawk"
+        if sys.platform == "win32"
+        else tmp_path / ".clawksis"
+    )
     root = Path(str(base) + suffix)
     profile = root / "profiles" / "coder"
-    assert json.loads(result.stdout) == list(map(str, [
-        root, root, root, root / "profiles", root / "active_profile", profile,
-        profile, root, Path(str(root) + "-changed"),
-    ]))
+    assert json.loads(result.stdout) == list(
+        map(
+            str,
+            [
+                root,
+                root,
+                root,
+                root / "profiles",
+                root / "active_profile",
+                profile,
+                profile,
+                root,
+                Path(str(root) + "-changed"),
+            ],
+        )
+    )
 
 
 @pytest.mark.platforms("linux", "macos", "windows")
@@ -78,13 +97,19 @@ def test_startup_readers_use_the_suffixed_home(tmp_path, monkeypatch):
     load_clawk_dotenv(project_env=tmp_path / "absent.env", load_external_secrets=False)
     assert os.environ.get("SUFFIX_TEST_CREDENTIAL") == "suffixed"
     assert _clawk_home_dir() == home
-    assert get_startup_watchdog_dump_path() == home / "logs" / "gateway-startup-watchdog.log"
+    assert (
+        get_startup_watchdog_dump_path()
+        == home / "logs" / "gateway-startup-watchdog.log"
+    )
 
 
 def test_suffix_does_not_change_explicit_or_context_home(tmp_path, monkeypatch):
     from clawk_constants import (
-        get_default_clawk_root, get_clawk_home, get_process_clawk_home,
-        reset_clawk_home_override, set_clawk_home_override,
+        get_default_clawk_root,
+        get_clawk_home,
+        get_process_clawk_home,
+        reset_clawk_home_override,
+        set_clawk_home_override,
     )
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -93,7 +118,12 @@ def test_suffix_does_not_change_explicit_or_context_home(tmp_path, monkeypatch):
     scoped = tmp_path / "scoped"
     monkeypatch.setenv("CLAWK_HOME", str(explicit))
     monkeypatch.setenv("CLAWK_DATA_DIR_SUFFIX", "magic-test")
-    assert get_clawk_home() == get_process_clawk_home() == get_default_clawk_root() == explicit
+    assert (
+        get_clawk_home()
+        == get_process_clawk_home()
+        == get_default_clawk_root()
+        == explicit
+    )
     token = set_clawk_home_override(scoped)
     try:
         assert get_clawk_home() == scoped

@@ -153,7 +153,7 @@ test('POSIX relaunch gate refuses live and uncertain install markers without exe
         }
 
         if (command.includes('CLAWK_HOME')) {
-          return '/home/alice/.clawk\n'
+          return '/home/alice/.clawksis\n'
         }
 
         if (command.includes('.clawk-update-in-progress')) {
@@ -203,7 +203,7 @@ test('POSIX relaunch gate rechecks after token upload immediately before process
       }
 
       if (command.includes('CLAWK_HOME')) {
-        return '/home/alice/.clawk\n'
+        return '/home/alice/.clawksis\n'
       }
 
       if (command.includes('.clawk-update-in-progress')) {
@@ -245,7 +245,7 @@ test('POSIX relaunch gate rechecks after token upload immediately before process
 
 test('readRemoteInstallId reads the backend identity without spawning a dashboard or minting one', async () => {
   const ssh = fakeSsh([
-    [/CLAWK_HOME/, '/Users/zillajr/.clawk\n'],
+    [/CLAWK_HOME/, '/Users/zillajr/.clawksis\n'],
     [/cat .*install_id/, '0f8a1c2b3d4e5f60718293a4b5c6d7e8\n']
   ])
 
@@ -279,7 +279,7 @@ test('readRemoteInstallId reports the INSTALL root id for a profile-pinned home'
 test('readRemoteInstallId reports no id rather than a bad one', async () => {
   for (const payload of ['', 'not-an-id\n', 'ABCDEF\n', '0f8a1c2b3d4e5f60718293a4b5c6d7e8extra\n']) {
     const ssh = fakeSsh([
-      [/CLAWK_HOME/, '/Users/zillajr/.clawk\n'],
+      [/CLAWK_HOME/, '/Users/zillajr/.clawksis\n'],
       [/cat .*install_id/, payload]
     ])
 
@@ -291,7 +291,7 @@ test('readRemoteInstallId reports no id rather than a bad one', async () => {
 
 test('listRemoteClawksisProfiles inventories Mini-style profile dirs without spawning a dashboard', async () => {
   const ssh = fakeSsh([
-    [/CLAWK_HOME/, '/Users/zillajr/.clawk\n'],
+    [/CLAWK_HOME/, '/Users/zillajr/.clawksis\n'],
     [/ls -1/, 'bob\ndixie\ngoose\nrambo\nbob.rollback-old\n']
   ])
 
@@ -1205,7 +1205,7 @@ test('managed SSH maps a local scope to a different non-default remote profile',
   assert.match(spawn, /--profile\b/)
   assert.ok(spawn.includes('writer_2'))
   assert.match(spawn, /serve\s+--isolated/)
-  assert.match(spawn, /\.clawk\/desktop-ssh\/[0-9a-f]{32}\/[0-9a-f]{16}\.token/)
+  assert.match(spawn, /\.clawksis\/desktop-ssh\/[0-9a-f]{32}\/[0-9a-f]{16}\.token/)
   assert.ok(!spawn.includes(' work'), 'the local Desktop scope must not become the remote profile')
 })
 
@@ -1321,7 +1321,7 @@ test('connect() fresh spawn writes clawkHome + protocolVersion into the lockfile
     [/uname/, 'Linux\nx86_64'],
     [/\[ -x/, 'OK'],
     [/cat .*lock\.json/, ''], // no lockfile
-    [/CLAWK_HOME/, '/home/alice/.clawk\n'],
+    [/CLAWK_HOME/, '/home/alice/.clawksis\n'],
     [/grep -q ssh-session-token-file/, 'YES\n'],
     [/python3 -c/, ''],
     [/printf '%s\\n'/, ''],
@@ -1341,7 +1341,7 @@ test('connect() fresh spawn writes clawkHome + protocolVersion into the lockfile
   await connect(connectDeps(ssh, { adoptServedToken: async () => 'fresh' }))
   const lockWrite = writes.find(c => c.includes('schemaVersion')) || ''
   assert.match(lockWrite, new RegExp(`"protocolVersion":${PROTOCOL_VERSION}`))
-  assert.match(lockWrite, /"clawkHome":"\/home\/alice\/\.clawk"/)
+  assert.match(lockWrite, /"clawkHome":"\/home\/alice\/\.clawksis"/)
 })
 
 test('connect() respawns when the lockfile pid is dead (killed dashboard)', async () => {
@@ -1643,7 +1643,7 @@ test('buildSpawnCommand includes --ssh-session-token-file when tokenFilePath is 
   })
 
   assert.match(cmd, /--ssh-session-token-file/)
-  assert.match(cmd, /\.clawk\/desktop-ssh\//)
+  assert.match(cmd, /\.clawksis\/desktop-ssh\//)
 })
 
 test('spawnRemoteDashboard removes a token file when upload reporting fails', async () => {
@@ -2093,7 +2093,7 @@ test.skipIf(process.platform === 'win32')(
       // argv: ['-c', <marker gate>, <marker path>, <payload>]
       assert.equal(
         argv[2],
-        `${fakeHome}/.clawk/.clawk-update-in-progress`,
+        `${fakeHome}/.clawksis/.clawk-update-in-progress`,
         'marker path must reach python fully expanded, with no quote characters'
       )
 
@@ -2112,7 +2112,7 @@ test.skipIf(process.platform === 'win32')(
       )
 
       const [reservation, lock, ownerFile] = stdout.split('\n')
-      const base = `${fakeHome}/.clawk/desktop-ssh/${OWNERSHIP_ID}`
+      const base = `${fakeHome}/.clawksis/desktop-ssh/${OWNERSHIP_ID}`
       assert.equal(reservation, `${base}/.connect.lock`)
       assert.equal(lock, `${base}/backend.lock.json`)
       assert.equal(ownerFile, `${base}/.connect.lock/owner`)

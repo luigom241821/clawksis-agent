@@ -50,9 +50,9 @@ class ForeignRoot(ValueError):
 
 
 def _install_root(home: Path) -> Path:
-    # <root>/.clawk or <root>/.clawk/profiles/<name>: the root is the HOME that anchors it.
+    # <root>/.clawksis or <root>/.clawksis/profiles/<name>: the root is the HOME that anchors it.
     parts = home.parts
-    if len(parts) >= 3 and parts[-3] == ".clawk" and parts[-2] == "profiles":
+    if len(parts) >= 3 and parts[-3] == ".clawksis" and parts[-2] == "profiles":
         return home.parents[2]
     return home.parent
 
@@ -251,7 +251,7 @@ def verify_systemd(
     configured = env.get("CLAWK_HOME", "").strip()
     if not configured:
         configured = str(
-            _absolute(env.get("HOME") or pwd.getpwuid(uid).pw_dir) / ".clawk"
+            _absolute(env.get("HOME") or pwd.getpwuid(uid).pw_dir) / ".clawksis"
         )
     verify_home(home, configured)
     match = re.fullmatch(

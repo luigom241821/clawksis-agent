@@ -117,7 +117,7 @@ class TestBootReadersBeforeProfileOverride:
         self, fresh_constants, tmp_path, capsys
     ):
         """Boot scratch setup: silent, and pointed at the home the bootstrap resolved."""
-        clawk_dir = tmp_path / ".clawk"
+        clawk_dir = tmp_path / ".clawksis"
         (clawk_dir / "profiles" / "coder").mkdir(parents=True)
         (clawk_dir / "active_profile").write_text("coder\n")
         capsys.readouterr()  # drop anything the setup above printed
@@ -132,7 +132,7 @@ class TestBootReadersBeforeProfileOverride:
         self, fresh_constants, tmp_path, capsys
     ):
         """A caller that passes a home (`clawk doctor` for another profile) stays silent."""
-        clawk_dir = tmp_path / ".clawk"
+        clawk_dir = tmp_path / ".clawksis"
         profile_dir = clawk_dir / "profiles" / "coder"
         profile_dir.mkdir(parents=True)
         (clawk_dir / "active_profile").write_text("coder\n")

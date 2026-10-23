@@ -205,7 +205,7 @@ def test_gateway_credentials_never_reach_a_secondary_profiles_host(daemon):
 
     assert len(daemon.calls) == 2
     forbidden = {
-        "x-clawk-gateway-ticket",
+        "x-clawksis-gateway-ticket",
         web_server._SESSION_HEADER_NAME.lower(),
         "authorization",
         "cookie",

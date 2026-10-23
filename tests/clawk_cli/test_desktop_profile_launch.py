@@ -51,7 +51,15 @@ def _named_profiles(argv: list[str]) -> set[str]:
 def _packaged_exe(root: Path) -> Path:
     desktop_dir = root / "apps" / "desktop"
     if sys.platform == "darwin":
-        exe = desktop_dir / "release" / "mac-arm64" / "Clawksis.app" / "Contents" / "MacOS" / "Clawksis"
+        exe = (
+            desktop_dir
+            / "release"
+            / "mac-arm64"
+            / "Clawksis.app"
+            / "Contents"
+            / "MacOS"
+            / "Clawksis"
+        )
     elif sys.platform == "win32":
         exe = desktop_dir / "release" / "win-unpacked" / "Clawksis.exe"
     else:
@@ -69,12 +77,16 @@ def _live_profile(root: Path, name: str) -> None:
     (profile / "config.yaml").write_text("{}\n", encoding="utf-8")
 
 
-def _launch_command(tmp_path, monkeypatch, argv: list[str], *, active_profile: str | None = None) -> list[str]:
-    clawk_root = tmp_path / ".clawk"
+def _launch_command(
+    tmp_path, monkeypatch, argv: list[str], *, active_profile: str | None = None
+) -> list[str]:
+    clawk_root = tmp_path / ".clawksis"
     clawk_root.mkdir()
     if active_profile and active_profile != "default":
         _live_profile(clawk_root, active_profile)
-        (clawk_root / "active_profile").write_text(active_profile + "\n", encoding="utf-8")
+        (clawk_root / "active_profile").write_text(
+            active_profile + "\n", encoding="utf-8"
+        )
     for name in _named_profiles(argv):
         _live_profile(clawk_root, name)
 
@@ -98,7 +110,9 @@ def _launch_command(tmp_path, monkeypatch, argv: list[str], *, active_profile: s
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(sys, "argv", argv)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", project)
-    monkeypatch.setattr(main_desktop, "_desktop_exe_integrity_error", lambda _path: None)
+    monkeypatch.setattr(
+        main_desktop, "_desktop_exe_integrity_error", lambda _path: None
+    )
     # Module global: restore it so a later cmd_gui test does not inherit a flag.
     monkeypatch.setattr(cli_main, "_explicit_cli_profile", None)
 
@@ -120,13 +134,17 @@ def _launch_command(tmp_path, monkeypatch, argv: list[str], *, active_profile: s
 
 
 def test_dash_p_desktop_appends_profile_to_packaged_launch(tmp_path, monkeypatch):
-    launched = _launch_command(tmp_path, monkeypatch, ["clawk", "-p", "desktop", "desktop"])
+    launched = _launch_command(
+        tmp_path, monkeypatch, ["clawk", "-p", "desktop", "desktop"]
+    )
 
     assert launched[-2:] == ["--profile", "desktop"]
 
 
 def test_profile_equals_spelling_is_forwarded(tmp_path, monkeypatch):
-    launched = _launch_command(tmp_path, monkeypatch, ["clawk", "desktop", "--profile=work"])
+    launched = _launch_command(
+        tmp_path, monkeypatch, ["clawk", "desktop", "--profile=work"]
+    )
 
     assert launched[-2:] == ["--profile", "work"]
 

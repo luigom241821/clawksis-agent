@@ -12,7 +12,9 @@ from pathlib import Path
 
 from clawk_cli._startup_fast import is_desktop_ssh_backend_argv
 
-_PS_RUN_KWARGS = dict(capture_output=True, text=True, encoding="utf-8", errors="replace")
+_PS_RUN_KWARGS = dict(
+    capture_output=True, text=True, encoding="utf-8", errors="replace"
+)
 
 
 def _empty_result() -> dict[str, list]:
@@ -43,9 +45,12 @@ def _iter_process_table() -> list[tuple[int, str]]:
         # pythonw.exe desktop/gateway backend during an update, where a bare wmic spawn would pop a console
         # window.
         from clawk_cli._subprocess_compat import bounded_probe_run
+
         result = bounded_probe_run(
             ["wmic", "process", "get", "ProcessId,CommandLine", "/FORMAT:LIST"],
-            timeout=10, errors="ignore")
+            timeout=10,
+            errors="ignore",
+        )
         if result is None or result.returncode != 0 or result.stdout is None:
             return rows
         current_cmd = ""
@@ -57,7 +62,9 @@ def _iter_process_table() -> list[tuple[int, str]]:
                 _append_row(rows, line[len("ProcessId=") :], current_cmd)
         return rows
     # ps, not `pgrep -f "clawk.*dashboard"` (greedy regex; consistent with gateway pid scan).
-    result = subprocess.run(["ps", "-A", "-o", "pid=,command="], timeout=10, **_PS_RUN_KWARGS, check=False)
+    result = subprocess.run(
+        ["ps", "-A", "-o", "pid=,command="], timeout=10, **_PS_RUN_KWARGS, check=False
+    )
     if result.returncode == 0:
         for line in getattr(result, "stdout", "").split("\n"):
             parts = line.strip().split(None, 1)
@@ -66,7 +73,9 @@ def _iter_process_table() -> list[tuple[int, str]]:
     return rows
 
 
-def _scan_dashboard_processes(*, exclude_pids: set[int] | None = None) -> list[tuple[int, str]]:
+def _scan_dashboard_processes(
+    *, exclude_pids: set[int] | None = None
+) -> list[tuple[int, str]]:
     """``(pid, cmdline)`` of running ``dashboard``/``serve`` processes; empty on any scan error.
 
     A forgotten dashboard keeps the old Python backend against the new JS bundle after
@@ -84,9 +93,14 @@ def _scan_dashboard_processes(*, exclude_pids: set[int] | None = None) -> list[t
     # server`` and this list decides a SIGTERM — ``herdr --session clawk server`` (a terminal
     # multiplexer) was killed and its unit restarted by ``clawk update`` (#121156).
     from clawk_cli.update_cmd_windows import _clawk_holder_subcommand
+
     try:
-        found = [(pid, cmd) for pid, cmd in _iter_process_table()
-                 if pid not in skip and _clawk_holder_subcommand(cmd) in ("dashboard", "serve")]
+        found = [
+            (pid, cmd)
+            for pid, cmd in _iter_process_table()
+            if pid not in skip
+            and _clawk_holder_subcommand(cmd) in ("dashboard", "serve")
+        ]
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return []
     # Spawn-ledger augmentation: an argv scan misses a truncated or unreadable cmdline; the ledger
@@ -97,11 +111,15 @@ def _scan_dashboard_processes(*, exclude_pids: set[int] | None = None) -> list[t
         # serve/dashboard the scan missed; prefer the ledger's recorded argv (full launch args) over the
         # scan's truncated view. See #81564.
         from clawk_cli.process_identity import ledger_entries
+
         seen = {pid for pid, _ in found} | skip
         for entry in ledger_entries():
             pid = entry.get("pid")
-            if (entry.get("purpose") in ("serve", "dashboard") and isinstance(pid, int)
-                    and pid not in seen):
+            if (
+                entry.get("purpose") in ("serve", "dashboard")
+                and isinstance(pid, int)
+                and pid not in seen
+            ):
                 found.append((pid, str(entry.get("argv") or "")))
     return found
 
@@ -115,10 +133,15 @@ def _ledger_serve_binds() -> dict[int, tuple[str, int]]:
     binds: dict[int, tuple[str, int]] = {}
     with contextlib.suppress(Exception):
         from clawk_cli.process_identity import ledger_entries
+
         for entry in ledger_entries():
             pid, port = entry.get("pid"), entry.get("port")
-            if (entry.get("purpose") in ("serve", "dashboard") and isinstance(pid, int)
-                    and isinstance(port, int) and port > 0):
+            if (
+                entry.get("purpose") in ("serve", "dashboard")
+                and isinstance(pid, int)
+                and isinstance(port, int)
+                and port > 0
+            ):
                 binds[pid] = (str(entry.get("host") or ""), port)
     return binds
 
@@ -127,6 +150,7 @@ def _pid_environ(pid: int) -> dict[str, str] | None:
     """Exec-time environment of *pid* (psutil, then /proc); ``None`` when unreadable."""
     with contextlib.suppress(Exception):
         import psutil
+
         return dict(psutil.Process(pid).environ())
     try:
         raw = Path(f"/proc/{pid}/environ").read_bytes()
@@ -136,7 +160,9 @@ def _pid_environ(pid: int) -> dict[str, str] | None:
     for part in raw.split(b"\x00"):
         key, sep, value = part.partition(b"=")
         if sep:
-            env[key.decode("utf-8", errors="replace")] = value.decode("utf-8", errors="replace")
+            env[key.decode("utf-8", errors="replace")] = value.decode(
+                "utf-8", errors="replace"
+            )
     return env
 
 
@@ -151,6 +177,7 @@ def _pid_passwd_home(pid: int) -> str | None:
     uid: int | None = None
     with contextlib.suppress(Exception):
         import psutil
+
         uid = psutil.Process(pid).uids().real
     if uid is None:
         with contextlib.suppress(OSError):
@@ -159,11 +186,14 @@ def _pid_passwd_home(pid: int) -> str | None:
         return None
     with contextlib.suppress(Exception):
         import pwd
+
         return pwd.getpwuid(uid).pw_dir or None
     return None
 
 
-def _clawk_home_for_pid(pid: int, *, require_launch_identity: bool = False) -> str | None:
+def _clawk_home_for_pid(
+    pid: int, *, require_launch_identity: bool = False
+) -> str | None:
     """Resolve a process home for discovery, or require pinned launch identity for termination.
 
     By default, ``None`` means an unreadable environment (another user, hardened ``/proc``).
@@ -184,11 +214,17 @@ def _clawk_home_for_pid(pid: int, *, require_launch_identity: bool = False) -> s
     if env is None:
         return None
     from clawk_cli.main_dashboard import _dashboard_cmdline_for_pid
-    from clawk_cli.profiles import get_active_profile, normalize_profile_name, profile_root_for_env_home
+    from clawk_cli.profiles import (
+        get_active_profile,
+        normalize_profile_name,
+        profile_root_for_env_home,
+    )
+
     argv = _dashboard_cmdline_for_pid(pid)
     if require_launch_identity and argv is None:
         # The dashboard argv reader has no Windows implementation; psutil does.
         import psutil
+
         argv = psutil.Process(pid).cmdline()
     if require_launch_identity and not argv:
         return None
@@ -196,24 +232,45 @@ def _clawk_home_for_pid(pid: int, *, require_launch_identity: bool = False) -> s
     env_home = env.get("CLAWK_HOME", "").strip()
     profile = _profile_flag_value(argv)
     if require_launch_identity:
-        anchor = (env.get('LOCALAPPDATA') or env.get('USERPROFILE')) if sys.platform == 'win32' else env.get('HOME')
+        anchor = (
+            (env.get("LOCALAPPDATA") or env.get("USERPROFILE"))
+            if sys.platform == "win32"
+            else env.get("HOME")
+        )
         if env_home and not Path(env_home).is_absolute():
             return None
         if not env_home and (not anchor or not Path(anchor).is_absolute()):
             return None
-    if profile is None and env_home and (
-        Path(env_home).parent.name == "profiles" or env.get("CLAWK_UPDATE_POST_SWAP") == "1"
+    if (
+        profile is None
+        and env_home
+        and (
+            Path(env_home).parent.name == "profiles"
+            or env.get("CLAWK_UPDATE_POST_SWAP") == "1"
+        )
     ):
         return env_home
     if sys.platform == "win32":
         local_appdata = env.get("LOCALAPPDATA", "").strip()
-        base = Path(local_appdata) if local_appdata else Path(env.get("USERPROFILE") or Path.home()) / "AppData" / "Local"
+        base = (
+            Path(local_appdata)
+            if local_appdata
+            else Path(env.get("USERPROFILE") or Path.home()) / "AppData" / "Local"
+        )
         default_home = base / "clawk"
     else:
-        default_home = Path(env.get("HOME") or _pid_passwd_home(pid) or Path.home()) / ".clawk"
+        default_home = (
+            Path(env.get("HOME") or _pid_passwd_home(pid) or Path.home()) / ".clawksis"
+        )
     root = profile_root_for_env_home(env_home, default_home)
-    fixed_identity = any(env.get(k) for k in ("CLAWK_SUPERVISED_CHILD", "CLAWK_S6_SUPERVISED_CHILD",
-                                               "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR")) or is_desktop_ssh_backend_argv(argv)
+    fixed_identity = any(
+        env.get(k)
+        for k in (
+            "CLAWK_SUPERVISED_CHILD",
+            "CLAWK_S6_SUPERVISED_CHILD",
+            "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR",
+        )
+    ) or is_desktop_ssh_backend_argv(argv)
     if profile is None and not fixed_identity:
         if require_launch_identity:
             return None  # The sticky profile at launch is unknowable; never read today's value.
@@ -223,7 +280,9 @@ def _clawk_home_for_pid(pid: int, *, require_launch_identity: bool = False) -> s
 
 
 def _dashboard_subcommand_index(argv: list[str]) -> int | None:
-    return next((i for i, tok in enumerate(argv) if tok in ("serve", "dashboard")), None)
+    return next(
+        (i for i, tok in enumerate(argv) if tok in ("serve", "dashboard")), None
+    )
 
 
 def _profile_flag_value(argv: list[str]) -> str | None:
@@ -244,9 +303,11 @@ def _is_ephemeral_port_zero_backend(argv: list[str]) -> bool:
     """
     if _dashboard_subcommand_index(argv) is None:
         return False
-    return any((tok == "--port" and i + 1 < len(argv) and str(argv[i + 1]) == "0")
-               or (tok.startswith("--port=") and tok.split("=", 1)[1].strip() == "0")
-               for i, tok in enumerate(argv))
+    return any(
+        (tok == "--port" and i + 1 < len(argv) and str(argv[i + 1]) == "0")
+        or (tok.startswith("--port=") and tok.split("=", 1)[1].strip() == "0")
+        for i, tok in enumerate(argv)
+    )
 
 
 def _normalize_dashboard_cmdline(argv: list[str]) -> tuple[str, ...]:
@@ -294,7 +355,8 @@ def _pids_owned_by_clawk_home(pids: list[int], home: str) -> list[int]:
     """
     target = _normalized_home_for_compare(home)
     return [
-        pid for pid in pids
+        pid
+        for pid in pids
         if (pid_home := _clawk_home_for_pid(pid))
         and _normalized_home_for_compare(pid_home) == target
     ]
@@ -338,6 +400,7 @@ def _filter_dashboard_respawn_candidates(
     if own_home is None:
         try:
             from clawk_constants import get_clawk_home
+
             own_home = str(get_clawk_home())
         except Exception:
             own_home = ""
@@ -348,7 +411,11 @@ def _filter_dashboard_respawn_candidates(
     for _pid, argv, clawk_home in candidates:
         if not argv or _is_ephemeral_port_zero_backend(argv):
             continue
-        if own_key and clawk_home and _normalized_home_for_compare(clawk_home) != own_key:
+        if (
+            own_key
+            and clawk_home
+            and _normalized_home_for_compare(clawk_home) != own_key
+        ):
             continue
         norm = _normalize_dashboard_cmdline(argv)
         profile_key = _profile_key_for_respawn(argv, clawk_home)
@@ -372,11 +439,29 @@ def _exclude_pids_from_env() -> set[int]:
 #: Executables that only *carry* a clawk command line. A process headed by one of these
 #: never serves traffic itself; when its argv matches the dashboard patterns it is a
 #: wrapper around the command (``bash -c 'clawk dashboard --stop'``), not a backend.
-_WRAPPER_HEAD_COMMANDS = frozenset({
-    "ash", "bash", "csh", "dash", "fish", "ksh", "sh", "tcsh", "zsh",
-    "env", "nohup", "nice", "stdbuf", "timeout", "watch", "xargs",
-    "screen", "tmux", "sudo",
-})
+_WRAPPER_HEAD_COMMANDS = frozenset(
+    {
+        "ash",
+        "bash",
+        "csh",
+        "dash",
+        "fish",
+        "ksh",
+        "sh",
+        "tcsh",
+        "zsh",
+        "env",
+        "nohup",
+        "nice",
+        "stdbuf",
+        "timeout",
+        "watch",
+        "xargs",
+        "screen",
+        "tmux",
+        "sudo",
+    }
+)
 
 
 def _caller_ancestor_pids() -> set[int]:
@@ -396,7 +481,8 @@ def _caller_ancestor_pids() -> set[int]:
     for _ in range(2048):  # cycle / corrupt-PPid guard
         try:
             status_text = Path(f"/proc/{cur}/status").read_text(
-                encoding="utf-8", errors="replace")
+                encoding="utf-8", errors="replace"
+            )
             for line in status_text.splitlines():
                 if line.startswith("PPid:"):
                     cur = int(line.split()[1])
@@ -442,10 +528,13 @@ def _is_caller_wrapper_shell(pid: int, ancestors: set[int]) -> bool:
     return (_argv_head_command(pid) or "") in _WRAPPER_HEAD_COMMANDS
 
 
-def _kill_pids_windows(pids: list[int], killed: list[int], failed: list[tuple[int, str]]) -> None:
+def _kill_pids_windows(
+    pids: list[int], killed: list[int], failed: list[tuple[int, str]]
+) -> None:
     """``taskkill /F`` each PID after re-verifying its identity."""
     from gateway.status import get_process_start_time
     from clawk_cli._subprocess_compat import pid_is_clawk, windows_hide_flags
+
     # Identity captured right after discovery: a PID reused before the kill fails the check.
     pid_start_times = {pid: get_process_start_time(pid) for pid in pids}
     for pid in pids:
@@ -457,9 +546,16 @@ def _kill_pids_windows(pids: list[int], killed: list[int], failed: list[tuple[in
                 failed.append((pid, "not clawk-owned or process identity changed"))
             else:
                 result = subprocess.run(
-                    ["taskkill", "/PID", str(pid), "/F"], capture_output=True,
-                    stdin=subprocess.DEVNULL, text=True, encoding="utf-8",
-                    errors="replace", timeout=10, creationflags=windows_hide_flags(), check=False)
+                    ["taskkill", "/PID", str(pid), "/F"],
+                    capture_output=True,
+                    stdin=subprocess.DEVNULL,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=10,
+                    creationflags=windows_hide_flags(),
+                    check=False,
+                )
                 if result.returncode == 0:
                     killed.append(pid)
                 else:
@@ -518,8 +614,14 @@ def _posix_descendants(roots: list[int]) -> dict[int, tuple[int, int | None]]:
     ``_kill_pids_windows`` uses). Empty on scan failure → root-only kill, the historical behaviour.
     """
     from gateway.status import get_process_start_time
+
     try:
-        result = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,tty="], timeout=10, **_PS_RUN_KWARGS, check=False)
+        result = subprocess.run(
+            ["ps", "-A", "-o", "pid=,ppid=,tty="],
+            timeout=10,
+            **_PS_RUN_KWARGS,
+            check=False,
+        )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return {}
     children: dict[int, list[tuple[int, str]]] = {}
@@ -539,9 +641,16 @@ def _posix_descendants(roots: list[int]) -> dict[int, tuple[int, int | None]]:
     while pending:
         root, cur = pending.pop()
         for pid, tty in children.get(cur, ()):
-            if pid in found or pid in roots or pid == me or _is_detached_session_leader(pid, tty):
+            if (
+                pid in found
+                or pid in roots
+                or pid == me
+                or _is_detached_session_leader(pid, tty)
+            ):
                 continue
-            if pid not in ancestors:  # an ancestor of the caller is spared, but its other children are not
+            if (
+                pid not in ancestors
+            ):  # an ancestor of the caller is spared, but its other children are not
                 found[pid] = (root, get_process_start_time(pid))
             pending.append((root, pid))
     return found
@@ -557,11 +666,15 @@ def _wait_gone(pids: list[int], seconds: float) -> list[int]:
     alive = list(pids)
     while alive and _time.monotonic() < deadline:
         _time.sleep(0.1)
-        alive = [p for p in alive if _pid_exists(p)]  # os.kill(pid, 0) breaks on Windows
+        alive = [
+            p for p in alive if _pid_exists(p)
+        ]  # os.kill(pid, 0) breaks on Windows
     return alive
 
 
-def _kill_pids_posix(pids: list[int], killed: list[int], failed: list[tuple[int, str]]) -> None:
+def _kill_pids_posix(
+    pids: list[int], killed: list[int], failed: list[tuple[int, str]]
+) -> None:
     """SIGTERM, wait up to ``_POSIX_TERM_GRACE_SECONDS`` for graceful exit, SIGKILL survivors, then
     sweep the dashboard-owned descendants that outlived the root and wait for the tree to be gone.
 
@@ -594,20 +707,27 @@ def _kill_pids_posix(pids: list[int], killed: list[int], failed: list[tuple[int,
         _send(pid, _signal.SIGKILL)
 
     # Snapshot identity must still match: a PID recycled during the grace is not ours to signal.
-    survivors = [p for p, (_root, start) in descendants.items()
-                 if start is not None and get_process_start_time(p) == start]
+    survivors = [
+        p
+        for p, (_root, start) in descendants.items()
+        if start is not None and get_process_start_time(p) == start
+    ]
     for sig in (_signal.SIGTERM, _signal.SIGKILL):
         for pid in survivors:
             with contextlib.suppress(OSError):
                 os.kill(pid, sig)
         survivors = _wait_gone(survivors, _POSIX_DESCENDANT_GRACE_SECONDS)
-    failed.extend((pid, "descendant of the stopped backend still alive after SIGKILL")
-                  for pid in survivors)
+    failed.extend(
+        (pid, "descendant of the stopped backend still alive after SIGKILL")
+        for pid in survivors
+    )
 
 
 def _kill_stale_dashboard_processes(
-    reason: str = "the running backend no longer matches the updated frontend", *,
-    restart_managed: bool = False, already_restarted_units: set[str] | None = None,
+    reason: str = "the running backend no longer matches the updated frontend",
+    *,
+    restart_managed: bool = False,
+    already_restarted_units: set[str] | None = None,
     scope_home: str | None = None,
 ) -> dict[str, list]:
     """Kill running ``clawk dashboard`` / ``clawk serve`` processes (update end, ``--stop``).
@@ -631,12 +751,17 @@ def _kill_stale_dashboard_processes(
     """
     from clawk_cli import main_dashboard as _dash
 
-    _dash_unit = str(getattr(_dash, "_DASHBOARD_SYSTEMD_UNIT", "clawksis-dashboard.service")).removesuffix(".service")
+    _dash_unit = str(
+        getattr(_dash, "_DASHBOARD_SYSTEMD_UNIT", "clawksis-dashboard.service")
+    ).removesuffix(".service")
     # The update's fleet loop already handled the dashboard unit (restarted it, or declined for lack
     # of root and printed the manual command): a second attempt here restarts a healthy unit twice,
     # or retries without --no-ask-password and dumps a polkit/tty error under the same advice (#141021).
-    if (restart_managed and _dash_unit not in (already_restarted_units or ())
-            and _dash._restart_managed_dashboard_service(reason)):
+    if (
+        restart_managed
+        and _dash_unit not in (already_restarted_units or ())
+        and _dash._restart_managed_dashboard_service(reason)
+    ):
         # The dashboard unit is handled but other backends (e.g. clawk-serve.service) are not:
         # mark the unit handled so the filter below drops its PIDs, and keep going.
         already_restarted_units = set(already_restarted_units or ()) | {_dash_unit}
@@ -645,7 +770,9 @@ def _kill_stale_dashboard_processes(
         # An SSH-owned backend belongs to an attached Desktop client; killing it strands that
         # client's fixed SSH port-forward. Same ownership records as the reaper.
         exclude |= _lock_owned_serve_pids()
-    pids = _dash._find_stale_dashboard_pids(exclude_pids=exclude or None, scope_home=scope_home)
+    pids = _dash._find_stale_dashboard_pids(
+        exclude_pids=exclude or None, scope_home=scope_home
+    )
     if not pids:
         return _empty_result()
     # Snapshot systemd unit/cgroup and argv BEFORE killing (the cgroup dies with the process).
@@ -659,10 +786,14 @@ def _kill_stale_dashboard_processes(
     # job then fails every KeepAlive restart with "port already in use", and the running backend
     # is left unsupervised. Snapshot the loaded jobs once, before the kill; ``--stop`` reads them
     # too, so it can say that a KeepAlive job will undo the stop.
-    launchd_jobs = _dash._loaded_launchd_backend_jobs() if sys.platform != "win32" else []
+    launchd_jobs = (
+        _dash._loaded_launchd_backend_jobs() if sys.platform != "win32" else []
+    )
 
     def _launchd_owner(pid: int, cmdline: list[str] | None):
-        return _dash._launchd_job_owning_backend(pid, cmdline, launchd_jobs, ancestors=_process_ancestors(pid))
+        return _dash._launchd_job_owning_backend(
+            pid, cmdline, launchd_jobs, ancestors=_process_ancestors(pid)
+        )
 
     if restart_managed and sys.platform != "win32":
         for pid in pids:
@@ -681,8 +812,12 @@ def _kill_stale_dashboard_processes(
                 pid_cmdline[pid] = cmdline
                 pid_home[pid] = _clawk_home_for_pid(pid)
         if already_restarted_units:
-            pids = [pid for pid in pids if (pid_service.get(pid) or "").removesuffix(".service")
-                    not in already_restarted_units]
+            pids = [
+                pid
+                for pid in pids
+                if (pid_service.get(pid) or "").removesuffix(".service")
+                not in already_restarted_units
+            ]
             if not pids:
                 return _empty_result()
     elif launchd_jobs:
@@ -692,31 +827,59 @@ def _kill_stale_dashboard_processes(
     print(f"\n⟲ Stopping {len(pids)} dashboard process(es) ({reason})")
     killed: list[int] = []
     failed: list[tuple[int, str]] = []
-    (_kill_pids_windows if sys.platform == "win32" else _kill_pids_posix)(pids, killed, failed)
+    (_kill_pids_windows if sys.platform == "win32" else _kill_pids_posix)(
+        pids, killed, failed
+    )
     for pid in killed:
         print(f"    ✓ stopped PID {pid}")
     for pid, err_msg in failed:
         print(f"    ✗ failed to stop PID {pid}: {err_msg}")
     if killed and restart_managed:
         unrecovered = _restart_killed_backends(
-            killed, pid_service, pid_cgroup, pid_cmdline, pid_home, pid_launchd=pid_launchd)
+            killed,
+            pid_service,
+            pid_cgroup,
+            pid_cmdline,
+            pid_home,
+            pid_launchd=pid_launchd,
+        )
     else:
         unrecovered = list(killed)
         # A stopped launchd job with KeepAlive restarts itself: say so instead of a misleading
         # "restart it yourself" hint, and give the command that actually keeps it down.
-        for target in sorted({f"{d}/{l}" for p in killed if (j := pid_launchd.get(p)) for d, l, _ in (j,)}):
-            print(f"  ⚠ PID(s) supervised by launchd job {target}: a KeepAlive job restarts itself.\n"
-                  f"    To keep it down: launchctl bootout {target}")
+        for target in sorted(
+            {
+                f"{d}/{l}"
+                for p in killed
+                if (j := pid_launchd.get(p))
+                for d, l, _ in (j,)
+            }
+        ):
+            print(
+                f"  ⚠ PID(s) supervised by launchd job {target}: a KeepAlive job restarts itself.\n"
+                f"    To keep it down: launchctl bootout {target}"
+            )
         if any(p not in pid_launchd for p in killed):
-            print("  Restart the dashboard when you're ready:\n    clawk dashboard --port <port>")
-    return {"matched": list(pids), "killed": list(killed), "failed": list(failed),
-            "unrecovered": list(unrecovered)}
+            print(
+                "  Restart the dashboard when you're ready:\n    clawk dashboard --port <port>"
+            )
+    return {
+        "matched": list(pids),
+        "killed": list(killed),
+        "failed": list(failed),
+        "unrecovered": list(unrecovered),
+    }
 
 
 def _restart_killed_backends(
-    killed: list[int], pid_service: dict[int, str | None], pid_cgroup: dict[int, str | None],
-    pid_cmdline: dict[int, list[str]], pid_home: dict[int, str | None], *,
-    pid_launchd: dict[int, tuple[str, str, int | None]] | None = None) -> list[int]:
+    killed: list[int],
+    pid_service: dict[int, str | None],
+    pid_cgroup: dict[int, str | None],
+    pid_cmdline: dict[int, list[str]],
+    pid_home: dict[int, str | None],
+    *,
+    pid_launchd: dict[int, tuple[str, str, int | None]] | None = None,
+) -> list[int]:
     """Update path: restart systemd units, kickstart launchd jobs (macOS), respawn manual argv
     (detached, headless, logged to logs/dashboard-restart.log; one per profile, no ``--port 0``).
     Returns PIDs not brought back."""
@@ -725,6 +888,7 @@ def _restart_killed_backends(
     # ``serve|dashboard --port 0`` backends are not resurrected and duplicates collapse to one per profile
     # (#78821).
     from clawk_cli import main_dashboard as _dash
+
     unrecovered: list[int] = []
     failed_restarts: list[tuple[str, str]] = []
     seen_services: set[str] = set()
@@ -739,7 +903,9 @@ def _restart_killed_backends(
             if _dash._try_restart_systemd_service(svc_name, pid_cgroup.get(pid)):
                 print(f"    ✓ restarted systemd service {svc_name}")
             else:
-                failed_restarts.append((svc_name, "systemctl restart returned non-zero"))
+                failed_restarts.append(
+                    (svc_name, "systemctl restart returned non-zero")
+                )
                 unrecovered.append(pid)
         elif launchd_job:
             # launchd owns the backend: the job brings it back (KeepAlive, or the kickstart below),
@@ -755,9 +921,15 @@ def _restart_killed_backends(
             else:
                 # A LaunchDaemon (system domain) can only be kickstarted by root; the hint must
                 # be the command that works from the shell the operator is actually in.
-                sudo = "sudo " if domain.startswith("system") and os.geteuid() != 0 else ""  # windows-footgun: ok — launchd jobs exist only on macOS
+                sudo = (
+                    "sudo " if domain.startswith("system") and os.geteuid() != 0 else ""
+                )  # windows-footgun: ok — launchd jobs exist only on macOS
                 failed_restarts.append(
-                    (target, f"launchd is not supervising a fresh process; run: {sudo}launchctl kickstart -k {target}"))
+                    (
+                        target,
+                        f"launchd is not supervising a fresh process; run: {sudo}launchctl kickstart -k {target}",
+                    )
+                )
                 unrecovered.append(pid)
         elif pid in pid_cmdline:
             respawn_candidates.append((pid, pid_cmdline[pid], pid_home.get(pid)))
@@ -766,11 +938,15 @@ def _restart_killed_backends(
     for svc, err in failed_restarts:
         print(f"    ⚠ {svc}: {err}")
     respawn_cmds = _filter_dashboard_respawn_candidates(respawn_candidates)
-    failed_cmds = _dash._respawn_dashboard_processes(respawn_cmds) if respawn_cmds else None
+    failed_cmds = (
+        _dash._respawn_dashboard_processes(respawn_cmds) if respawn_cmds else None
+    )
     if failed_cmds:
         unrecovered.extend(p for p in killed if pid_cmdline.get(p) in failed_cmds)
     if failed_restarts or unrecovered:
-        print("  Restart anything not auto-restarted when you're ready:\n    clawk dashboard --port <port>")
+        print(
+            "  Restart anything not auto-restarted when you're ready:\n    clawk dashboard --port <port>"
+        )
     return unrecovered
 
 
@@ -783,13 +959,15 @@ def _norm_exe(path) -> str:
 
 
 def _detect_concurrent_clawk_instances(
-    scripts_dir: Path, *, exclude_pid: int | None = None) -> list[tuple[int, str]]:
+    scripts_dir: Path, *, exclude_pid: int | None = None
+) -> list[tuple[int, str]]:
     """Historical main export: stop old updaters without scanning live shims.
 
     PM stages a fresh generation instead of replacing a mapped clawk.exe.
     Returning an empty list would let old callers continue into that mutation.
     """
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch()
 
 
@@ -800,6 +978,7 @@ def _is_desktop_local_serve_cmdline(command: str) -> bool:
     those are operator-managed remote backends that legitimately run with ppid 1.
     """
     from clawk_cli.update_cmd_windows import _clawk_holder_subcommand
+
     # Canonical token matcher, never argv substrings: ``kanban --preserve-cache`` contains "serve" and
     # ``vim notes about clawk serve`` contains both markers — this predicate decides a kill.
     if _clawk_holder_subcommand(command) != "serve":
@@ -837,7 +1016,12 @@ def _process_ppid(pid: int) -> int | None:
     try:
         if sys.platform == "win32":
             return None
-        result = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], timeout=5, **_PS_RUN_KWARGS, check=False)
+        result = subprocess.run(
+            ["ps", "-o", "ppid=", "-p", str(pid)],
+            timeout=5,
+            **_PS_RUN_KWARGS,
+            check=False,
+        )
         if result.returncode != 0 or not result.stdout:
             return None
         return int(result.stdout.strip().split()[0])
@@ -860,6 +1044,7 @@ def _clawk_home_dir() -> Path:
     """The process's Clawksis home: remote-backend locks are a process-level asset, so a request scoped
     to another profile must still see the same lock dir."""
     from clawk_constants import get_process_clawk_home
+
     return get_process_clawk_home()
 
 
@@ -875,15 +1060,22 @@ def _valid_lockfile_payload(parsed: object, ownership_id: str) -> bool:
         or parsed.get("protocolVersion") != _PROTOCOL_VERSION
         or parsed.get("ownershipId") != ownership_id
         or not _is_hex(parsed.get("spawnNonce"), 16)
-        or not _is_hex(parsed.get("tokenFingerprint"), 32)):
+        or not _is_hex(parsed.get("tokenFingerprint"), 32)
+    ):
         return False
     pid, port = parsed.get("pid"), parsed.get("port")
-    if not (isinstance(pid, int) and 0 < pid <= 4194304 and isinstance(port, int)
-            and 0 <= port <= 65535):
+    if not (
+        isinstance(pid, int)
+        and 0 < pid <= 4194304
+        and isinstance(port, int)
+        and 0 <= port <= 65535
+    ):
         return False
     # String fields must be present and bounded (the writer enforces <=1024).
-    if any(not isinstance(parsed.get(f), str) or len(parsed[f]) > 1024
-           for f in ("profile", "clawkPath", "clawkHome", "logPath", "startedAt")):
+    if any(
+        not isinstance(parsed.get(f), str) or len(parsed[f]) > 1024
+        for f in ("profile", "clawkPath", "clawkHome", "logPath", "startedAt")
+    ):
         return False
     # Suffix-only check of logPath so a relocated CLAWK_HOME can't reject a legitimate backend.
     return parsed["logPath"].endswith(f"/{ownership_id}/{parsed['spawnNonce']}.log")
@@ -899,6 +1091,7 @@ def _remote_lock_roots(base_dir: Path | None) -> list[Path]:
     if base_dir is not None:
         return [base_dir]
     from clawk_constants import get_default_clawk_root
+
     roots: list[Path] = []
     for home in (_clawk_home_dir(), get_default_clawk_root()):
         root = home / _REMOTE_LOCK_SUBDIR
@@ -928,11 +1121,14 @@ def read_valid_backend_lock(lock_path: Path) -> dict | None:
     """The validated body of one ``desktop-ssh/<ownershipId>/backend.lock.json``, or None when it is
     missing, unreadable, oversized or does not match the writer's schema (never raises)."""
     import json
+
     ownership_id = lock_path.parent.name
     try:  # validateOwnershipId(): exactly 32 lowercase hex chars
         if not _is_hex(ownership_id, 32) or not lock_path.is_file():
             return None
-        with lock_path.open("rb") as f:  # bounded: this runs on every owner-watchdog poll
+        with lock_path.open(
+            "rb"
+        ) as f:  # bounded: this runs on every owner-watchdog poll
             data = f.read(65537)
         if len(data) > 65536:
             return None
@@ -951,12 +1147,19 @@ def _process_age_seconds(pid: int) -> float:
     import time as _time
 
     import psutil as _psutil
+
     return max(0.0, _time.time() - _psutil.Process(pid).create_time())
 
 
 def _reap_orphaned_desktop_local_serves(
-    *, reason: str = "orphaned desktop-local clawk serve", signal_term=None, signal_kill=None,
-    sleep_fn=None, lock_owned_pids_fn=None, process_age_seconds_fn=None) -> dict[str, list]:
+    *,
+    reason: str = "orphaned desktop-local clawk serve",
+    signal_term=None,
+    signal_kill=None,
+    sleep_fn=None,
+    lock_owned_pids_fn=None,
+    process_age_seconds_fn=None,
+) -> dict[str, list]:
     """Kill leftover Desktop-local ``clawk serve`` backends with no parent. Never raises.
 
     When Electron dies uncleanly its ``serve --host 127.0.0.1 --port 0`` children are
@@ -969,8 +1172,13 @@ def _reap_orphaned_desktop_local_serves(
     """
     import signal as _signal
     import time as _time
+
     signal_term = _signal.SIGTERM if signal_term is None else signal_term
-    signal_kill = getattr(_signal, "SIGKILL", _signal.SIGTERM) if signal_kill is None else signal_kill
+    signal_kill = (
+        getattr(_signal, "SIGKILL", _signal.SIGTERM)
+        if signal_kill is None
+        else signal_kill
+    )
     sleep_fn = sleep_fn or _time.sleep
     lock_owned_pids_fn = lock_owned_pids_fn or _lock_owned_serve_pids
     process_age_seconds_fn = process_age_seconds_fn or _process_age_seconds
@@ -997,12 +1205,19 @@ def _reap_orphaned_desktop_local_serves(
     except Exception:
         return _empty_result()
     owned_now = _owned_pids()  # re-read: a lock may have been written since the scan
-    matched = [pid for pid, cmd in scanned
-               if _is_desktop_local_serve_cmdline(cmd) and pid not in owned_now
-               and _process_ppid(pid) in (0, 1) and _is_stale_orphan(pid)]
+    matched = [
+        pid
+        for pid, cmd in scanned
+        if _is_desktop_local_serve_cmdline(cmd)
+        and pid not in owned_now
+        and _process_ppid(pid) in (0, 1)
+        and _is_stale_orphan(pid)
+    ]
     if not matched:
         return _empty_result()
-    descendants = _posix_descendants(matched)  # before the kill: the root's death reparents them
+    descendants = _posix_descendants(
+        matched
+    )  # before the kill: the root's death reparents them
     killed: list[int] = []
     failed: list[int] = []
     for pid in matched:
@@ -1015,6 +1230,7 @@ def _reap_orphaned_desktop_local_serves(
     # Brief grace, then SIGKILL survivors (psutil.pid_exists: os.kill(pid, 0) is a Windows footgun).
     sleep_fn(1.5)
     import psutil
+
     for pid in matched:
         if pid in failed:
             continue
@@ -1031,11 +1247,17 @@ def _reap_orphaned_desktop_local_serves(
     # grace, and these trees already lost their Electron and their backend.
     # A root whose own kill raised (EPERM: not ours) keeps its subtree — do not orphan it half-way.
     from gateway.status import get_process_start_time
+
     for pid, (root, start) in descendants.items():
-        if root not in failed and start is not None and get_process_start_time(pid) == start:
+        if (
+            root not in failed
+            and start is not None
+            and get_process_start_time(pid) == start
+        ):
             with contextlib.suppress(OSError):
                 os.kill(pid, signal_kill)
     with contextlib.suppress(Exception):
-        print(f"⟲ Reaped {len(killed)} orphaned desktop-local serve backend(s) ({reason}): {killed or matched}")
+        print(
+            f"⟲ Reaped {len(killed)} orphaned desktop-local serve backend(s) ({reason}): {killed or matched}"
+        )
     return {"matched": matched, "killed": killed, "failed": failed}
-

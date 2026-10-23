@@ -19,7 +19,7 @@ On macOS/Linux:
 ```bash
 node --version
 npm --version
-BOX_CLI_HOME="${CLAWK_HOME:-$HOME/.clawk}/tools/box-cli"
+BOX_CLI_HOME="${CLAWK_HOME:-$HOME/.clawksis}/tools/box-cli"
 mkdir -p "$BOX_CLI_HOME"
 npm install --prefix "$BOX_CLI_HOME" @box/cli
 npm exec --prefix "$BOX_CLI_HOME" -- box --version

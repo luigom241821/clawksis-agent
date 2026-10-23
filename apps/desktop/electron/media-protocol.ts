@@ -199,7 +199,7 @@ export function createMediaProtocolHandler(dependencies: MediaProtocolDependenci
         return new Response('Remote media authentication unavailable', { status: 401 })
       }
 
-      headers.set('x-clawk-session-token', connection.token)
+      headers.set('x-clawksis-session-token', connection.token)
 
       return await dependencies.fetchRemote(endpoint, headers, method)
     } catch (error) {

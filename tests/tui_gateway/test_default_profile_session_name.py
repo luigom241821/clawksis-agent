@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def _profile_layout(tmp_path: Path) -> tuple[Path, Path]:
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     default_home = root
     launch_home = root / "profiles" / "worker"
     launch_home.mkdir(parents=True)

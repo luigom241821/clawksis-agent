@@ -41,7 +41,7 @@ class TestGetDefaultClawksisRoot:
         monkeypatch.setattr(clawk_constants.sys, "platform", "linux")
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-        assert get_default_clawk_root() == tmp_path / ".clawk"
+        assert get_default_clawk_root() == tmp_path / ".clawksis"
 
     def test_docker_profile_active(self, tmp_path, monkeypatch):
         """When a Docker profile is active (CLAWK_HOME=<root>/profiles/<name>),
@@ -687,7 +687,7 @@ class TestProjectVenvDirOutOfTree:
 
         clawk_constants.venv_python_path(venv).parent.mkdir(parents=True)
         clawk_constants.venv_python_path(venv).write_text("", encoding="utf-8")
-        dist_info = site_packages(venv) / "clawk_agent-0.0.0.dist-info"
+        dist_info = site_packages(venv) / "clawksis_agent-0.0.0.dist-info"
         dist_info.mkdir(parents=True)
         (dist_info / "METADATA").write_text(
             "Name: clawksis-agent\nVersion: 0.0.0\n", encoding="utf-8"

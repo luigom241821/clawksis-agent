@@ -223,7 +223,7 @@ The director turns this into actual `kanban_create` calls.
 ## API-key prerequisites check
 
 Before firing the kanban, verify required keys are available. Check both
-the Clawksis `.env` (`${CLAWK_HOME:-$HOME/.clawk}/.env`) and macOS Keychain
+the Clawksis `.env` (`${CLAWK_HOME:-$HOME/.clawksis}/.env`) and macOS Keychain
 (if on macOS):
 
 ```bash
@@ -231,7 +231,7 @@ check_key() {
     local var="$1"
     local kc_account="$2"
     local kc_service="$3"
-    local _clawk_env="${CLAWK_HOME:-$HOME/.clawk}/.env"
+    local _clawk_env="${CLAWK_HOME:-$HOME/.clawksis}/.env"
     if grep -q "^${var}=" "$_clawk_env" 2>/dev/null && \
        [ -n "$(grep "^${var}=" "$_clawk_env" | cut -d= -f2-)" ]; then
         return 0

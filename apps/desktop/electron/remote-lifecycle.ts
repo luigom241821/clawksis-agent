@@ -309,7 +309,7 @@ async function probeRemotePlatform(ssh) {
 // state store; best-effort.
 async function probeRemoteClawkHome(ssh) {
   try {
-    const out = (await ssh.exec('echo "${CLAWK_HOME:-$HOME/.clawk}"')).trim().split('\n').pop()
+    const out = (await ssh.exec('echo "${CLAWK_HOME:-$HOME/.clawksis}"')).trim().split('\n').pop()
 
     return out || '~/.clawksis'
   } catch (cause) {

@@ -162,7 +162,7 @@ def desktop_home(env: Any) -> str:
 def browser_profile_dir(env: Any) -> str:
     """The ONE ``--user-data-dir`` the agent's agent-browser and the dock's Browser icon share inside the
     sandbox (same rule as the host: two profiles would mean the human logs into a jar the bot never sees)."""
-    return f"{desktop_home(env).rstrip('/')}/.clawk/bot-desktop/browser-profile"
+    return f"{desktop_home(env).rstrip('/')}/.clawksis/bot-desktop/browser-profile"
 
 
 _CHROMIUM_PROBE = (

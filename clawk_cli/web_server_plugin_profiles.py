@@ -37,8 +37,8 @@ _GATEWAY_CREDENTIAL_HEADERS = frozenset(
         "authorization",
         "cookie",
         "host",
-        "x-clawk-gateway-ticket",
-        "x-clawk-session-token",
+        "x-clawksis-gateway-ticket",
+        "x-clawksis-session-token",
     }
 )
 # Every query credential the gateway accepts (``web_server_chat._ws_auth_ok``, ``_has_valid_query_token``,

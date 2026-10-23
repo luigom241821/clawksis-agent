@@ -212,7 +212,7 @@ def _secure_cache_dir(new_subpath: str, old_name: str) -> Path:
     directories the NixOS module's ``systemd.tmpfiles`` rules pre-create, so
     they are made lazily at runtime; a hardcoded 0700 here would be the only
     thing setting their mode and would silently override a design that pins
-    ``stateDir/.clawk`` to ``2770`` and runs the gateway with ``UMask =
+    ``stateDir/.clawksis`` to ``2770`` and runs the gateway with ``UMask =
     "0007"`` so "interactive users in the clawk group can read/write"
     gateway-created state. On such a host the gateway and a hostUsers CLI
     share one ``$CLAWK_HOME``, so a 0700 cache created by whichever ran

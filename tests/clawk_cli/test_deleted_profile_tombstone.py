@@ -37,7 +37,7 @@ from clawk_logging import setup_logging
 @pytest.fixture()
 def profile_env(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     default_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     return tmp_path
@@ -48,17 +48,21 @@ def _named_homes(tmp_path: Path) -> list[str]:
 
 
 def _delete(name: str) -> None:
-    with patch("clawk_cli.profiles._cleanup_gateway_service"), patch(
-        "clawk_cli.profiles._stop_profile_backends"
+    with (
+        patch("clawk_cli.profiles._cleanup_gateway_service"),
+        patch("clawk_cli.profiles._stop_profile_backends"),
     ):
         delete_profile(name, yes=True)
 
 
 class TestDeletedProfileTombstone:
-    def test_delete_then_logging_setup_does_not_recreate_home(self, profile_env, monkeypatch):
+    def test_delete_then_logging_setup_does_not_recreate_home(
+        self, profile_env, monkeypatch
+    ):
         profile_dir = create_profile("worker", no_alias=True, no_skills=True)
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), patch(
-            "clawk_cli.profiles._stop_profile_backends"
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch("clawk_cli.profiles._stop_profile_backends"),
         ):
             delete_profile("worker", yes=True)
 
@@ -66,11 +70,13 @@ class TestDeletedProfileTombstone:
         assert "worker" not in _named_homes(profile_env)
 
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
-        with pytest.raises(FileNotFoundError, match="Named profile home does not exist"):
+        with pytest.raises(
+            FileNotFoundError, match="Named profile home does not exist"
+        ):
             setup_logging(clawk_home=profile_dir, force=True)
 
         assert not profile_dir.exists()
-        monkeypatch.setenv("CLAWK_HOME", str(profile_env / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(profile_env / ".clawksis"))
         assert "worker" not in _named_homes(profile_env)
 
     def test_late_reasoning_caps_save_does_not_recreate_deleted_home(self, profile_env):
@@ -112,8 +118,9 @@ class TestDeletedProfileTombstone:
 
     def test_empty_shell_after_delete_is_not_listed_or_served(self, profile_env):
         profile_dir = create_profile("worker", no_alias=True, no_skills=True)
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), patch(
-            "clawk_cli.profiles._stop_profile_backends"
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch("clawk_cli.profiles._stop_profile_backends"),
         ):
             delete_profile("worker", yes=True)
 
@@ -128,25 +135,31 @@ class TestDeletedProfileTombstone:
         # honors the same tombstone: a recreated shell must not resurface as a
         # `bot-chat:worker` delivery target.
         assert "worker" not in list_profile_names()
-        assert f"{BOT_CHAT_PLATFORM}:worker" not in [t["id"] for t in cron_delivery_targets()]
+        assert f"{BOT_CHAT_PLATFORM}:worker" not in [
+            t["id"] for t in cron_delivery_targets()
+        ]
 
     def test_tombstoned_home_is_not_bootstrapped(self, profile_env, monkeypatch):
         profile_dir = create_profile("worker", no_alias=True, no_skills=True)
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), patch(
-            "clawk_cli.profiles._stop_profile_backends"
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch("clawk_cli.profiles._stop_profile_backends"),
         ):
             delete_profile("worker", yes=True)
         profile_dir.mkdir(parents=True)
 
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
-        with pytest.raises(FileNotFoundError, match="Named profile home does not exist"):
+        with pytest.raises(
+            FileNotFoundError, match="Named profile home does not exist"
+        ):
             ensure_clawk_home()
         assert not (profile_dir / "sessions").exists()
 
     def test_create_after_delete_clears_tombstone(self, profile_env):
         create_profile("worker", no_alias=True, no_skills=True)
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), patch(
-            "clawk_cli.profiles._stop_profile_backends"
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch("clawk_cli.profiles._stop_profile_backends"),
         ):
             delete_profile("worker", yes=True)
 
@@ -186,7 +199,7 @@ class TestDeletedProfileTombstone:
         profile_dir = create_profile("worker", no_alias=True, no_skills=True)
         _delete("worker")
         profile_dir.mkdir(parents=True)
-        (profile_env / ".clawk" / ".env").write_text(
+        (profile_env / ".clawksis" / ".env").write_text(
             "OPENROUTER_API_KEY=root-key\n", encoding="utf-8"
         )
 
@@ -200,12 +213,12 @@ class TestDeletedProfileTombstone:
         cron ticker, or a stray infrastructure dir) is not listed, served, or seeded with the
         default install's ``.env`` — that seeding is what legitimised ghosts on ``clawk update``
         (#95188 path D, #94823, #99392). ``profile create`` may take the name back."""
-        default_env = profile_env / ".clawk" / ".env"
+        default_env = profile_env / ".clawksis" / ".env"
         default_env.write_text("OPENAI_API_KEY=sk-real\n", encoding="utf-8")
-        shell = profile_env / ".clawk" / "profiles" / "ghost"
+        shell = profile_env / ".clawksis" / "profiles" / "ghost"
         (shell / "cron").mkdir(parents=True)
         (shell / "cron" / "ticker_heartbeat").write_text("1\n", encoding="utf-8")
-        legacy = profile_env / ".clawk" / "profiles" / "legacy"
+        legacy = profile_env / ".clawksis" / "profiles" / "legacy"
         legacy.mkdir()
         (legacy / "state.db").write_bytes(b"")
 
@@ -223,7 +236,9 @@ class TestDeletedProfileTombstone:
         # A live marker-less dir may still hold user files: ``profile create`` must fail closed,
         # naming the stray dir, and leave every byte in place (never rmtree a non-tombstoned dir).
         (shell / "skills" / "my-skill").mkdir(parents=True)
-        (shell / "skills" / "my-skill" / "SKILL.md").write_text("# mine\n", encoding="utf-8")
+        (shell / "skills" / "my-skill" / "SKILL.md").write_text(
+            "# mine\n", encoding="utf-8"
+        )
         with pytest.raises(FileExistsError, match=str(shell)):
             create_profile("ghost", no_alias=True, no_skills=True)
         assert (shell / "skills" / "my-skill" / "SKILL.md").exists()
@@ -232,7 +247,7 @@ class TestDeletedProfileTombstone:
     def test_dangling_symlink_marker_is_still_identity(self, profile_env):
         """A profile whose only marker is a dangling symlinked ``config.yaml`` (clone/migration
         leftover) stays resolvable: ``is_file()`` follows links and would make it invisible."""
-        legacy = profile_env / ".clawk" / "profiles" / "legacy"
+        legacy = profile_env / ".clawksis" / "profiles" / "legacy"
         legacy.mkdir(parents=True)
         (legacy / "config.yaml").symlink_to(profile_env / "gone" / "config.yaml")
         assert profile_exists("legacy")
@@ -275,12 +290,12 @@ class TestNamedProfileHome:
         assert named_profile_home(worker) == worker
 
     def test_dot_clawk_layout_resolves_without_markers(self, tmp_path):
-        worker = tmp_path / ".clawk" / "profiles" / "worker"
+        worker = tmp_path / ".clawksis" / "profiles" / "worker"
         assert named_profile_home(worker / "logs") == worker
         assert named_profile_home(worker) == worker
 
     def test_default_home_with_profiles_in_path_is_not_named(self, tmp_path):
-        default_home = tmp_path / "foo" / "profiles" / "notahome" / ".clawk"
+        default_home = tmp_path / "foo" / "profiles" / "notahome" / ".clawksis"
         assert named_profile_home(default_home) is None
         assert named_profile_home(default_home / "logs") is None
 

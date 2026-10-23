@@ -124,7 +124,7 @@ async function startFakeGateway(): Promise<FakeGateway> {
   const sessionTokens: string[] = []
 
   const server = http.createServer((req, res) => {
-    const token = req.headers['x-clawk-session-token']
+    const token = req.headers['x-clawksis-session-token']
 
     if (typeof token === 'string' && token) {
       sessionTokens.push(token)

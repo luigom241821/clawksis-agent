@@ -37,7 +37,7 @@ def test_ensure_checks_effective_service_binding_before_start(
     from clawk_cli.gateway_runtime_service import service_suffix
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    home = tmp_path / (".clawk" if case == "default" else "custom root")
+    home = tmp_path / (".clawksis" if case == "default" else "custom root")
     if case == "named":
         home = home / "profiles" / "worker"
     home.mkdir(mode=0o700, parents=True)
@@ -263,7 +263,7 @@ def test_launchd_verifies_the_osascript_wrapped_command_the_installer_writes(
         verify_launchd_plist,
     )
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     from clawk_cli import gateway as gw
 
     command = _launchd_gateway_command(
@@ -356,7 +356,7 @@ def test_launchd_verifies_the_osascript_wrapped_command_the_installer_writes(
         argv[0] = str(tmp_path / "osascript")
     env = dict(
         CLAWK_HOME=str(
-            home if case != "other_home" else tmp_path / "elsewhere" / ".clawk"
+            home if case != "other_home" else tmp_path / "elsewhere" / ".clawksis"
         ),
         CLAWK_SUPERVISED_CHILD="1",
     )

@@ -1035,7 +1035,7 @@ class LineAdapter(BasePlatformAdapter):
 
             clawk_home = Path(get_clawk_home()).resolve()
         except Exception:
-            clawk_home = Path.home().joinpath(".clawk").resolve()
+            clawk_home = Path.home().joinpath(".clawksis").resolve()
         resolved = path.resolve()
         if not any(
             resolved.is_relative_to(r)

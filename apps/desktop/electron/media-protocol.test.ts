@@ -160,7 +160,7 @@ describe('createMediaProtocolHandler', () => {
     expect(url.pathname).toBe('/clawk/api/files/stream')
     expect(url.searchParams.get('path')).toBe('/root/outputs/render.mp4')
     expect(url.searchParams.has('token')).toBe(false)
-    expect(headers.get('x-clawk-session-token')).toBe('s e/cret')
+    expect(headers.get('x-clawksis-session-token')).toBe('s e/cret')
     expect(headers.get('range')).toBe('bytes=0-1023')
   })
 
@@ -182,7 +182,7 @@ describe('createMediaProtocolHandler', () => {
     const [, headers] = vi.mocked(deps.fetchRemote).mock.calls[0]
     expect(headers.get('cf-access-client-id')).toBe('client-id')
     expect(headers.get('range')).toBe('bytes=0-1023')
-    expect(headers.get('x-clawk-session-token')).toBe('secret')
+    expect(headers.get('x-clawksis-session-token')).toBe('secret')
   })
 
   it('sends the connection extra gateway headers on OAuth cookie-session remote media', async () => {

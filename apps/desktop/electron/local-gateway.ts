@@ -364,7 +364,7 @@ export function createLocalGatewayDials() {
       const headers = { ...details.requestHeaders }
 
       for (const key of Object.keys(headers)) {
-        if (['origin', 'x-clawk-gateway-ticket'].includes(key.toLowerCase())) {delete headers[key]}
+        if (['origin', 'x-clawksis-gateway-ticket'].includes(key.toLowerCase())) {delete headers[key]}
       }
 
       return grant.header ? { ...headers, 'X-Clawksis-Gateway-Ticket': grant.ticket } : headers

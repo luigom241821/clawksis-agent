@@ -38,7 +38,7 @@ clawk_bootstrap_python() {
                      "$repo/venv/bin/python" "$repo/venv/Scripts/python.exe"; do
         [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
     done
-    for store in "${CLAWK_RUNTIME_DIR:-}" "$repo/../tools" "${CLAWK_HOME:-$HOME/.clawk}/tools"; do
+    for store in "${CLAWK_RUNTIME_DIR:-}" "$repo/../tools" "${CLAWK_HOME:-$HOME/.clawksis}/tools"; do
         [ -n "$store" ] || continue
         for candidate in "$store"/python-*/bin/python3 "$store"/python-*/python.exe \
                          "$store"/python-*/bin/python "$store"/python-*/bin/python.exe; do

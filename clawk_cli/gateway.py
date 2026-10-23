@@ -3506,7 +3506,7 @@ def _ld_library_path_line(system: bool, target_home_dir: str | None = None) -> s
 
 def _clawk_home_for_target_user(target_home_dir: str) -> str:
     """Remap the current CLAWK_HOME (root's, under sudo) to the target user's equivalent:
-    ``/root/.clawk[/profiles/x]`` → ``/home/alice/.clawk[/profiles/x]``; custom paths kept as-is."""
+    ``/root/.clawksis[/profiles/x]`` → ``/home/alice/.clawksis[/profiles/x]``; custom paths kept as-is."""
     current_clawk_raw = os.environ.get("CLAWK_HOME", "").strip()
     current_clawk = (
         Path(current_clawk_raw).expanduser() if current_clawk_raw else get_clawk_home()
@@ -3860,7 +3860,7 @@ def _normalize_launchd_plist_for_comparison(text: str) -> str:
 
 def systemd_unit_is_current(system: bool = False) -> bool:
     # CLAWK_HOME sync chokepoint for every compare/regenerate path: under `sudo … --system` it is often
-    # stripped to /root/.clawk, so refresh would rewrite a correct unit and status warn forever.
+    # stripped to /root/.clawksis, so refresh would rewrite a correct unit and status warn forever.
     # Idempotent; the os.environ mutation persists for later runtime reads (restart's PID/drain).
     _sync_clawk_home_from_systemd_unit(system=system)
 

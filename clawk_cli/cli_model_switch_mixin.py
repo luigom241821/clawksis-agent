@@ -1391,6 +1391,57 @@ class CLIModelSwitchMixin:
         finally:
             self._one_turn_selection_context = None
 
+    def _handle_gquota_command(self, cmd_original: str) -> None:
+        """Show Google Gemini Code Assist quota usage for the current OAuth account (fork: /gquota)."""
+        try:
+            from agent.google_code_assist import CodeAssistError, retrieve_user_quota
+            from agent.google_oauth import (
+                GoogleOAuthError,
+                get_valid_access_token,
+                load_credentials,
+            )
+        except ImportError as exc:
+            self._console_print(f"  [red]Gemini modules unavailable: {exc}[/]")
+            return
+
+        try:
+            access_token = get_valid_access_token()
+        except GoogleOAuthError as exc:
+            self._console_print(f"  [yellow]{exc}[/]")
+            self._console_print(
+                "  Run [bold]/model[/] and pick 'Google Gemini (OAuth)' to sign in."
+            )
+            return
+
+        creds = load_credentials()
+        project_id = (creds.project_id if creds else "") or ""
+        try:
+            buckets = retrieve_user_quota(access_token, project_id=project_id)
+        except CodeAssistError as exc:
+            self._console_print(f"  [red]Quota lookup failed:[/] {exc}")
+            return
+
+        if not buckets:
+            self._console_print(
+                "  [dim]No quota buckets reported (account may be on legacy/unmetered tier).[/]"
+            )
+            return
+
+        buckets.sort(key=lambda b: (b.model_id, b.token_type))
+        self._console_print()
+        self._console_print(
+            f"  [bold]Gemini Code Assist quota[/]  (project: {project_id or '(auto / free-tier)'})"
+        )
+        self._console_print()
+        width = 20
+        for b in buckets:
+            pct = max(0.0, min(1.0, b.remaining_fraction))
+            filled = round(pct * width)
+            bar = "▓" * filled + "░" * (width - filled)
+            header = b.model_id + (f" [{b.token_type}]" if b.token_type else "")
+            self._console_print(f"    {header:40s}  {bar}  {int(pct * 100):3d}%")
+        self._console_print()
+
     def _handle_codex_runtime(self, cmd_original: str) -> None:
         """Handle /codex-runtime — toggle the codex app-server runtime opt-in.
 

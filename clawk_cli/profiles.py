@@ -2659,7 +2659,7 @@ def export_profile(
     # Archive base name without extension (.tar.gz appended by the writer).
     base = str(Path(output_path)).removesuffix(".tar.gz").removesuffix(".tgz")
 
-    # The default profile IS ~/.clawksis (dir name ".clawk"), so both paths stage a filtered
+    # The default profile IS ~/.clawksis (dir name ".clawksis"), so both paths stage a filtered
     # copy under a temp dir named after the canonical id: root allow-list for default,
     # credential exclusion for named profiles.
     def _ignore_credentials(directory: str, contents: list) -> set:

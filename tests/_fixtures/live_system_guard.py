@@ -4,6 +4,7 @@ Imported into ``tests/conftest.py`` so pytest registers the fixture there;
 ``pytest_plugins`` is not an option because ``tests/conftest.py`` is not the
 rootdir conftest (the rootdir is the repo root, where ``pyproject.toml`` lives).
 """
+
 from pathlib import Path
 
 import pytest
@@ -91,6 +92,7 @@ def _live_system_guard(request, monkeypatch):
     # the live psutil walk below. Static set keeps the fast path cheap.
     try:
         import psutil as _psutil
+
         _initial_children = {
             c.pid for c in _psutil.Process(test_pid).children(recursive=True)
         }
@@ -193,9 +195,19 @@ def _live_system_guard(request, monkeypatch):
         "clawk gateway",
     )
     _MUTATING_VERBS = (
-        "restart", "start", "stop", "kill", "reload",
-        "reset-failed", "enable", "disable", "mask", "unmask",
-        "daemon-reload", "try-restart", "reload-or-restart",
+        "restart",
+        "start",
+        "stop",
+        "kill",
+        "reload",
+        "reset-failed",
+        "enable",
+        "disable",
+        "mask",
+        "unmask",
+        "daemon-reload",
+        "try-restart",
+        "reload-or-restart",
     )
     _PROCESS_KILLERS = ("pkill", "killall", "taskkill", "skill", "fuser")
     _CONTAINER_RUNTIMES = ("docker", "podman", "nerdctl")
@@ -206,11 +218,24 @@ def _live_system_guard(request, monkeypatch):
         except ValueError:
             tokens = cmd_str.split()
         return tokens[0].rsplit("/", 1)[-1].lower() if tokens else ""
+
     # Shell/launcher executables whose arguments are themselves commands —
     # argv[0]-only scanning must not exempt what they wrap.
     _WRAPPER_COMMANDS = (
-        "sh", "bash", "zsh", "dash", "env", "nohup", "setsid",
-        "timeout", "sudo", "xargs", "nice", "ionice", "stdbuf", "flock",
+        "sh",
+        "bash",
+        "zsh",
+        "dash",
+        "env",
+        "nohup",
+        "setsid",
+        "timeout",
+        "sudo",
+        "xargs",
+        "nice",
+        "ionice",
+        "stdbuf",
+        "flock",
     )
 
     def _cmd_to_string(cmd) -> str:
@@ -259,7 +284,8 @@ def _live_system_guard(request, monkeypatch):
         name = word.rsplit("/", 1)[-1].lower()
         for suffix in (".service", ".timer", ".socket"):
             name = name.removesuffix(suffix)
-        return name == "clawk" or name.startswith("clawk-")
+        # The fork names units both ``clawk-*`` and ``clawksis-*`` (clawksis-dashboard).
+        return name in ("clawk", "clawksis") or name.startswith(("clawk-", "clawksis-"))
 
     def _is_blocked_systemctl(cmd) -> bool:
         cmd_str = _cmd_to_string(cmd)
@@ -269,8 +295,10 @@ def _live_system_guard(request, monkeypatch):
         # A unit the test itself created under a unique name (``request.node.
         # live_system_guard_owned_units``) may be cleaned up; nothing else is exempt.
         owned = getattr(request.node, "live_system_guard_owned_units", ())
-        if not (_matches_clawk_gateway(cmd_str)
-                or any(_is_clawk_unit(w) and w not in owned for w in words)):
+        if not (
+            _matches_clawk_gateway(cmd_str)
+            or any(_is_clawk_unit(w) and w not in owned for w in words)
+        ):
             return False
         return any(verb in words for verb in _MUTATING_VERBS)
 
@@ -322,7 +350,9 @@ def _live_system_guard(request, monkeypatch):
             tokens = _shlex.split(cmd_str)
         except ValueError:
             tokens = cmd_str.split()
-        if "-m" not in tokens or tokens[tokens.index("-m") + 1:][:1] != ["gateway.run"]:
+        if "-m" not in tokens or tokens[tokens.index("-m") + 1 :][:1] != [
+            "gateway.run"
+        ]:
             return False
         clawk_home, home = env.get("CLAWK_HOME"), env.get("HOME")
         if not clawk_home or not home:
@@ -331,16 +361,19 @@ def _live_system_guard(request, monkeypatch):
         # tmp user dir, which would make a sandboxed child look like it runs against the real one.
         try:
             import pwd
+
             real_home = Path(pwd.getpwuid(_os.getuid()).pw_dir).resolve()
         except (ImportError, KeyError):
             real_home = Path.home().resolve()
         # The child must not resolve the REAL Clawksis root. Comparing CLAWK_HOME against the whole
         # account home refused every Windows sandbox: %TEMP% lives under %USERPROFILE%.
         from clawk_state_guard import _real_platform_state_root
+
         real_root = _real_platform_state_root() or real_home / ".clawksis"
         try:
-            return (Path(home).resolve() != real_home
-                    and not Path(clawk_home).resolve().is_relative_to(real_root))
+            return Path(home).resolve() != real_home and not Path(
+                clawk_home
+            ).resolve().is_relative_to(real_root)
         except Exception:
             return False
 
@@ -415,6 +448,7 @@ def _live_system_guard(request, monkeypatch):
         # sibling refactor moved the spawn seam and left tests patching the
         # facade. The canonical matcher, never an argv substring.
         from gateway.status import gateway_spawn_intent_subcommand
+
         # A gateway launched INSIDE a container (`docker exec … clawk gateway start`) cannot
         # reach the host's systemd unit or webhook port; tests/docker/ exists to exercise it.
         in_container = _first_token_basename(cmd_str) in _CONTAINER_RUNTIMES
@@ -440,6 +474,7 @@ def _live_system_guard(request, monkeypatch):
         def _guarded(cmd, *args, **kwargs):
             _check_subprocess_cmd(name, cmd, kwargs)
             return real(cmd, *args, **kwargs)
+
         _guarded.__name__ = f"_guarded_{name}"
         # Make the wrapper subscriptable like the wrapped callable when
         # the wrapped object is. ``subprocess.Popen[bytes]`` is used as
@@ -508,6 +543,7 @@ def _live_system_guard(request, monkeypatch):
     # pty.spawn — POSIX-only.
     try:
         import pty as _pty
+
         if hasattr(_pty, "spawn"):
             real_pty_spawn = _pty.spawn
 
@@ -522,6 +558,7 @@ def _live_system_guard(request, monkeypatch):
     # asyncio.create_subprocess_* — bypasses subprocess module entirely.
     try:
         import asyncio as _asyncio
+
         real_async_exec = _asyncio.create_subprocess_exec
         real_async_shell = _asyncio.create_subprocess_shell
 
@@ -536,9 +573,7 @@ def _live_system_guard(request, monkeypatch):
             return await real_async_shell(cmd, *args, **kwargs)
 
         monkeypatch.setattr(_asyncio, "create_subprocess_exec", _guarded_async_exec)
-        monkeypatch.setattr(
-            _asyncio, "create_subprocess_shell", _guarded_async_shell
-        )
+        monkeypatch.setattr(_asyncio, "create_subprocess_shell", _guarded_async_shell)
     except Exception:
         pass
 

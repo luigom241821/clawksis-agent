@@ -343,7 +343,7 @@ const FORBIDDEN_REMOTE_HEADER_NAMES = new Set([
   'trailer',
   'transfer-encoding',
   'upgrade',
-  'x-clawk-session-token'
+  'x-clawksis-session-token'
 ])
 
 /**

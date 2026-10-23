@@ -16,7 +16,7 @@ test('a plugin dial carries the grant header once and never in its URL', () => {
   expect(url).not.toContain('grant-1')
   expect(parsed.pathname).toBe('/api/plugins/kanban/events')
   expect(parsed.searchParams.get('board')).toBe('b')
-  const details = { url, webContentsId: 7, resourceType: 'webSocket', requestHeaders: { Origin: 'file://', 'x-clawk-gateway-ticket': 'forged' } }
+  const details = { url, webContentsId: 7, resourceType: 'webSocket', requestHeaders: { Origin: 'file://', 'x-clawksis-gateway-ticket': 'forged' } }
   expect(dials.headers({ ...details, webContentsId: 8 })).toBeNull()
   // A different path carrying the same nonce gets nothing.
   expect(dials.headers({ ...details, url: url.replace('/kanban/events', '/other/events') })).toBeNull()

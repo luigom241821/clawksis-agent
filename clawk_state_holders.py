@@ -203,7 +203,7 @@ def _store_install_layout(this_home: str) -> tuple[Optional[str], Optional[str]]
         profile_home = named_profile_home(this_home)
         if profile_home is not None:
             return os.path.abspath(str(profile_home.parent.parent)), profile_home.name
-        if os.path.basename(this_home) == ".clawk":
+        if os.path.basename(this_home) == ".clawksis":
             return os.path.abspath(this_home), None
     except Exception:  # constants import/resolution must never break a holder scan
         logger.debug(
@@ -279,7 +279,7 @@ def _argv_scoped_to_other_home(argv: Sequence[str], db_path: Path) -> bool:
     """Return whether argv proves the process belongs to a DIFFERENT instance.
 
     ``state.db`` lives at the CLAWK_HOME root, so an absolute-path token
-    containing a ``/.clawk`` segment (or naming a ``state.db``/WAL/SHM under
+    containing a ``/.clawksis`` segment (or naming a ``state.db``/WAL/SHM under
     some other parent) identifies that token's own Clawksis home.  When at least
     one such token exists AND no token references this instance's state.db,
     its sidecars, or its home directory, the process provably works on a
@@ -336,8 +336,8 @@ def _argv_scoped_to_other_home(argv: Sequence[str], db_path: Path) -> bool:
         if index == 0 and not argv0_locates_home:
             continue
         if (
-            "/.clawk" in normalized
-            or normalized.endswith("/.clawk")
+            "/.clawksis" in normalized
+            or normalized.endswith("/.clawksis")
             or os.path.basename(normalized) in _STATE_DB_NAMES
         ):
             other_home_seen = True

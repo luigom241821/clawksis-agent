@@ -22,7 +22,7 @@
 #   added     programs.clawksis-agent    the CLI and the desktop application,
 #                                      because Home Manager separates an
 #                                      installation from a daemon
-#   changed   stateDir (+ "/.clawk")  -> clawkHome, set directly
+#   changed   stateDir (+ "/.clawksis") -> clawkHome, set directly
 #
 # To use the module:
 #   imports = [ clawksis-agent.homeManagerModules.default ];
@@ -255,14 +255,14 @@
         // {
           clawkHome = lib.mkOption {
             type = lib.types.str;
-            default = "${config.home.homeDirectory}/.clawk";
-            defaultText = lib.literalExpression ''"''${config.home.homeDirectory}/.clawk"'';
+            default = "${config.home.homeDirectory}/.clawksis";
+            defaultText = lib.literalExpression ''"''${config.home.homeDirectory}/.clawksis"'';
             description = ''
               The value of CLAWK_HOME. This state directory holds
               config.yaml, .env, auth.json, the sessions, the skills, the
               memory and the cron jobs.
 
-              The NixOS module takes a `stateDir` and adds `/.clawk` to it.
+              The NixOS module takes a `stateDir` and adds `/.clawksis` to it.
               This module sets CLAWK_HOME directly. Thus an existing
               ~/.clawksis continues to work, and you can give the directory any
               name.

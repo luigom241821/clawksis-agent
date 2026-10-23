@@ -263,7 +263,7 @@ If git credentials are already configured (via credential.helper store), the tok
 
 ```bash
 # Read from git credential store
-uv run python "${CLAWK_HOME:-$HOME/.clawk}/skills/github/github-auth/scripts/git-credential-token.py"
+uv run python "${CLAWK_HOME:-$HOME/.clawksis}/skills/github/github-auth/scripts/git-credential-token.py"
 ```
 
 ### Helper: Detect Auth Method
@@ -276,11 +276,11 @@ if command -v gh &>/dev/null && gh auth status &>/dev/null; then
   echo "AUTH_METHOD=gh"
 elif [ -n "$GITHUB_TOKEN" ]; then
   echo "AUTH_METHOD=curl"
-elif _clawk_env="${CLAWK_HOME:-$HOME/.clawk}/.env"; [ -f "$_clawk_env" ] && grep -q "^GITHUB_TOKEN=" "$_clawk_env"; then
+elif _clawk_env="${CLAWK_HOME:-$HOME/.clawksis}/.env"; [ -f "$_clawk_env" ] && grep -q "^GITHUB_TOKEN=" "$_clawk_env"; then
   export GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" "$_clawk_env" | head -1 | cut -d= -f2 | tr -d '\n\r')
   echo "AUTH_METHOD=curl"
 elif grep -q "github.com" ~/.git-credentials 2>/dev/null; then
-  export GITHUB_TOKEN=$(uv run python "${CLAWK_HOME:-$HOME/.clawk}/skills/github/github-auth/scripts/git-credential-token.py")
+  export GITHUB_TOKEN=$(uv run python "${CLAWK_HOME:-$HOME/.clawksis}/skills/github/github-auth/scripts/git-credential-token.py")
   echo "AUTH_METHOD=curl"
 else
   echo "AUTH_METHOD=none"

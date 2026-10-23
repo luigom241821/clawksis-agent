@@ -1148,7 +1148,7 @@ def _route_named_profile_dashboard(
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=False)
     # Pin the child to the machine ROOT, resolved explicitly rather than by
     # dropping CLAWK_HOME: in the Docker layout the root is /opt/data, and an
-    # unset CLAWK_HOME would fall back to $HOME/.clawksis = /opt/data/.clawk — an
+    # unset CLAWK_HOME would fall back to $HOME/.clawksis = /opt/data/.clawksis — an
     # empty auto-seeded home with only the default profile and no install stamp.
     # get_default_clawk_root() strips a trailing profiles/<name> for both layouts.
     try:

@@ -760,7 +760,8 @@ def _canonical_profile_request(name: str) -> str:
     installation details — unless a real named profile of that name exists (``clawk`` is a legal
     id), in which case it wins; other unknown names keep failing closed in ``_profile_home``.
     """
-    if name.casefold() in {".clawk", "clawk"}:
+    # Default-home basenames: ``.clawksis`` (POSIX), ``clawk`` (Windows), ``.clawk`` (pre-rebrand).
+    if name.casefold() in {".clawksis", ".clawk", "clawk"}:
         from clawk_cli import profiles as profiles_mod
 
         # Check the profiles root directly: get_profile_dir rejects "clawk" as a

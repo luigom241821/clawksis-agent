@@ -20,21 +20,25 @@ from clawk_cli.profiles import create_wrapper_script
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
     """Isolate the profile root (CLAWK_HOME) and the wrapper dir (Path.home())."""
-    (tmp_path / ".clawk").mkdir()
+    (tmp_path / ".clawksis").mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None)
     monkeypatch.setattr(gateway_migrate, "duplicate_credential_findings", list)
     return tmp_path
 
 
 def _alias(profile, *, remove, name=None):
-    profile_cmd._profile_alias(SimpleNamespace(profile_name=profile, remove=remove, alias_name=name))
+    profile_cmd._profile_alias(
+        SimpleNamespace(profile_name=profile, remove=remove, alias_name=name)
+    )
 
 
 @pytest.mark.platforms("any")  # the wrapper name differs per host (.bat on Windows)
 def test_doctor_names_the_command_that_removes_an_orphan_alias(isolated_home, capsys):
-    keep = isolated_home / ".clawksis" / "profiles" / "keep"  # doctor's section needs one live profile
+    keep = (
+        isolated_home / ".clawksis" / "profiles" / "keep"
+    )  # doctor's section needs one live profile
     keep.mkdir(parents=True)
     (keep / "config.yaml").write_text("model: m\n", encoding="utf-8")
     wrapper = create_wrapper_script("petcare")

@@ -38,7 +38,7 @@ _REAL_READLINK = os.readlink
 
 
 # Representative demo-gateway argv on the two-instance host: every absolute
-# token lives under /home/demo/.clawk, the binary name matches the Clawksis
+# token lives under /home/demo/.clawksis, the binary name matches the Clawksis
 # patterns, and nothing references the main instance's home or state.db.
 DEMO_HOME_ARGV = [
     "/home/demo/.clawksis/clawksis-agent/clawk",
@@ -112,9 +112,9 @@ class TestUninspectableHolderInstanceScope:
     def test_other_instance_argv_is_not_a_holder_of_our_db(self, tmp_path, monkeypatch):
         """RED: fd dir unreadable + argv proves the process belongs to a
         DIFFERENT Clawksis home → not a holder of our state.db."""
-        # A real ``.clawk`` home, as on the field host this test is drawn from: the install
+        # A real ``.clawksis`` home, as on the field host this test is drawn from: the install
         # location can only identify a home that is itself part of an install layout.
-        db_path = tmp_path / ".clawk" / "state.db"
+        db_path = tmp_path / ".clawksis" / "state.db"
         _install_fake_proc(monkeypatch, tmp_path, unreadable_pids=(222,))
         _install_fake_argv(monkeypatch, {222: DEMO_HOME_ARGV})
 
@@ -146,7 +146,7 @@ class TestUninspectableHolderInstanceScope:
         """One process per host serves EVERY profile, so argv naming only the install root does
         not prove the process is another instance: it holds ``<root>/profiles/<name>/state.db``
         too. A DIFFERENT install root is still proof."""
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         db_path = root / "profiles" / "b" / "state.db"
         db_path.parent.mkdir(parents=True)
         multiplexer = ["clawk", "--home", str(root), "gateway", "run"]
@@ -172,7 +172,7 @@ class TestUninspectableHolderInstanceScope:
         state.db, deferring its FTS rebuild and auto-VACUUM for as long as the sibling lived
         (#92401, inside a single install). The process's own ``-p``/``--profile`` selection decides.
         """
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         db_path = root / "profiles" / "b" / "state.db"
         db_path.parent.mkdir(parents=True)
         shared_binary = str(root / "venv" / "bin" / "clawk")
@@ -198,7 +198,7 @@ class TestUninspectableHolderInstanceScope:
         It sits under our install root, so a blanket own-prefix test read the strongest evidence of
         a different scope as proof of ours.
         """
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         db_path = root / "profiles" / "b" / "state.db"
         db_path.parent.mkdir(parents=True)
         other_store = root / "profiles" / "other" / "state.db"
@@ -224,7 +224,7 @@ class TestUninspectableHolderInstanceScope:
         work = tmp_path / "work"
         db_path = work / "profiles" / "b" / "state.db"
         db_path.parent.mkdir(parents=True)
-        unrelated_home = work / "demo" / ".clawk"
+        unrelated_home = work / "demo" / ".clawksis"
         unrelated_home.mkdir(parents=True)
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))

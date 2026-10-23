@@ -669,5 +669,89 @@
     "symbol": "_installed_git",
     "kind": "bare_which",
     "reason": "only asks whether the caller's bare git is on PATH; when it is not (Desktop on a Windows install whose only git is install.ps1's PM-staged copy) it defers to update_pause_record._git_executable, the updater's own resolution"
+  },
+  {
+    "path": "agent/google_oauth.py",
+    "symbol": "_locate_gemini_cli_oauth_js",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: asks where the user's own `gemini` CLI is installed to read its public OAuth client from that install; PM never provides it"
+  },
+  {
+    "path": "clawk_cli/cookbook.py",
+    "symbol": "_detect_gpu",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: probes the host's NVIDIA driver tool (nvidia-smi) for GPU facts; a system tool, never PM-managed"
+  },
+  {
+    "path": "clawk_cli/cookbook.py",
+    "symbol": "_do_install_ollama",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: checks for the user's Homebrew before offering `brew install ollama`; a system package manager"
+  },
+  {
+    "path": "clawk_cli/cookbook.py",
+    "symbol": "ollama_installed",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: asks whether the user's own Ollama install is on PATH; Ollama is a user-installed service, not PM-managed"
+  },
+  {
+    "path": "clawk_cli/cookbook_llamacpp.py",
+    "symbol": "server_binary",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: finds a user-installed llama-server on PATH; llama.cpp is not PM-managed"
+  },
+  {
+    "path": "clawk_cli/dashboard_service.py",
+    "symbol": "_ensure_caddy",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: `clawk dashboard domain` installs/uses the system Caddy via apt-get/dnf; system packages, never PM-managed"
+  },
+  {
+    "path": "clawk_cli/dashboard_service.py",
+    "symbol": "_require_linux_systemd_root",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: gates the root-only system unit on the host's systemctl and records the clawk launcher on root's PATH for ExecStart"
+  },
+  {
+    "path": "clawk_cli/dashboard_service.py",
+    "symbol": "cmd_dashboard_service",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: status/uninstall of the system unit require the host's systemctl"
+  },
+  {
+    "path": "clawk_cli/main.py",
+    "symbol": "_edit_home_md",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: picks the user's terminal editor (nano/vim/vi) from PATH"
+  },
+  {
+    "path": "clawk_cli/tools_config.py",
+    "symbol": "_install_npm_cli",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: setup hook installs a user-facing global CLI with the user's own npm so it lands on their PATH; PM's sealed Node store must not receive global installs"
+  },
+  {
+    "path": "clawk_cli/tools_config.py",
+    "symbol": "_post_setup_mirofish",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: MiroFish setup needs the user's Docker; a system tool, never PM-managed"
+  },
+  {
+    "path": "clawk_cli/tools_config.py",
+    "symbol": "_resolve_npm_cli",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: asks whether a user-facing global npm CLI (claude/codex) is on the user's PATH before checking npm's global bin dir"
+  },
+  {
+    "path": "tools/coding_cli_common.py",
+    "symbol": "resolve_cli",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: coding-agent CLIs (claude, codex, gemini, ...) are user installs found on the user's PATH or an explicit override"
+  },
+  {
+    "path": "tools/scrape_tool.py",
+    "symbol": "_scrapling_cmd",
+    "kind": "bare_which",
+    "reason": "Clawksis-only: finds the user's scrapling CLI on PATH or an explicit override; not PM-managed"
   }
 ]

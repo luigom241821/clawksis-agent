@@ -42,7 +42,7 @@ _DENIED_PREFIXES = tuple(PurePosixPath(p) for p in _MEDIA_DELIVERY_DENIED_PREFIX
 _DENIED_HOME_RELATIVE = tuple(
     PurePosixPath(s) for s in _MEDIA_DELIVERY_DENIED_HOME_SUBPATHS
 ) + tuple(
-    PurePosixPath(".clawk", *PurePosixPath(rel.replace(os.sep, "/")).parts)
+    PurePosixPath(".clawksis", *PurePosixPath(rel.replace(os.sep, "/")).parts)
     for rel in _ROOT_CREDENTIAL_PATHS
 )
 
