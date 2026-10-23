@@ -58,7 +58,7 @@ const botB: RosterRow = { ...botA, connectionId: 'host-b' }
 
 const status: DisplayStatus = {
   profile: 'default',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: true,
   missing: [],

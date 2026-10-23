@@ -259,7 +259,7 @@ class Cell:
     def __init__(self, tmp_path: Path):
         self.root = tmp_path
         self.home = tmp_path / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.clawk_home.mkdir(parents=True)
         (self.clawk_home / "config.yaml").write_text(
             "gateway:\n  delivery_ledger: true\n", encoding="utf-8"

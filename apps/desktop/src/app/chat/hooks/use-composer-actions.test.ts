@@ -696,7 +696,7 @@ describe('attachImagePath thumbnail separation', () => {
       ...original,
       attachedSessionId: 'session-1',
       label: 'photo.png',
-      path: '/root/.clawk/attachments/photo.png',
+      path: '/root/.clawksis/attachments/photo.png',
       uploadState: undefined
     })
 
@@ -708,7 +708,7 @@ describe('attachImagePath thumbnail separation', () => {
 
     expect($composerAttachments.get()[0]).toMatchObject({
       attachedSessionId: 'session-1',
-      path: '/root/.clawk/attachments/photo.png',
+      path: '/root/.clawksis/attachments/photo.png',
       thumbnailUrl: expect.stringMatching(/^data:image\/png;base64,/)
     })
   })

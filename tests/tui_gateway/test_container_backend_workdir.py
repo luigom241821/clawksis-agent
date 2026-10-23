@@ -110,4 +110,4 @@ def test_attached_host_file_is_staged_and_agent_sees_container_path(launch_home,
         f"summarise @file:{server._format_ref_value(ref_path)}", cwd=cwd, allowed_root=cwd,
         context_length=200_000)
     assert not ctx.warnings, ctx.warnings
-    assert f"available on disk at `/root/.clawk/attachments/{stored.name}`" in ctx.message
+    assert f"available on disk at `/root/.clawksis/attachments/{stored.name}`" in ctx.message

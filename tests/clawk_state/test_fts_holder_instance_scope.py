@@ -2,8 +2,8 @@
 
 Field-verified 2026-09-07 on a production host running TWO independent
 Clawksis instances: a main gateway (user ``ubuntu``,
-CLAWK_HOME=/home/ubuntu/.clawk) and a demo gateway (user ``demo``,
-CLAWK_HOME=/home/demo/.clawk).  The demo gateway runs as another user, so
+CLAWK_HOME=/home/ubuntu/.clawksis) and a demo gateway (user ``demo``,
+CLAWK_HOME=/home/demo/.clawksis).  The demo gateway runs as another user, so
 its ``/proc/<pid>/fd`` table is unreadable from the main instance and the
 holder scan falls back to ``/proc/<pid>/cmdline`` + ``_looks_like_clawk``.
 The demo process's argv matches the Clawksis patterns exactly, so the fallback
@@ -41,15 +41,15 @@ _REAL_READLINK = os.readlink
 # token lives under /home/demo/.clawk, the binary name matches the Clawksis
 # patterns, and nothing references the main instance's home or state.db.
 DEMO_HOME_ARGV = [
-    "/home/demo/.clawk/clawksis-agent/clawk",
+    "/home/demo/.clawksis/clawksis-agent/clawk",
     "gateway",
     "run",
 ]
 
 # Same, spelled through the venv interpreter + clawk launcher script.
 DEMO_VENV_ARGV = [
-    "/home/demo/.clawk/clawksis-agent/venv/bin/python",
-    "/home/demo/.clawk/clawksis-agent/clawk_cli/main.py",
+    "/home/demo/.clawksis/clawksis-agent/venv/bin/python",
+    "/home/demo/.clawksis/clawksis-agent/clawk_cli/main.py",
     "gateway",
 ]
 
@@ -148,7 +148,7 @@ class TestUninspectableHolderInstanceScope:
         db_path = root / "profiles" / "b" / "state.db"
         db_path.parent.mkdir(parents=True)
         multiplexer = ["clawk", "--home", str(root), "gateway", "run"]
-        other_install = ["clawk", "--home", "/home/demo/.clawk", "gateway", "run"]
+        other_install = ["clawk", "--home", "/home/demo/.clawksis", "gateway", "run"]
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))
         _install_fake_argv(monkeypatch, {222: multiplexer})
@@ -235,6 +235,6 @@ class TestUninspectableHolderInstanceScope:
 
         _install_fake_proc(monkeypatch, db_path.parent, unreadable_pids=(222,))
         _install_fake_argv(
-            monkeypatch, {222: ["/home/u/.clawk/venv/bin/clawk", "gateway", "run"]})
+            monkeypatch, {222: ["/home/u/.clawksis/venv/bin/clawk", "gateway", "run"]})
         holders = clawk_state_holders.foreign_state_db_holders(db_path)
         assert [pid for pid, _ in holders] == [222]

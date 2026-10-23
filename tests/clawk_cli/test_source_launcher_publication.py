@@ -124,16 +124,16 @@ def test_launcher_resolves_default_home_at_use_not_publication(tmp_path, monkeyp
     new_user_home = tmp_path / "second-user"
     new_user_home.mkdir()
     monkeypatch.setenv("HOME", str(new_user_home))
-    monkeypatch.setenv("CLAWK_HOME", str(new_user_home / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(new_user_home / ".clawksis"))
     select_generation(repo, "second", "from-second-user")
     env = dict(os.environ)
     env.pop("CLAWK_HOME")
     result = subprocess.run([str(launcher)], cwd=tmp_path, env=env,
                             capture_output=True, text=True, encoding="utf-8", timeout=30, check=False)
     assert result.returncode == 7, result.stdout + result.stderr
-    assert json.loads(result.stdout)["home"] == str(new_user_home / ".clawk")
+    assert json.loads(result.stdout)["home"] == str(new_user_home / ".clawksis")
     assert json.loads(result.stdout)["value"] == "from-second-user"
-    assert published_home != new_user_home / ".clawk"
+    assert published_home != new_user_home / ".clawksis"
 
 
 @pytest.mark.parametrize("publisher", [

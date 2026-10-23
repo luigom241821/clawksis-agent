@@ -112,7 +112,7 @@ def isolated_env(
 ) -> dict[str, str]:
     """Allowlisted environment with HOME/CLAWK_HOME under ``root``."""
     home = root / "home"
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     clawk_home.mkdir(parents=True, exist_ok=True)
     shim_dir = root / "shims"
     write_shims(shim_dir)
@@ -148,7 +148,7 @@ def isolated_env(
     if real_uv_cache.is_dir():
         env["UV_CACHE_DIR"] = str(real_uv_cache)
     base_path = os.environ.get("PATH", "/usr/bin:/bin")
-    uv = shutil.which("uv") or (str(REAL_HOME / ".clawk" / "bin" / "uv") if (REAL_HOME / ".clawk" / "bin" / "uv").exists() else None)
+    uv = shutil.which("uv") or (str(REAL_HOME / ".clawksis" / "bin" / "uv") if (REAL_HOME / ".clawksis" / "bin" / "uv").exists() else None)
     path_parts = [str(shim_dir), *[str(p) for p in extra_path]]
     if uv:
         path_parts.append(str(Path(uv).parent))
@@ -175,7 +175,7 @@ def sandbox_argv(argv: Sequence[str], *, writable: Iterable[Path], unshare_net: 
     # The child's allowlisted PATH may omit the Nix-provided bwrap (notably a login shell
     # with a clean distro PATH); resolve it in the parent before wrapping the command.
     cmd = [shutil.which("bwrap") or "bwrap", "--dev-bind", "/", "/"]
-    real_clawk = REAL_HOME / ".clawk"
+    real_clawk = REAL_HOME / ".clawksis"
     if real_clawk.is_dir():
         cmd += ["--ro-bind", str(real_clawk), str(real_clawk)]
     for w in writable:

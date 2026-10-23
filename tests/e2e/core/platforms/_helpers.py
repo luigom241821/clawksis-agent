@@ -52,7 +52,7 @@ def hermetic_env(home: Path, extra: Optional[dict[str, str]] = None) -> dict[str
     extra = dict(extra or {})
     shim = extra.pop("PYTHONPATH_PREPEND", "")
     env.update(
-        HOME=str(home), CLAWK_HOME=str(home / ".clawk"), XDG_STATE_HOME=str(home / ".local" / "state"),
+        HOME=str(home), CLAWK_HOME=str(home / ".clawksis"), XDG_STATE_HOME=str(home / ".local" / "state"),
         # a stand-in's sitecustomize shim (if any) first, then the checkout under test
         PYTHONPATH=os.pathsep.join(p for p in (shim, str(REPO_ROOT)) if p),
         NO_COLOR="1", TERM="dumb", NO_PROXY="127.0.0.1,localhost", no_proxy="127.0.0.1,localhost",
@@ -107,7 +107,7 @@ class GatewayUnderTest:
                  ready: Callable[[], bool]) -> None:
         self.root = root
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.log_path = root / "gateway.log"
         self._env = dict(env)
         self._ready = ready

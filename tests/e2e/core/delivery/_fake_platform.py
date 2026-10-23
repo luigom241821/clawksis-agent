@@ -494,7 +494,7 @@ class GatewayProcess:
 
         self.root = root
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.spool = root / "spool"
         self.spool.mkdir(parents=True, exist_ok=True)
         write_clawk_home(self.clawk_home, llm_base_url, extra_config=extra_config)

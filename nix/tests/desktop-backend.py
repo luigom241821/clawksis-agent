@@ -29,7 +29,7 @@ def _processes_under(home: Path) -> list[int]:
 desktop, expected = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="clawk-desktop-backend-") as temporary:
     home = Path(temporary)
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     legacy = clawk_home / "clawksis-agent"
     (legacy / "clawk_cli").mkdir(parents=True)
     (legacy / "clawk_cli" / "main.py").touch()

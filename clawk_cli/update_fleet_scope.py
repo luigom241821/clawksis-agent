@@ -132,7 +132,7 @@ def systemd_unit_clawk_home(scope_cmd: list, svc_name: str) -> str | None:
         if sep and key == "CLAWK_HOME" and value.strip():
             return value.strip()
     if "--user" in scope_cmd:
-        return str(Path.home() / ".clawk")
+        return str(Path.home() / ".clawksis")
     return None
 
 

@@ -56,16 +56,16 @@ def hermetic_env(home: Path, clawk_home: Path | None = None, proxy: str | None =
     fake = home.resolve()
     # The state-db guard is bypassed below, so prove first that this child can never reach the
     # real install: its HOME (and therefore every profile root) lives outside the real home.
-    assert fake != real_home and real_home / ".clawk" not in (fake, *fake.parents), fake
+    assert fake != real_home and real_home / ".clawksis" not in (fake, *fake.parents), fake
     env = {k: v for k, v in os.environ.items()
            if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))}
     env.update(
         HOME=str(home),
-        CLAWK_HOME=str(clawk_home or home / ".clawk"),
+        CLAWK_HOME=str(clawk_home or home / ".clawksis"),
         PYTHONPATH=str(REPO_ROOT),
         NO_COLOR="1",
         TERM="dumb",
-        # A pytest-descendant child treats $HOME/.clawk/state.db as production; that HOME is ours.
+        # A pytest-descendant child treats $HOME/.clawksis/state.db as production; that HOME is ours.
         CLAWK_STATE_DB_GUARD_BYPASS="1",
     )
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"):

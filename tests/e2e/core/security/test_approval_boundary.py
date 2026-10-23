@@ -118,7 +118,7 @@ def _single_query_run(root: Path, single_query_mode: str) -> dict[str, Any]:
     script += [ToolCall("terminal", {"command": CONTROL}), Text("done")]
     key = "sk-approval-cli"
     with FakeLLMServer(script, api_key=key) as srv:
-        write_home(home / ".clawk", srv.base_url, api_key=key,
+        write_home(home / ".clawksis", srv.base_url, api_key=key,
                    config=MANUAL + f"  single_query_mode: {single_query_mode}\n")
         proc = run_clawk(["chat", "-q", "run the maintenance commands", "-Q"], home, timeout=180, cwd=victims)
         requests = srv.main_requests()

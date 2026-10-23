@@ -58,7 +58,7 @@ def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Pat
         kinds = Counter(r["kind"] for r in llm.requests)
         out = [f"fake provider requests: main={kinds['main']} aux={kinds['aux']}"]
         for name in ("agent.log", "errors.log"):
-            log = home / ".clawk" / "logs" / name
+            log = home / ".clawksis" / "logs" / name
             tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-40:] if log.exists() else ["<missing>"]
             out += [f"--- {name} (tail) ---", *tail]
         pid = tmux("display-message", "-p", "-t", "p", "#{pane_pid}").strip()
@@ -97,9 +97,9 @@ def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Pat
         time.sleep(2.0)
 
     with llm:
-        write_clawk_home(home / ".clawk", llm.base_url)
+        write_clawk_home(home / ".clawksis", llm.base_url)
         env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAWK_", "TMUX"))}
-        env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawk"), PYTHONPATH=str(REPO_ROOT),
+        env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawksis"), PYTHONPATH=str(REPO_ROOT),
                    TERM="xterm-256color", CLAWK_STATE_DB_GUARD_BYPASS="1", PYTHONFAULTHANDLER="1")
         argv = [sys.executable, "-m", "clawk_cli.main", "chat", "--cli", "--yolo"]
         subprocess.run(["tmux", "-L", sock, "-f", os.devnull, "new-session", "-d", "-s", "p", "-x", "120",

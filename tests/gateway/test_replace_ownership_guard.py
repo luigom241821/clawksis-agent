@@ -90,7 +90,7 @@ class TestRecordAuthority:
             patch(
                 "gateway.status._read_pid_record",
                 return_value=_record(
-                    home="/home/other/.clawk/profiles/timothy"
+                    home="/home/other/.clawksis/profiles/timothy"
                 ),
             ),
             patch(
@@ -222,7 +222,7 @@ class TestArgvConsistencyCheck:
             _looks_like_profile_conflict_from_cmdline as conflict,
         )
 
-        tim_home = Path("/home/x/.clawk/profiles/tim")
+        tim_home = Path("/home/x/.clawksis/profiles/tim")
         # Foreign target advertising timothy — NOT ours.
         assert (
             conflict("python -m clawk_cli.main --profile timothy gateway run", tim_home)
@@ -244,17 +244,17 @@ class TestArgvConsistencyCheck:
             _looks_like_profile_conflict_from_cmdline as conflict,
         )
 
-        tim_home = Path("/home/x/.clawk/profiles/tim")
+        tim_home = Path("/home/x/.clawksis/profiles/tim")
         assert (
             conflict(
-                "python -m clawk_cli.main CLAWK_HOME=/home/x/.clawk/profiles/timothy gateway run",
+                "python -m clawk_cli.main CLAWK_HOME=/home/x/.clawksis/profiles/timothy gateway run",
                 tim_home,
             )
             is True
         )
         assert (
             conflict(
-                "python -m clawk_cli.main --clawk-home /home/x/.clawk/profiles/tim/ gateway run",
+                "python -m clawk_cli.main --clawk-home /home/x/.clawksis/profiles/tim/ gateway run",
                 tim_home,
             )
             is False  # trailing slash normalizes away
@@ -265,7 +265,7 @@ class TestArgvConsistencyCheck:
             _looks_like_profile_conflict_from_cmdline as conflict,
         )
 
-        root = Path("/home/x/.clawk")
+        root = Path("/home/x/.clawksis")
         assert conflict("python -m x --profile sam run", root) is True
         assert conflict("python -m x -p sam run", root) is True
         assert conflict("python -m x run", root) is False

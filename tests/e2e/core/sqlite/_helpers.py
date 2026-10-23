@@ -94,7 +94,7 @@ class Chamber:
         self.root = root
         self.mode = journal
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.clawk_home.mkdir(parents=True, exist_ok=True)
         # The config default in BOTH arms: the delete arm is a default-config user on a vulnerable SQLite.
         (self.clawk_home / "config.yaml").write_text("database:\n  journal_mode: wal\n", encoding="utf-8")

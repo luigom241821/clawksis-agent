@@ -30,7 +30,7 @@ def node_tool_dirs() -> tuple[str, ...]:
 
 
 def clawk_vendored_dirs() -> tuple[str, ...]:
-    return ("~/.clawksis/bin",) if _POSIX else ("%USERPROFILE%/.clawk/bin",)
+    return ("~/.clawksis/bin",) if _POSIX else ("%USERPROFILE%/.clawksis/bin",)
 
 
 def machine_marker_files() -> tuple[str, ...]:
@@ -49,7 +49,7 @@ def clawk_home_globs() -> tuple[str, ...]:
     """Every place a Clawksis data root can sit by default: suffixed channel roots, the legacy Windows
     root, and the per-package roots of MSIX builds that ran with filesystem virtualisation."""
     if _WIN:
-        return ("%LOCALAPPDATA%/clawk*", "%USERPROFILE%/.clawk",
+        return ("%LOCALAPPDATA%/clawk*", "%USERPROFILE%/.clawksis",
                 "%LOCALAPPDATA%/Packages/NousResearch*_*/LocalCache/Local/clawk*")
     return ("~/.clawksis*",)
 

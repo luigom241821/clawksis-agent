@@ -1225,7 +1225,7 @@ class TestImportAtomicWrites:
         """Same invariant on the `_external/` branch, which writes outside CLAWK_HOME."""
         dst_home = tmp_path / "dst"
         dst_home.mkdir()
-        clawk_home = dst_home / ".clawk"
+        clawk_home = dst_home / ".clawksis"
         clawk_home.mkdir()
         honcho = dst_home / ".honcho"
         honcho.mkdir()
@@ -1287,7 +1287,7 @@ class TestImportAtomicWrites:
         """Same guard on the `_external/` branch — the realistic dotfiles case."""
         dst_home = tmp_path / "dst"
         dst_home.mkdir()
-        clawk_home = dst_home / ".clawk"
+        clawk_home = dst_home / ".clawksis"
         clawk_home.mkdir()
         dotfiles = dst_home / "dotfiles"
         dotfiles.mkdir()

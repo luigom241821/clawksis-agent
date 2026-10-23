@@ -228,7 +228,7 @@ class TmuxTui:
                  tui_dir: Path | None = None) -> None:
         self.root = root
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         # A socket path of our own (never the shared default dir tmux-<uid> under the system temp
         # dir, where a crashed run would leave it behind); close() removes it.
         self._sock_dir: str | None = None

@@ -494,7 +494,7 @@ ${payload}
     // Local desktop (connection mode != 'remote'): a local image_generate
     // output path must be read through the Electron bridge, not left as a
     // file:// URL the renderer cannot load (#83380).
-    const path = '/home/me/.clawk/cache/image_generate/out.png'
+    const path = '/home/me/.clawksis/cache/image_generate/out.png'
 
     await expect(artifactImageSrc(path)).resolves.toBe('data:image/png;base64,TE9DQUw=')
     expect(readFileDataUrl).toHaveBeenCalledWith(path)
@@ -512,7 +512,7 @@ ${payload}
     vi.stubGlobal('window', { clawkDesktop: { api } })
     $connection.set({ baseUrl: 'https://gw', mode: 'remote', token: 'secret' } as never)
 
-    const path = '/Users/me/.clawk/skills/work-esab/references/images/manual-step03.jpeg'
+    const path = '/Users/me/.clawksis/skills/work-esab/references/images/manual-step03.jpeg'
 
     await expect(artifactImageSrc(path)).resolves.toBe('data:image/jpeg;base64,cmVtb3Rl')
 

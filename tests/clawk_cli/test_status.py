@@ -188,14 +188,14 @@ class TestShowStatusXaiOAuth:
         monkeypatch.setattr(
             auth_mod,
             "get_xai_oauth_auth_status",
-            lambda: {"logged_in": True, "auth_store": "/home/u/.clawk/auth.json"},
+            lambda: {"logged_in": True, "auth_store": "/home/u/.clawksis/auth.json"},
             raising=False,
         )
 
         status_mod.show_status(SimpleNamespace(full=True, deep=False))
         out = capsys.readouterr().out
 
-        assert "Auth file:  /home/u/.clawk/auth.json" in out
+        assert "Auth file:  /home/u/.clawksis/auth.json" in out
 
     # ------------------------------------------------------------------
     # Not-logged-in branch

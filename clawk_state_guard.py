@@ -33,7 +33,7 @@ def _real_platform_state_root() -> Optional[Path]:
             base = os.environ.get("LOCALAPPDATA", "").strip()
             root = Path(base) / "clawk" if base else home / "AppData" / "Local" / "clawk"
         else:
-            root = home / ".clawk"
+            root = home / ".clawksis"
         return root.resolve()
     except Exception:
         return None

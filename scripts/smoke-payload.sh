@@ -27,7 +27,7 @@ try {
   }
   const home = join(scratch, 'home')
   mkdirSync(home)
-  const env = { HOME: home, USERPROFILE: home, CLAWK_HOME: join(home, '.clawk'),
+  const env = { HOME: home, USERPROFILE: home, CLAWK_HOME: join(home, '.clawksis'),
     PYTHONUTF8: '1', PYTHONDONTWRITEBYTECODE: '1', CLAWK_DISABLE_LAZY_INSTALLS: '1',
     UV_OFFLINE: '1', npm_config_offline: 'true' }
   // Keep OS process necessities only; no checkout, Python, PM, or Node overrides.

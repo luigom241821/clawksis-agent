@@ -169,7 +169,7 @@ def build_tools(tmp_path, monkeypatch, build_worker):
            if not key.startswith(("UV_", "PYTHON")) and key != "VIRTUAL_ENV"}
     home = tmp_path / "home"
     home.mkdir()
-    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home / ".clawk"))
+    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home / ".clawksis"))
     monkeypatch.setenv("CLAWK_HOME", env["CLAWK_HOME"])
     monkeypatch.setattr(Path, "home", lambda: home)
     return env

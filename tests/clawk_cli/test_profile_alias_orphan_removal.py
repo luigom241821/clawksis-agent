@@ -34,7 +34,7 @@ def _alias(profile, *, remove, name=None):
 
 @pytest.mark.platforms("any")  # the wrapper name differs per host (.bat on Windows)
 def test_doctor_names_the_command_that_removes_an_orphan_alias(isolated_home, capsys):
-    keep = isolated_home / ".clawk" / "profiles" / "keep"  # doctor's section needs one live profile
+    keep = isolated_home / ".clawksis" / "profiles" / "keep"  # doctor's section needs one live profile
     keep.mkdir(parents=True)
     (keep / "config.yaml").write_text("model: m\n", encoding="utf-8")
     wrapper = create_wrapper_script("petcare")

@@ -89,7 +89,7 @@ class ParityHome:
         fixture = self.clawk_home.resolve()
         assert fixture != real_root and fixture.parent != real_root / "profiles", (
             f"fixture CLAWK_HOME {self.clawk_home} is the real install's live home")
-        assert fixture == (self.home / ".clawk").resolve(), (
+        assert fixture == (self.home / ".clawksis").resolve(), (
             f"fixture CLAWK_HOME {self.clawk_home} is not <fixture HOME>/.clawk")
         # Allowlist, not denylist: the runner may itself be a Clawksis process whose
         # TERMINAL_CWD / CLAWK_* / credential env would silently reroute the child.
@@ -131,7 +131,7 @@ def build_parity_home(root: Path, base_url: str, *, grandchild: bool = True,
                       death_tool: bool = False, mcp_timeout: int = 60) -> ParityHome:
     """Write the full fixture home under ``root`` (a tmp_path)."""
     home = root / "home"
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     project = root / "project"
     markers = root / "markers"
     for d in (clawk_home, project, markers):

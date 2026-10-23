@@ -18,7 +18,7 @@ import type { QueueItem } from '../hooks/useQueue.js'
 import { t } from '../i18n/runtime.js'
 
 const directory = (home?: string) =>
-  join(home ?? process.env.CLAWK_HOME ?? join(homedir(), '.clawk'), 'tui-pending-inputs')
+  join(home ?? process.env.CLAWK_HOME ?? join(homedir(), '.clawksis'), 'tui-pending-inputs')
 
 const recordName = /^[0-9a-f-]{36}\.json$/
 const successors = new Map<string, SubmissionDestination>()

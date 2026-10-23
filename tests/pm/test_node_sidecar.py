@@ -12,7 +12,7 @@ import pm
 from pm.package import InstallError, Runner, compose_env
 from pm.workspace import install_node_sidecar
 
-_REAL_CLAWK_HOME = Path.home() / ".clawk"  # Captured before per-test HOME isolation.
+_REAL_CLAWK_HOME = Path.home() / ".clawksis"  # Captured before per-test HOME isolation.
 
 
 def test_no_package_json_never_acquires_npm(tmp_path, monkeypatch):

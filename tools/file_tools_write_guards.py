@@ -415,12 +415,12 @@ def _get_container_mirror_prefix_for_task(task_id: str = "default") -> str | Non
         if env is not None:
             persistent_docker = (env.__class__.__name__ == "DockerEnvironment"
                                  and bool(getattr(env, "_persistent", False)))
-            return "/root/.clawk" if persistent_docker else None
+            return "/root/.clawksis" if persistent_docker else None
         config = _get_env_config()
     except Exception:
         return None
     if config.get("env_type") == "docker" and config.get("container_persistent", True):
-        return "/root/.clawk"
+        return "/root/.clawksis"
     return None
 
 

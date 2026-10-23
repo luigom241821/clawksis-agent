@@ -29,7 +29,7 @@ def test_remove_dashboard_launchd_jobs_boots_out_and_deletes_matching_plists(
         return path
 
     dashboard = job("com.user.clawksis-dashboard",
-                    ["/Users/u/.clawk/clawksis-agent/venv/bin/clawk", "dashboard", "--port", "9200"],
+                    ["/Users/u/.clawksis/clawksis-agent/venv/bin/clawk", "dashboard", "--port", "9200"],
                     agents_dir)
     serve = job("com.user.clawk-serve", ["clawk", "serve"], agents_dir)
     unrelated = job("com.user.keep", ["/usr/bin/say", "hello"], agents_dir)

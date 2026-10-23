@@ -6,7 +6,7 @@ import { createPluginWsUrlHandler, pluginWsPath } from './plugin-ws-url'
 // PLG-1: a local gateway's plugin socket rides the native-http grant its REST twin uses. The grant
 // is attached as a header to the one dial main prepared, never placed in the renderer's URL.
 
-const endpoint = { api_origin: 'http://127.0.0.1:9', control_home: null, profile_id: '/home/u/.clawk' } as unknown as GatewayEndpoint
+const endpoint = { api_origin: 'http://127.0.0.1:9', control_home: null, profile_id: '/home/u/.clawksis' } as unknown as GatewayEndpoint
 
 test('a plugin dial carries the grant header once and never in its URL', () => {
   const dials = createLocalGatewayDials()
@@ -68,13 +68,13 @@ test('mints a native-http grant for a local gateway and null elsewhere', async (
     ensureRegistryBackend: vi.fn(async () => ({ baseUrl: 'https://remote.invalid' })),
     forgetLocalGatewayDescriptor: vi.fn(),
     forgetRegistryLocalGatewayDescriptor: vi.fn(),
-    launchHome: '/home/u/.clawk',
+    launchHome: '/home/u/.clawksis',
     mint,
     prepare
   })
 
   await expect(handler({ path: '/events', pluginId: 'kanban', profile: 'default' }, 3)).resolves.toBe('http://127.0.0.1:9|/api/plugins/kanban/events|grant-2|3')
-  expect(mint).toHaveBeenCalledWith(expect.objectContaining({ profile_id: '/home/u/.clawk' }), 'native-http')
+  expect(mint).toHaveBeenCalledWith(expect.objectContaining({ profile_id: '/home/u/.clawksis' }), 'native-http')
   await expect(handler({ connectionId: 'homelab', path: '/events', pluginId: 'kanban' }, 3)).resolves.toBeNull()
   await expect(handler({ path: '/../ws', pluginId: 'kanban' }, 3)).rejects.toThrow('Invalid plugin socket path')
   await expect(handler({ path: '/%2e%2e/other/events', pluginId: 'kanban' }, 3)).rejects.toThrow('Invalid plugin socket path')
@@ -94,7 +94,7 @@ test('a mint refused for a permission reason is a named reply, any other failure
     ensureRegistryBackend: vi.fn(),
     forgetLocalGatewayDescriptor: vi.fn(),
     forgetRegistryLocalGatewayDescriptor: vi.fn(),
-    launchHome: '/home/u/.clawk',
+    launchHome: '/home/u/.clawksis',
     mint,
     prepare: vi.fn(() => 'unused')
   })
@@ -114,8 +114,8 @@ test('a mint refused for a permission reason is a named reply, any other failure
 test('the shared local dial keeps the gateway socket on an interactive grant', async () => {
   const { localGatewayDial } = await import('./local-gateway')
   const mint = vi.fn(async () => 'interactive-2')
-  const url = await localGatewayDial({ ensure: async () => ({ baseUrl: 'http://127.0.0.1:9', gatewayEndpoint: endpoint }), forget: vi.fn(), launchHome: '/home/u/.clawk', mint, prepare: (baseUrl, ticket) => `${baseUrl}|${ticket}`, profile: '' })
+  const url = await localGatewayDial({ ensure: async () => ({ baseUrl: 'http://127.0.0.1:9', gatewayEndpoint: endpoint }), forget: vi.fn(), launchHome: '/home/u/.clawksis', mint, prepare: (baseUrl, ticket) => `${baseUrl}|${ticket}`, profile: '' })
 
   expect(url).toBe('http://127.0.0.1:9|interactive-2')
-  expect(mint).toHaveBeenCalledWith(expect.objectContaining({ profile_id: '/home/u/.clawk' }), 'interactive')
+  expect(mint).toHaveBeenCalledWith(expect.objectContaining({ profile_id: '/home/u/.clawksis' }), 'interactive')
 })

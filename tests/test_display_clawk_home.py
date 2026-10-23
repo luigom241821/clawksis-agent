@@ -34,7 +34,7 @@ class TestDisplayClawkHomePosix(unittest.TestCase):
         import clawk_constants as hc
 
         with patch.object(hc, "get_clawk_home",
-                          return_value=Path.home() / ".clawk"):
+                          return_value=Path.home() / ".clawksis"):
             out = hc.display_clawk_home()
         self.assertEqual(out, "~/.clawksis")
 

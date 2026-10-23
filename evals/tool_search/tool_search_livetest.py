@@ -299,7 +299,7 @@ def setup_isolated_home(
     the agent can authenticate against OpenRouter inside the isolated home.
     """
     home_dir = Path(tempfile.mkdtemp(prefix="clawk_ts_live_"))
-    clawk_home = home_dir / ".clawk"
+    clawk_home = home_dir / ".clawksis"
     clawk_home.mkdir(parents=True)
 
     if ORIGINAL_AUTH.exists():

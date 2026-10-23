@@ -20,7 +20,7 @@ def fake_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
-    monkeypatch.setenv("CLAWK_HOME", str(home / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(home / ".clawksis"))
     (home / ".local" / "bin").mkdir(parents=True)
     return home
 
@@ -37,7 +37,7 @@ def _make_clawk_node(clawk_home: Path) -> Path:
 
 @pytest.mark.parametrize("owned", [False, True])
 def test_node_link_cleanup_respects_resolved_owner(fake_home, monkeypatch, owned):
-    home = fake_home / ".clawk"
+    home = fake_home / ".clawksis"
     link = fake_home / ".local" / "bin" / "node"
     target = home / "node" / "bin" / "node" if owned else fake_home / "other" / "node"
     target.parent.mkdir(parents=True, exist_ok=True)

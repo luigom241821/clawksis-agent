@@ -20,4 +20,4 @@ except (ModuleNotFoundError, ImportError):
     def get_clawk_home() -> Path:
         """Return the Clawksis home directory (default: ``~/.clawksis``)."""
         val = os.environ.get("CLAWK_HOME", "").strip()
-        return Path(val) if val else Path.home() / ".clawk"
+        return Path(val) if val else Path.home() / ".clawksis"

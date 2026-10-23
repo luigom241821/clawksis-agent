@@ -200,7 +200,7 @@ def test_stop_only_targets_the_invoking_clawk_home(monkeypatch):
 class TestClawkHomeForPid:
     """Tri-state owner resolution: a readable environment always names a home."""
 
-    @pytest.mark.platforms("posix")  # POSIX default home is $HOME/.clawk
+    @pytest.mark.platforms("posix")  # POSIX default home is $HOME/.clawksis
     def test_readable_env_without_var_resolves_to_that_process_default_home(self, monkeypatch, tmp_path):
         """The common install shape exports no CLAWK_HOME: the backend lives in its user's
         platform default home, and a default-home ``--stop`` must still find it (#113978)."""
@@ -232,7 +232,7 @@ class TestClawkHomeForPid:
         service_home = tmp_path / "clawk-service"
         self._posix_scrubbed_unit(monkeypatch, tmp_path, str(service_home))
 
-        assert Path(dashboard_procs._clawk_home_for_pid(1)) == service_home / ".clawk"
+        assert Path(dashboard_procs._clawk_home_for_pid(1)) == service_home / ".clawksis"
 
     def test_unreadable_passwd_entry_keeps_the_existing_fallback(self, monkeypatch, tmp_path):
         """No owner, no entry: the previous behaviour stands rather than resolving to nothing."""
@@ -263,4 +263,4 @@ class TestClawkHomeForPid:
     def test_unreadable_env_is_none_and_spared(self, monkeypatch):
         monkeypatch.setattr(dashboard_procs, "_pid_environ", lambda pid: None)
         assert dashboard_procs._clawk_home_for_pid(7) is None
-        assert dashboard_procs._pids_owned_by_clawk_home([7], "/home/alice/.clawk") == []
+        assert dashboard_procs._pids_owned_by_clawk_home([7], "/home/alice/.clawksis") == []

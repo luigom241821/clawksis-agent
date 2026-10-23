@@ -281,7 +281,7 @@ Drop a user plugin at `~/.clawksis/plugins/image_gen/<name>/` with the same `nam
 ## Testing
 
 ```bash
-export CLAWK_HOME=$HOME/.clawk/cache/scratch/clawk-imggen-test
+export CLAWK_HOME=$HOME/.clawksis/cache/scratch/clawk-imggen-test
 mkdir -p $CLAWK_HOME/plugins/image_gen/my-backend
 # …copy __init__.py + plugin.yaml into that dir…
 

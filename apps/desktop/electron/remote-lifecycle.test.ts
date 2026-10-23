@@ -186,8 +186,8 @@ test('POSIX relaunch gate permits absent/dead markers and normalizes named-profi
     }
   }
 
-  await assertRemoteInstallUpdateClear(ssh, '/home/alice/.clawk/profiles/research')
-  assert.ok(commands[0].endsWith(" '/home/alice/.clawk/.clawk-update-in-progress'"), commands[0].slice(-80))
+  await assertRemoteInstallUpdateClear(ssh, '/home/alice/.clawksis/profiles/research')
+  assert.ok(commands[0].endsWith(" '/home/alice/.clawksis/.clawk-update-in-progress'"), commands[0].slice(-80))
 })
 
 test('POSIX relaunch gate rechecks after token upload immediately before process creation', async () => {
@@ -261,13 +261,13 @@ test('readRemoteInstallId reports the INSTALL root id for a profile-pinned home'
   // The whole point of the id: two ssh connections to one machine — one pinned at a profile,
   // one at the root — must report the SAME backend so their roster rows collapse.
   const pinned = fakeSsh([
-    [/CLAWK_HOME/, '/Users/zillajr/.clawk/profiles/dixie\n'],
+    [/CLAWK_HOME/, '/Users/zillajr/.clawksis/profiles/dixie\n'],
     [/cat .*install_id/, '0f8a1c2b3d4e5f60718293a4b5c6d7e8\n']
   ])
 
   assert.equal(await readRemoteInstallId(pinned), '0f8a1c2b3d4e5f60718293a4b5c6d7e8')
   assert.equal(
-    pinned.calls.some(cmd => cmd.includes('/Users/zillajr/.clawk/install_id')),
+    pinned.calls.some(cmd => cmd.includes('/Users/zillajr/.clawksis/install_id')),
     true
   )
   assert.equal(
@@ -363,7 +363,7 @@ test('locateClawksis preserves an installer wrapper instead of resolving its int
     [/\[ -x .*\.local\/bin\/clawk/, 'OK'],
     // If the removed python3 wrapper-parser were ever reintroduced, this rule
     // would reward it with an interpreter path and the assertions below fail.
-    [/python3 -c/, '/home/u/.clawk/clawksis-agent/venv/bin/python\n']
+    [/python3 -c/, '/home/u/.clawksis/clawksis-agent/venv/bin/python\n']
   ])
 
   assert.equal(await locateClawksis(ssh, ''), '/home/u/.local/bin/clawk')
@@ -379,7 +379,7 @@ test('locateClawksis returns an explicit remoteClawksisPath unchanged', async ()
   // ~/.local/bin/clawk changed nothing for affected users.
   const ssh = fakeSsh([
     [/\[ -x .*\.local\/bin\/clawk/, 'OK'],
-    [/python3 -c/, '/home/u/.clawk/clawksis-agent/venv/bin/python\n']
+    [/python3 -c/, '/home/u/.clawksis/clawksis-agent/venv/bin/python\n']
   ])
 
   assert.equal(await locateClawksis(ssh, '~/.local/bin/clawk'), '~/.local/bin/clawk')
@@ -618,7 +618,7 @@ test('pidIsOurDashboard accepts the venv entrypoint an installer wrapper execs i
   ])
 
   assert.equal(
-    await pidIsOurDashboard(ssh, 5, SPAWN_NONCE, '~/.local/bin/clawk', '/Users/cd9c/.clawk', OWNERSHIP_ID, 'ops'),
+    await pidIsOurDashboard(ssh, 5, SPAWN_NONCE, '~/.local/bin/clawk', '/Users/cd9c/.clawksis', OWNERSHIP_ID, 'ops'),
     true
   )
   assert.match(ownershipProbe, /clawksis-agent.*venv.*bin.*clawk/)
@@ -1583,7 +1583,7 @@ test('connect() preserves an owned backend when a reuse transport throws', async
 
 test('validateRemotePath accepts absolute POSIX paths', () => {
   assert.doesNotThrow(() => validateRemotePath('/usr/bin/clawk'))
-  assert.doesNotThrow(() => validateRemotePath('/home/user/.clawk/clawksis-agent/venv/bin/clawk'))
+  assert.doesNotThrow(() => validateRemotePath('/home/user/.clawksis/clawksis-agent/venv/bin/clawk'))
 })
 
 test('validateRemotePath accepts ~/ prefix paths', () => {

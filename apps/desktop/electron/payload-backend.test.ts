@@ -84,10 +84,10 @@ test('ticket minting runs the payload python, never the CLI shim', () => {
 // ─── update channel helpers ─────────────────────────────────────────
 
 test('installIdForRoot matches the Python install id (sha16 of the canonical path)', () => {
-  // sha256('/home/u/.clawk/clawksis-agent')[:16] — recomputed independently.
+  // sha256('/home/u/.clawksis/clawksis-agent')[:16] — recomputed independently.
   assert.equal(
-    installIdForRoot('/home/u/.clawk/clawksis-agent'),
-    createHash('sha256').update('/home/u/.clawk/clawksis-agent', 'utf8').digest('hex').slice(0, 16)
+    installIdForRoot('/home/u/.clawksis/clawksis-agent'),
+    createHash('sha256').update('/home/u/.clawksis/clawksis-agent', 'utf8').digest('hex').slice(0, 16)
   )
   // The canonicalizer output is what gets hashed (symlinked homes).
   assert.equal(

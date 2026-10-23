@@ -420,7 +420,7 @@ def test_resume_on_another_surface_restores_the_pinned_tool_bytes(monkeypatch, t
 
     sent = _agent([])
     sent.tools = [_tool("read_file"), _described("delegate_task", "delegate", group={"type": "string"}),
-                  _described("skill_manage", "lands in /home/u/.clawk/skills"),
+                  _described("skill_manage", "lands in /home/u/.clawksis/skills"),
                   _described("tool_search", "Search 6 additional tools.")]
     static = {"skill_manage": _described("skill_manage", "lands in the profile's skills dir")["function"]}
     monkeypatch.setattr(registry_mod.registry, "get_all_entries",

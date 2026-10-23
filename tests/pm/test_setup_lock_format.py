@@ -81,7 +81,7 @@ def test_setup_reads_pins_independent_of_indentation(tmp_path, served, indent, b
         json.dumps({"origin": base_url, "prefix": "mirror/"}, indent=mirror_indent), encoding="utf-8",
     )
     env = {"PATH": os.environ["PATH"], "HOME": str(home),
-           "CLAWK_HOME": str(home / ".clawk"), "CLAWK_RUNTIME_DIR": str(runtime),
+           "CLAWK_HOME": str(home / ".clawksis"), "CLAWK_RUNTIME_DIR": str(runtime),
            "PYTHONNOUSERSITE": "1"}
     result = subprocess.run(
         [bash, str(core / "setup-clawk.sh"), "--runtime-only"], cwd=tmp_path,
@@ -97,6 +97,6 @@ def test_setup_reads_pins_independent_of_indentation(tmp_path, served, indent, b
     ]
     assert not (home / ".local").exists()
     assert not (core / ".env").exists()
-    assert not (home / ".clawk" / "skills").exists()
+    assert not (home / ".clawksis" / "skills").exists()
     print(f"runtime-only bootstrap: indent={indent!r}, blank_lines={blank_lines}: exit {result.returncode}")
     print(result.stdout)

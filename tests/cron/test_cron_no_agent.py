@@ -282,7 +282,7 @@ def test_run_job_script_nul_path_fails_cleanly(clawk_env):
 @pytest.mark.parametrize(
     "error",
     [
-        "Script timed out after 900s: /home/u/.clawk/scripts/nightly.sh",
+        "Script timed out after 900s: /home/u/.clawksis/scripts/nightly.sh",
         "Script failed: curl returned 429 from api.example.com",
         "Script failed: gpg authentication failed for key",
         "Script failed: ReadTimeout contacting localhost",

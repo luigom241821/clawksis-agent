@@ -37,7 +37,7 @@ interface BootThemeFile {
 // Profile-aware: the Python launcher exports CLAWK_HOME (set by
 // _apply_profile_override) before spawning the TUI. Falling back to
 // ~/.clawksis matches get_clawk_home()'s default.
-const bootFilePath = () => join(process.env.CLAWK_HOME ?? join(homedir(), '.clawk'), 'tui-theme-boot.json')
+const bootFilePath = () => join(process.env.CLAWK_HOME ?? join(homedir(), '.clawksis'), 'tui-theme-boot.json')
 
 // Never touch the user's real ~/.clawksis from test runs (the TS suite has no
 // CLAWK_HOME isolation fixture).

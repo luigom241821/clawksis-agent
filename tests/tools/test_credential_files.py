@@ -45,7 +45,7 @@ class TestRegisterCredentialFiles:
         mounts = get_credential_file_mounts()
         assert len(mounts) == 1
         assert mounts[0]["host_path"] == str(clawk_home / "token.json")
-        assert mounts[0]["container_path"] == "/root/.clawk/token.json"
+        assert mounts[0]["container_path"] == "/root/.clawksis/token.json"
 
     def test_path_takes_precedence_over_name(self, tmp_path):
         """When both path and name are present, path wins."""
@@ -78,16 +78,16 @@ class TestSkillsDirectoryMount:
 
         assert len(mounts) >= 1
         assert mounts[0]["host_path"] == str(skills_dir)
-        assert mounts[0]["container_path"] == "/root/.clawk/skills"
+        assert mounts[0]["container_path"] == "/root/.clawksis/skills"
 
     def test_custom_container_base(self, tmp_path):
         clawk_home = tmp_path / ".clawk"
         (clawk_home / "skills").mkdir(parents=True)
 
         with patch.dict(os.environ, {"CLAWK_HOME": str(clawk_home)}):
-            mounts = get_skills_directory_mount(container_base="/home/user/.clawk")
+            mounts = get_skills_directory_mount(container_base="/home/user/.clawksis")
 
-        assert mounts[0]["container_path"] == "/home/user/.clawk/skills"
+        assert mounts[0]["container_path"] == "/home/user/.clawksis/skills"
 
     @pytest.mark.require_symlinks
     def test_symlinks_are_sanitized(self, tmp_path):
@@ -211,8 +211,8 @@ class TestIterSkillsFiles:
             files = iter_skills_files()
 
         paths = {f["container_path"] for f in files}
-        assert "/root/.clawk/skills/cat/myskill/SKILL.md" in paths
-        assert "/root/.clawk/skills/cat/myskill/references/api.md" in paths
+        assert "/root/.clawksis/skills/cat/myskill/SKILL.md" in paths
+        assert "/root/.clawksis/skills/cat/myskill/references/api.md" in paths
         for excluded in (
             ".hub",
             ".archive",
@@ -401,9 +401,9 @@ class TestCacheDirectoryMounts:
 
         mounts = get_cache_directory_mounts()
         paths = {m["container_path"] for m in mounts}
-        assert "/root/.clawk/cache/documents" in paths
-        assert "/root/.clawk/cache/audio" in paths
-        assert "/root/.clawk/cache/videos" in paths
+        assert "/root/.clawksis/cache/documents" in paths
+        assert "/root/.clawksis/cache/audio" in paths
+        assert "/root/.clawksis/cache/videos" in paths
 
     def test_legacy_dir_names_resolved(self, tmp_path, monkeypatch):
         """Old-style dir names (e.g. document_cache) are resolved correctly.
@@ -445,9 +445,9 @@ class TestCacheDirectoryMounts:
 
         mounts = get_cache_directory_mounts()
         container_paths = {m["container_path"] for m in mounts}
-        assert "/root/.clawk/attachments" in container_paths
-        assert "/root/.clawk/images" in container_paths
-        assert "/root/.clawk/cache/images" in container_paths
+        assert "/root/.clawksis/attachments" in container_paths
+        assert "/root/.clawksis/images" in container_paths
+        assert "/root/.clawksis/cache/images" in container_paths
         for mount in mounts:
             assert Path(mount["host_path"]).is_dir()
 
@@ -470,7 +470,7 @@ class TestCacheDirectoryMounts:
         paste.write_text("pasted body", encoding="utf-8")
 
         mounts = get_cache_directory_mounts()
-        assert "/root/.clawk/composer-pastes" in {m["container_path"] for m in mounts}
+        assert "/root/.clawksis/composer-pastes" in {m["container_path"] for m in mounts}
 
         synced = {Path(host) for host, _ in iter_sync_files("~/.clawksis")}
         assert paste in synced
@@ -489,7 +489,7 @@ class TestCacheDirectoryMounts:
 
         assert (
             map_cache_path_to_container(str(upload))
-            == "/root/.clawk/images/upload_20260722_181019_1.png"
+            == "/root/.clawksis/images/upload_20260722_181019_1.png"
         )
 
 
@@ -520,7 +520,7 @@ class TestMapCachePathToContainer:
         mapped = map_cache_path_to_container(
             str(clawk_home / "cache" / "images" / "x.png")
         )
-        assert mapped == "/root/.clawk/cache/images/x.png"
+        assert mapped == "/root/.clawksis/cache/images/x.png"
         assert (clawk_home / "cache" / "images").is_dir()
 
 
@@ -541,7 +541,7 @@ class TestToAgentVisiblePathPerBackend:
         from tools.credential_files import to_agent_visible_cache_path
 
         assert (
-            to_agent_visible_cache_path(staged) == "/root/.clawk/attachments/drop.zip"
+            to_agent_visible_cache_path(staged) == "/root/.clawksis/attachments/drop.zip"
         )
 
     def test_ssh_maps_to_tilde_clawk(self, tmp_path, monkeypatch):
@@ -581,11 +581,11 @@ class TestToAgentVisiblePathPerBackend:
 
         assert (
             to_agent_visible_cache_path(str(staged.resolve()))
-            == "/root/.clawk/attachments/paste.txt"
+            == "/root/.clawksis/attachments/paste.txt"
         )
         assert (
             to_agent_visible_cache_path(str(staged))
-            == "/root/.clawk/attachments/paste.txt"
+            == "/root/.clawksis/attachments/paste.txt"
         )
         # A sibling outside the mounted dirs still passes through.
         outside = real_home / "notes.txt"

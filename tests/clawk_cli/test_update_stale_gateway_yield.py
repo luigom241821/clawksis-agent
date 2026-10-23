@@ -15,13 +15,13 @@ import pytest
 @pytest.fixture
 def cron_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
-    (home / ".clawk").mkdir(parents=True)
+    (home / ".clawksis").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("CLAWK_HOME", str(home / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(home / ".clawksis"))
     for name in list(sys.modules):
         if name.split(".")[0] in ("cron", "gateway", "clawk_cli", "clawk_constants"):
             monkeypatch.delitem(sys.modules, name, raising=False)
-    return home / ".clawk"
+    return home / ".clawksis"
 
 
 def _status_block(pids):

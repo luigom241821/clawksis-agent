@@ -198,7 +198,7 @@ def hermetic_env(home: Path, extra: dict[str, str]) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items()
            if (k in _PASSTHROUGH or k.startswith("LC_")) and not k.endswith(_SECRET_SUFFIXES)}
     env.update({
-        "HOME": str(home), "CLAWK_HOME": str(home / ".clawk"), "PYTHONPATH": str(REPO_ROOT),
+        "HOME": str(home), "CLAWK_HOME": str(home / ".clawksis"), "PYTHONPATH": str(REPO_ROOT),
         "PYTHONUNBUFFERED": "1", "NO_COLOR": "1", "TERM": "dumb",
         # The child's HOME is tmp_path; this is the state-db guard's documented child escape hatch.
         "CLAWK_STATE_DB_GUARD_BYPASS": "1",
@@ -209,14 +209,14 @@ def hermetic_env(home: Path, extra: dict[str, str]) -> dict[str, str]:
 
 def write_home(root: Path, model: dict[str, Any], extra_cfg: dict[str, Any] | None = None) -> Path:
     home = root / "home"
-    (home / ".clawk").mkdir(parents=True, exist_ok=True)
+    (home / ".clawksis").mkdir(parents=True, exist_ok=True)
     cfg = {"model": {"default": "catalog-model-a", "context_length": 128000, **model},
            # auto_recovery_cycles: 0 — the documented post-exhaustion ladder (15/30/60/60/60 s) would
            # otherwise park a transport-failed turn for minutes; one bounded attempt is the contract here.
            "agent": {"api_max_retries": 1, "auto_recovery_cycles": 0}, "updates": {"check": False},
            **(extra_cfg or {})}
-    (home / ".clawk" / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-    select_test_dependencies(home / ".clawk", REPO_ROOT)
+    (home / ".clawksis" / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    select_test_dependencies(home / ".clawksis", REPO_ROOT)
     return home
 
 
@@ -239,7 +239,7 @@ def run_clawk(home: Path, cwd: Path, env_extra: dict[str, str], *args: str,
 
 
 def session_usage(home: Path) -> dict[str, Any] | None:
-    db = home / ".clawk" / "state.db"
+    db = home / ".clawksis" / "state.db"
     if not db.exists():
         return None
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)

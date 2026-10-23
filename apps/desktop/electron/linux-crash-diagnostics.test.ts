@@ -10,7 +10,7 @@ import { CHROMIUM_LOG_FILENAME, enableLinuxCrashDiagnostics, linuxCrashDiagnosti
 // fix is not a guess at the cause; it is making the next crash legible.
 
 test('on linux, fatal Chromium output lands in a file under the Clawksis logs dir', () => {
-  const plan = linuxCrashDiagnostics('/home/u/.clawk/logs', 'linux')
+  const plan = linuxCrashDiagnostics('/home/u/.clawksis/logs', 'linux')
 
   assert.ok(plan)
 
@@ -21,14 +21,14 @@ test('on linux, fatal Chromium output lands in a file under the Clawksis logs di
   const logFile = switches.get('log-file')
 
   assert.ok(logFile)
-  assert.equal(path.dirname(logFile), '/home/u/.clawk/logs')
+  assert.equal(path.dirname(logFile), '/home/u/.clawksis/logs')
   // FATAL (3) must survive the level filter; anything stricter would drop it.
   assert.ok(Number(switches.get('log-level')) <= 3)
   assert.equal(plan.crashReporter.uploadToServer, false)
 })
 
 test('other platforms get no Chromium logging switches and no crash reporter', () => {
-  assert.equal(linuxCrashDiagnostics('/Users/u/.clawk/logs', 'darwin'), null)
+  assert.equal(linuxCrashDiagnostics('/Users/u/.clawksis/logs', 'darwin'), null)
   assert.equal(linuxCrashDiagnostics('C:\\Users\\u\\.clawk\\logs', 'win32'), null)
 })
 
@@ -57,7 +57,7 @@ test('a logs dir that cannot be created degrades to no logging, never a dead she
 test('a crash reporter that refuses to start is not fatal either', () => {
   const switches: string[] = []
 
-  enableLinuxCrashDiagnostics(linuxCrashDiagnostics('/home/u/.clawk/logs', 'linux'), '/home/u/.clawk/logs', {
+  enableLinuxCrashDiagnostics(linuxCrashDiagnostics('/home/u/.clawksis/logs', 'linux'), '/home/u/.clawksis/logs', {
     ensureLogsDir: () => {},
     reclaimChromiumLog: () => {},
     appendSwitch: name => switches.push(name),
@@ -72,7 +72,7 @@ test('a crash reporter that refuses to start is not fatal either', () => {
 test('the Chromium log is bounded before Chromium appends to it', () => {
   const reclaimed: string[] = []
 
-  enableLinuxCrashDiagnostics(linuxCrashDiagnostics('/home/u/.clawk/logs', 'linux'), '/home/u/.clawk/logs', {
+  enableLinuxCrashDiagnostics(linuxCrashDiagnostics('/home/u/.clawksis/logs', 'linux'), '/home/u/.clawksis/logs', {
     ensureLogsDir: () => {},
     reclaimChromiumLog: file => reclaimed.push(file),
     appendSwitch: () => {},
@@ -81,5 +81,5 @@ test('the Chromium log is bounded before Chromium appends to it', () => {
 
   // Electron opens an explicit --log-file with APPEND_TO_OLD_LOG_FILE, so the
   // file it is about to append to is exactly the one that must be reclaimed.
-  assert.deepEqual(reclaimed, [path.join('/home/u/.clawk/logs', CHROMIUM_LOG_FILENAME)])
+  assert.deepEqual(reclaimed, [path.join('/home/u/.clawksis/logs', CHROMIUM_LOG_FILENAME)])
 })

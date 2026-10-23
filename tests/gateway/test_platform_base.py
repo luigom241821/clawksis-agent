@@ -360,7 +360,7 @@ class TestMediaInsideSerializedJson:
     def test_media_in_embedded_serialized_reply_not_extracted(self):
         """A serialized tool result that embeds a prior reply's MEDIA: tag."""
         content = (
-            '{"content":"previous reply MEDIA:/Users/ex/.clawk/media/'
+            '{"content":"previous reply MEDIA:/Users/ex/.clawksis/media/'
             'generated/stale.png and more text"}'
         )
         media, _ = BasePlatformAdapter.extract_media(content)
@@ -646,7 +646,7 @@ class TestMediaDeliveryDefaultMode:
         self._patch_roots(monkeypatch)
 
         fake_home = tmp_path / "home"
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
         (clawk_dir / "mcp-tokens").mkdir(parents=True)
         secret = clawk_dir / rel
         secret.write_text('{"access_token": "live-bearer-abc123"}')
@@ -673,7 +673,7 @@ class TestMediaDeliveryDefaultMode:
         self._patch_roots(monkeypatch)
 
         fake_home = tmp_path / "home"
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
         clawk_dir.mkdir(parents=True)
         token = clawk_dir / "google_token.json"
         token.write_text('{"access_token": "***", "refresh_token": "***"}')
@@ -695,7 +695,7 @@ class TestMediaDeliveryDefaultMode:
         monkeypatch.setenv("CLAWK_MEDIA_TRUST_RECENT_SECONDS", "600")
 
         fake_home = tmp_path / "home"
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
         clawk_dir.mkdir(parents=True)
         artifact = clawk_dir / "adhoc_report.pdf"
         artifact.write_bytes(b"%PDF-1.4")  # fresh mtime
@@ -714,7 +714,7 @@ class TestMediaDeliveryDefaultMode:
         self._patch_roots(monkeypatch)
 
         fake_home = tmp_path / "home"
-        clawk_dir = fake_home / ".clawk"
+        clawk_dir = fake_home / ".clawksis"
         clawk_dir.mkdir(parents=True)
         monkeypatch.setenv("HOME", str(fake_home))
         monkeypatch.setattr("gateway.platforms.base._CLAWK_HOME", clawk_dir)
@@ -742,7 +742,7 @@ class TestMediaDeliveryDefaultMode:
 
         self._patch_roots(monkeypatch)
         fake_home = tmp_path / "home"
-        clawk_root = fake_home / ".clawk"
+        clawk_root = fake_home / ".clawksis"
         profile_b = clawk_root / "profiles" / "beta"
         monkeypatch.setenv("HOME", str(fake_home))
         monkeypatch.setattr("gateway.platforms.base._CLAWK_HOME", clawk_root)
@@ -811,7 +811,7 @@ class TestMediaDeliveryDefaultMode:
 
     def test_profile_scoped_cache_delivers_under_symlinked_root(self, tmp_path, monkeypatch):
         """Reopened #31733: a profile gateway whose CLAWK_HOME is symlinked
-        under a denied prefix (e.g. /opt/data -> /root/.clawk) emits
+        under a denied prefix (e.g. /opt/data -> /root/.clawksis) emits
         profile-scoped paths (``<root>/profiles/<name>/cache/images/x.png``)
         that resolve under ``/root``. ``$HOME`` is NOT that prefix, so the
         root-home exception doesn't fire, and the top-level cache allowlist
@@ -996,7 +996,7 @@ class TestDockerContainerMediaPathTranslation:
         ) == str(media.resolve())
 
     def test_cache_dir_container_path_translates_to_host_cache(self, tmp_path, monkeypatch):
-        """MEDIA:/root/.clawk/cache/images/... (the agent_visible_image path
+        """MEDIA:/root/.clawksis/cache/images/... (the agent_visible_image path
         under docker) must translate to the HOST cache file, not the sandbox
         home copy."""
         clawk_home = tmp_path / ".clawk"
@@ -1009,17 +1009,17 @@ class TestDockerContainerMediaPathTranslation:
         monkeypatch.delenv("TERMINAL_DOCKER_VOLUMES", raising=False)
 
         assert BasePlatformAdapter.validate_media_delivery_path(
-            "/root/.clawk/cache/images/generated.png"
+            "/root/.clawksis/cache/images/generated.png"
         ) == str(media.resolve())
 
     def test_container_credential_path_never_translates_through_home(self, tmp_path, monkeypatch):
-        """/root/.clawk/* outside a cache mount (the sandbox's credential
+        """/root/.clawksis/* outside a cache mount (the sandbox's credential
         surface: .env, auth.json) must NOT resolve through the persistent
         home mount — those host-side copies sit outside the credential
         denylist prefixes and would otherwise deliver."""
         sandbox = tmp_path / "sandboxes"
         home = sandbox / "docker" / "default" / "home"
-        secret = home / ".clawk"
+        secret = home / ".clawksis"
         secret.mkdir(parents=True)
         (secret / "auth.json").write_text('{"token": "SECRET"}')
         clawk_home = tmp_path / ".clawk"
@@ -1031,7 +1031,7 @@ class TestDockerContainerMediaPathTranslation:
         monkeypatch.delenv("TERMINAL_DOCKER_VOLUMES", raising=False)
 
         assert BasePlatformAdapter.validate_media_delivery_path(
-            "/root/.clawk/auth.json"
+            "/root/.clawksis/auth.json"
         ) is None
 
 
@@ -1425,7 +1425,7 @@ class TestMediaFallbackDoesNotLeakHostPath:
     — a host filesystem path with no actionable information.
     """
 
-    SENSITIVE_PATH = "/home/jayne/.clawk/cache/media/sensitive_host_path_abc123.bin"
+    SENSITIVE_PATH = "/home/jayne/.clawksis/cache/media/sensitive_host_path_abc123.bin"
 
 
     @pytest.mark.asyncio
@@ -1545,7 +1545,7 @@ class TestDockerProfileSandboxMediaTranslation:
         ) == str(produced.resolve())
 
     def test_home_credential_surface_still_refused(self, monkeypatch):
-        """The /root/.clawk exclusion survives profile scoping: translating
+        """The /root/.clawksis exclusion survives profile scoping: translating
         the home mount must never expose the container's secret surface —
         in the profile layout AND the legacy session layout."""
         self._enable_docker(monkeypatch)
@@ -1556,7 +1556,7 @@ class TestDockerProfileSandboxMediaTranslation:
 
         assert (
             BasePlatformAdapter.validate_media_delivery_path(
-                "/root/.clawk/auth.json", session_key=self.SESSION_KEY
+                "/root/.clawksis/auth.json", session_key=self.SESSION_KEY
             )
             is None
         )

@@ -32,7 +32,7 @@ def make_scenario(provider, tmp_path, monkeypatch):
     def make(mode: str = "good", *, extra: str = "", platform: str = "cli", window: int | None = None,
              threshold_tokens: int = THRESHOLD_TOKENS, name: str = "clawk_home") -> Scenario:
         # The hermetic root conftest already isolates CLAWK_HOME per test; HOME stays put because the
-        # state.db live-system guard treats $HOME/.clawk as production.
+        # state.db live-system guard treats $HOME/.clawksis as production.
         clawk_home = tmp_path / name
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         import clawk_state

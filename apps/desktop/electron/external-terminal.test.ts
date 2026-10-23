@@ -34,10 +34,10 @@ test('windowsQuote doubles embedded quotes', () => {
 test('terminalScriptEnv drops PATH in any casing and keeps the rest', () => {
   const env = terminalScriptEnv(
     { Path: 'C:\\junk', PATH: '/junk', PYTHONPATH: '/repo', PYTHONUTF8: '1' },
-    '/home/b/.clawk'
+    '/home/b/.clawksis'
   )
 
-  assert.deepEqual(env, { PYTHONPATH: '/repo', PYTHONUTF8: '1', CLAWK_HOME: '/home/b/.clawk' })
+  assert.deepEqual(env, { PYTHONPATH: '/repo', PYTHONUTF8: '1', CLAWK_HOME: '/home/b/.clawksis' })
 })
 
 test('terminalScriptEnv skips empty values and an absent home', () => {
@@ -47,9 +47,9 @@ test('terminalScriptEnv skips empty values and an absent home', () => {
 test('buildTerminalScript execs the resolved runtime with its env', () => {
   const script = buildTerminalScript({
     args: ['-m', 'clawk_cli.main', '--tui', '--resume', 'sess'],
-    command: '/home/b/.clawk/clawksis-agent/venv/bin/python',
+    command: '/home/b/.clawksis/clawksis-agent/venv/bin/python',
     cwd: "/home/b/o'brien",
-    env: { PYTHONPATH: '/home/b/.clawk/clawksis-agent' },
+    env: { PYTHONPATH: '/home/b/.clawksis/clawksis-agent' },
     platform: 'darwin'
   })
 
@@ -58,8 +58,8 @@ test('buildTerminalScript execs the resolved runtime with its env', () => {
     [
       '#!/bin/sh',
       `cd '/home/b/o'\\''brien' || exit 1`,
-      `export PYTHONPATH='/home/b/.clawk/clawksis-agent'`,
-      `exec '/home/b/.clawk/clawksis-agent/venv/bin/python' '-m' 'clawk_cli.main' '--tui' '--resume' 'sess'`,
+      `export PYTHONPATH='/home/b/.clawksis/clawksis-agent'`,
+      `exec '/home/b/.clawksis/clawksis-agent/venv/bin/python' '-m' 'clawk_cli.main' '--tui' '--resume' 'sess'`,
       ''
     ].join('\n')
   )

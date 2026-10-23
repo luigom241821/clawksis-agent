@@ -130,9 +130,9 @@ def agent_env():
     t.start()
 
     test_home = tempfile.mkdtemp(prefix="clawk_e2e_47967_")
-    os.makedirs(os.path.join(test_home, ".clawk"))
+    os.makedirs(os.path.join(test_home, ".clawksis"))
     prev_home = os.environ.get("CLAWK_HOME")
-    os.environ["CLAWK_HOME"] = os.path.join(test_home, ".clawk")
+    os.environ["CLAWK_HOME"] = os.path.join(test_home, ".clawksis")
 
     # Import fresh so the patched conversation_loop is exercised even when the
     # module was imported earlier in the same worker.

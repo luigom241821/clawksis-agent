@@ -92,7 +92,7 @@ def test_scan_gateway_pids_claims_own_home_spellings_not_the_sibling(
 ):
     """``_scan_gateway_pids`` drives the mirrored CLAWK_HOME predicate: the process-table
     fallback must not sweep a longer sibling home's live gateway, while the supervisor
-    trailing-separator spelling (``CLAWK_HOME=/root/.clawk/``) is still its own home."""
+    trailing-separator spelling (``CLAWK_HOME=/root/.clawksis/``) is still its own home."""
     import clawk_cli.gateway as gw
     import clawk_cli.gateway_migrate_guards as guards
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))

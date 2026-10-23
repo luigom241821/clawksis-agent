@@ -61,7 +61,7 @@ def _lookup_tool():
 @pytest.fixture()
 def live_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # HOME too (a sibling, not the parent: state.db's live-system guard treats
-    # $HOME/.clawk as production), so nothing can resolve the developer's real home.
+    # $HOME/.clawksis as production), so nothing can resolve the developer's real home.
     home = tmp_path / "home"
     clawk_home = tmp_path / "clawk_home"
     home.mkdir()

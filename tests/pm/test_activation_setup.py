@@ -49,7 +49,7 @@ def test_activation_real_setup_pm_lifecycle(tmp_path, served):
     core.mkdir()
     home = tmp_path / "home"
     home.mkdir()
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     runtime = tmp_path / "runtime"
     scratch = tmp_path / "tmp"
     scratch.mkdir()

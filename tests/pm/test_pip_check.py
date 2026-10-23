@@ -143,7 +143,7 @@ def _overridden_project(tmp_path, overridden, extra_wheels=(), extra_dependencie
     home.mkdir()
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("UV_", "PYTHON")) and key != "VIRTUAL_ENV"}
-    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home / ".clawk"),
+    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home / ".clawksis"),
                UV_CACHE_DIR=str(tmp_path / "cache"), UV_PYTHON=sys.executable, UV_OFFLINE="1")
     _run([uv, "lock", "--python", sys.executable], cwd=source, env=env)
     return source, env

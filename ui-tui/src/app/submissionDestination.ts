@@ -30,7 +30,7 @@ function canonicalHome(path: string): string {
 
 export function captureDestination(): SubmissionDestination {
   const { sid, info } = getUiState()
-  const profileHome = canonicalHome(resolve(process.env.CLAWK_HOME ?? join(homedir(), '.clawk')))
+  const profileHome = canonicalHome(resolve(process.env.CLAWK_HOME ?? join(homedir(), '.clawksis')))
   // An explicit CLAWK_TUI_GATEWAY_URL may serve another home or machine: its receipts name the
   // owner's profile_id (from the session snapshot), not this client's CLAWK_HOME (C22). The local
   // home still keys the offline journal and image cache.

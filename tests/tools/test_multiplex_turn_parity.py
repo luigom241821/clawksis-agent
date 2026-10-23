@@ -96,7 +96,7 @@ def test_terminal_backend_consumers_read_the_routed_scope(two_homes):
         return (
             image_source._is_local_terminal_backend(),
             image_generation_tool._agent_cache_base_for_env(None),
-            credential_files.to_agent_visible_cache_path("/host/.clawk/x.png", "/root/.clawk"),
+            credential_files.to_agent_visible_cache_path("/host/.clawk/x.png", "/root/.clawksis"),
             sorted(Path(m["host_path"]).name for m in credential_files.get_credential_file_mounts()),
         )
 
@@ -105,7 +105,7 @@ def test_terminal_backend_consumers_read_the_routed_scope(two_homes):
     with _profile_runtime_scope(b):
         local, cache_base, translated, mounts = observe()
     assert local is False
-    assert cache_base == "/root/.clawk"
+    assert cache_base == "/root/.clawksis"
     assert translated != "/host/.clawk/x.png" or mounts == ["cred_b.txt"]
     assert mounts == ["cred_b.txt"]
 

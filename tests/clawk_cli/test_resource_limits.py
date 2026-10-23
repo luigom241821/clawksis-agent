@@ -234,7 +234,7 @@ def test_serve_startup_applies_limit_before_web_server(monkeypatch):
         lambda **kwargs: (calls.append("server"), served.update(kwargs)),
     )
     # Desktop SSH serve: the owner watchdog's lock sits next to the validated token (#132034).
-    token_dir = Path("/home/u/.clawk/desktop-ssh") / ("f" * 32)
+    token_dir = Path("/home/u/.clawksis/desktop-ssh") / ("f" * 32)
     monkeypatch.setattr(cli_main, "_read_ssh_session_token_file", lambda path: "s" * 64)
 
     args = SimpleNamespace(

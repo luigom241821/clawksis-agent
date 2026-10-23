@@ -61,7 +61,7 @@ _SECRET_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_ACCESS_KEY")
 class Home:
     def __init__(self, root: Path, sentinel: CatalogFake, provider: str, model: str, base_url: str = "") -> None:
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.clawk_home.mkdir(parents=True)
         self.sentinel = sentinel
         (self.clawk_home / "config.yaml").write_text(

@@ -1233,7 +1233,7 @@ class TestTerminalOutputRedaction:
                 "variablePathSecret123456789",
             ),
             (
-                "cat $HOME/.clawk/config.yaml",
+                "cat $HOME/.clawksis/config.yaml",
                 "SERVICE_TOKEN=homeVariablePathSecret123456",
                 "homeVariablePathSecret123456",
             ),

@@ -112,7 +112,7 @@ def _write_through_xai_oauth_to_global_root(state: dict[str, Any]) -> None:
     # in _load_global_auth_store). Uses raw HOME, not Path.home(), which fixtures may monkeypatch.
     real_home_env = os.environ.get("HOME", "") if os.environ.get("PYTEST_CURRENT_TEST") else ""
     if real_home_env:
-        real_root = Path(real_home_env) / ".clawk" / "auth.json"
+        real_root = Path(real_home_env) / ".clawksis" / "auth.json"
         try:
             if global_path.resolve(strict=False) == real_root.resolve(strict=False):
                 return

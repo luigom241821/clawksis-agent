@@ -306,8 +306,8 @@ scripts/run_tests.sh tests/agent/test_iron_proxy.py tests/clawk_cli/test_iron_pr
 CLAWK_RUN_E2E=1 scripts/run_tests.sh tests/agent/test_iron_proxy_e2e.py
 
 # Live PTY smoke against `clawk egress`
-CLAWK_HOME=$HOME/.clawk/cache/scratch/clawk-egress-test python3 -m clawk_cli.main egress --help
-CLAWK_HOME=$HOME/.clawk/cache/scratch/clawk-egress-test python3 -m clawk_cli.main egress setup --help
+CLAWK_HOME=$HOME/.clawksis/cache/scratch/clawk-egress-test python3 -m clawk_cli.main egress --help
+CLAWK_HOME=$HOME/.clawksis/cache/scratch/clawk-egress-test python3 -m clawk_cli.main egress setup --help
 ```
 
 The CLI uses argparse, so `--help` is a good first probe for "did my new flag register correctly".

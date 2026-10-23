@@ -1016,7 +1016,7 @@ test('homeRelativeAttachmentCandidates normalizes Windows backslashes before joi
   const candidates = homeRelativeAttachmentCandidates(
     'AppData\\Local\\clawk\\attachments\\foo.xlsx',
     '/Users/alice',
-    '/Users/alice/.clawk'
+    '/Users/alice/.clawksis'
   )
 
   assert.equal(candidates[0], path.join('/Users/alice', 'AppData/Local/clawk/attachments/foo.xlsx'))
@@ -1024,31 +1024,31 @@ test('homeRelativeAttachmentCandidates normalizes Windows backslashes before joi
 
 test('homeRelativeAttachmentCandidates returns nothing for an absolute path', () => {
   assert.deepEqual(
-    homeRelativeAttachmentCandidates('/already/absolute/foo.xlsx', '/Users/alice', '/Users/alice/.clawk'),
+    homeRelativeAttachmentCandidates('/already/absolute/foo.xlsx', '/Users/alice', '/Users/alice/.clawksis'),
     []
   )
 })
 
 test('homeRelativeAttachmentCandidates returns nothing for a file: URL', () => {
   assert.deepEqual(
-    homeRelativeAttachmentCandidates('file:///already/resolved/foo.xlsx', '/Users/alice', '/Users/alice/.clawk'),
+    homeRelativeAttachmentCandidates('file:///already/resolved/foo.xlsx', '/Users/alice', '/Users/alice/.clawksis'),
     []
   )
 })
 
 test('homeRelativeAttachmentCandidates returns nothing for empty input', () => {
-  assert.deepEqual(homeRelativeAttachmentCandidates('', '/Users/alice', '/Users/alice/.clawk'), [])
-  assert.deepEqual(homeRelativeAttachmentCandidates('   ', '/Users/alice', '/Users/alice/.clawk'), [])
+  assert.deepEqual(homeRelativeAttachmentCandidates('', '/Users/alice', '/Users/alice/.clawksis'), [])
+  assert.deepEqual(homeRelativeAttachmentCandidates('   ', '/Users/alice', '/Users/alice/.clawksis'), [])
 })
 
 test('homeRelativeAttachmentCandidates second candidate falls back to basename only', () => {
   // A ref that lost its directory prefix entirely still has a shot via the
   // well-known attachments dir + basename, matching the reported repro shape.
-  const candidates = homeRelativeAttachmentCandidates('foo.xlsx', '/Users/alice', '/Users/alice/.clawk')
+  const candidates = homeRelativeAttachmentCandidates('foo.xlsx', '/Users/alice', '/Users/alice/.clawksis')
 
   assert.deepEqual(candidates, [
     path.join('/Users/alice', 'foo.xlsx'),
-    path.join('/Users/alice/.clawk', 'attachments', 'foo.xlsx')
+    path.join('/Users/alice/.clawksis', 'attachments', 'foo.xlsx')
   ])
 })
 

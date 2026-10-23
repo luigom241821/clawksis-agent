@@ -40,7 +40,7 @@ const bot: RosterRow = { name: 'ops' }
 
 const running: DisplayStatus = {
   profile: 'ops',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: true,
   missing: [],

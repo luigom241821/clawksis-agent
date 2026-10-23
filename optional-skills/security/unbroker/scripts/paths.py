@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def clawk_home() -> Path:
-    return Path(os.environ.get("CLAWK_HOME") or (Path.home() / ".clawk"))
+    return Path(os.environ.get("CLAWK_HOME") or (Path.home() / ".clawksis"))
 
 
 def data_dir() -> Path:

@@ -236,7 +236,7 @@ profile is a contextvar override bound per activity, `os.environ["CLAWK_HOME"]` 
 profile's, and a module-level constant derived from the home freezes to that launch profile (see
 [Gateway Internals § Multiplexed profiles](./gateway-internals.md#multiplexed-profiles)). Profile
 operations are HOME-anchored (`_get_profiles_root()` returns
-`Path.home() / ".clawk" / "profiles"`, not `get_clawk_home() / "profiles"`) so
+`Path.home() / ".clawksis" / "profiles"`, not `get_clawk_home() / "profiles"`) so
 `clawk -p coder profile list` sees all profiles regardless of which one is active — intentional.
 Profile-safe coding rules are in the root `AGENTS.md`; multiplex secret-scope rules in
 `gateway/AGENTS.md`.

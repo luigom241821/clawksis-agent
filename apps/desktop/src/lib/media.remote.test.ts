@@ -16,7 +16,7 @@ import {
 
 describe('filePathFromMediaPath', () => {
   it('passes through a plain path', () => {
-    expect(filePathFromMediaPath('/home/u/.clawk/images/a.png')).toBe('/home/u/.clawk/images/a.png')
+    expect(filePathFromMediaPath('/home/u/.clawksis/images/a.png')).toBe('/home/u/.clawksis/images/a.png')
   })
 
   it('decodes a file:// URL with encoded characters', () => {
@@ -223,7 +223,7 @@ describe('gatewayMediaDataUrl', () => {
   })
 
   it('reads gateway media through the desktop fs bridge instead of /api/media roots', async () => {
-    const url = await gatewayMediaDataUrl('/home/u/.clawk/skills/demo/images/a b.png')
+    const url = await gatewayMediaDataUrl('/home/u/.clawksis/skills/demo/images/a b.png')
 
     expect(url).toBe('data:image/png;base64,ZHVtbXk=')
     expect(api).toHaveBeenCalledWith({

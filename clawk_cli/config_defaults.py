@@ -363,7 +363,7 @@ DEFAULT_CONFIG = {
         "container_disk": 51200,        # MB (default 50GB)
         "container_persistent": True,   # Persist filesystem across sessions
         # Docker volume mounts, "host_path:container_path" (docker -v syntax), e.g.
-        # ["/home/user/.clawk/cache/documents:/output"]. For gateway MEDIA delivery, write to
+        # ["/home/user/.clawksis/cache/documents:/output"]. For gateway MEDIA delivery, write to
         # /output/... inside Docker and emit the host-visible path in MEDIA:, not the container one.
         "docker_volumes": [],
         "docker_mount_cwd_to_workspace": False,  # mount host cwd at /workspace (weakens isolation)

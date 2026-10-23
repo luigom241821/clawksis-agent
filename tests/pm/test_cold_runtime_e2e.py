@@ -116,7 +116,7 @@ def test_cold_cli_builds_own_runtime_discovers_plugins_and_repairs_app(tmp_path,
         '[tool.uv]\npackage=false\n', encoding="utf-8",
     )
     home = tmp_path / "home"
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     plugin = clawk_home / "plugins" / "cold-proof"
     plugin.mkdir(parents=True)
     config = clawk_home / "config.yaml"

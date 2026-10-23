@@ -752,12 +752,12 @@ def _read_ssh_session_token_file(path: str) -> str:
     if not os.path.isabs(path):
         raise SystemExit("--ssh-session-token-file must be absolute")
 
-    # The Desktop client writes the token under the account's $HOME/.clawk/
+    # The Desktop client writes the token under the account's $HOME/.clawksis/
     # desktop-ssh, independent of CLAWK_HOME and the active profile. Anchor
     # validation there, NOT get_clawk_home(): a non-default profile or a Docker
     # /opt/data root re-homes get_clawk_home() and would reject every token.
     # See #69551.
-    token_root = Path.home() / ".clawk" / "desktop-ssh"
+    token_root = Path.home() / ".clawksis" / "desktop-ssh"
     try:
         relative = Path(path).relative_to(token_root)
     except ValueError as exc:
@@ -1014,7 +1014,7 @@ def _route_named_profile_dashboard(
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=False)
     # Pin the child to the machine ROOT, resolved explicitly rather than by
     # dropping CLAWK_HOME: in the Docker layout the root is /opt/data, and an
-    # unset CLAWK_HOME would fall back to $HOME/.clawk = /opt/data/.clawk — an
+    # unset CLAWK_HOME would fall back to $HOME/.clawksis = /opt/data/.clawk — an
     # empty auto-seeded home with only the default profile and no install stamp.
     # get_default_clawk_root() strips a trailing profiles/<name> for both layouts.
     try:

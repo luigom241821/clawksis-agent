@@ -101,7 +101,7 @@ you can do a comparison diff in Chrome DevTools Memory tab.
 
 ```bash
 node apps/desktop/scripts/profile-typing.mjs \
-  --chars=400 --cps=30 --out=$HOME/.clawk/cache/scratch/clawk-typing
+  --chars=400 --cps=30 --out=$HOME/.clawksis/cache/scratch/clawk-typing
 # → ~/.clawksis/cache/scratch/clawk-typing.cpuprofile  (open in Chrome DevTools Performance)
 # → ~/.clawksis/cache/scratch/clawk-typing.before.heapsnapshot
 # → ~/.clawksis/cache/scratch/clawk-typing.after.heapsnapshot

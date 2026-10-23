@@ -370,7 +370,7 @@ API_KEY=\$(python3 - <<'PY'
 
 from pathlib import Path
 
-p = Path.home()/'.clawk'/'.env'
+p = Path.home()/'.clawksis'/'.env'
 
 for raw in p.read_text().splitlines():
 

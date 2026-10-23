@@ -16,7 +16,7 @@ from pm.package import Runner
 from pm.registry import get_package
 from pm.store import current_target, tree_digest
 
-_REAL_CLAWK_HOME = Path.home() / ".clawk"  # Captured before per-test HOME isolation.
+_REAL_CLAWK_HOME = Path.home() / ".clawksis"  # Captured before per-test HOME isolation.
 
 
 def _register_installed_tool(name, executable, companions=()):

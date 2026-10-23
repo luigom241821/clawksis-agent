@@ -1,8 +1,8 @@
 """`clawk gateway stop|restart|start` from a sandbox home must never operate ANOTHER install's systemd unit.
 
 Real incident: an e2e helper ran `clawk gateway stop` with a throwaway ``HOME`` and
-``CLAWK_HOME=$HOME/.clawk`` on a host whose production gateway is the system unit
-``clawk-gateway.service`` (``Environment=CLAWK_HOME=/root/.clawk``). The sandbox home is the
+``CLAWK_HOME=$HOME/.clawksis`` on a host whose production gateway is the system unit
+``clawk-gateway.service`` (``Environment=CLAWK_HOME=/root/.clawksis``). The sandbox home is the
 "default" home relative to its own ``HOME``, so the service name resolved to the bare
 ``clawk-gateway``; system units are global, so that unit "existed"; ``_sync_clawk_home_from_systemd_unit``
 then adopted the production home and ``systemctl stop clawk-gateway`` took every bot offline.
@@ -22,7 +22,7 @@ def host(tmp_path, monkeypatch):
     prod = tmp_path / "prod" / ".clawk"
     account = tmp_path / "account" / ".clawk"
     sandbox_home = tmp_path / "sandbox"
-    for p in (prod, account, sandbox_home / ".clawk"):
+    for p in (prod, account, sandbox_home / ".clawksis"):
         p.mkdir(parents=True)
     unit_dir = tmp_path / "systemd"
     unit_dir.mkdir()

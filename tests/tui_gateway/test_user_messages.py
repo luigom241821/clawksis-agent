@@ -14,10 +14,10 @@ from tui_gateway.user_messages import agent_init_failed_message
 
 
 @pytest.mark.parametrize("exc_text", [
-    "Timed out waiting for auth store lock (/home/u/.clawk/profiles/coder/auth.lock); "
+    "Timed out waiting for auth store lock (/home/u/.clawksis/profiles/coder/auth.lock); "
     "another clawk process (pid 4242) probably still holds it",
-    "Timed out waiting for auth store lock (/home/u/.clawk/profiles/coder/auth.lock)",
-    "Timed out waiting for shared Nous auth lock (/home/u/.clawk/shared/nous.lock)",
+    "Timed out waiting for auth store lock (/home/u/.clawksis/profiles/coder/auth.lock)",
+    "Timed out waiting for shared Nous auth lock (/home/u/.clawksis/shared/nous.lock)",
 ], ids=["auth-store-with-holder", "auth-store-no-holder", "shared-nous-store"])
 def test_auth_lock_timeout_contention_gets_the_wait_copy(exc_text):
     message = agent_init_failed_message(TimeoutError(exc_text))

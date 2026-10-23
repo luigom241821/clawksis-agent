@@ -1028,7 +1028,7 @@ _SHELL_RC_BASENAMES = frozenset({
 # it are files, so ``grep .bashrc app.py`` must not gate on the pattern.
 _PATTERN_FIRST_COMMANDS = frozenset({"grep", "awk", "sed"})
 _CLAWK_HOME_PREFIXES = ("$CLAWK_HOME/", "${CLAWK_HOME}/")
-# ``$HOME/.clawk/config.yaml`` keeps the ``.clawk`` segment, so stripping the prefix is
+# ``$HOME/.clawksis/config.yaml`` keeps the ``.clawk`` segment, so stripping the prefix is
 # enough to gate it; ``~/`` already survives the ``$``-bearing-path bail-out.
 _HOME_PREFIXES = ("$HOME/", "${HOME}/")
 

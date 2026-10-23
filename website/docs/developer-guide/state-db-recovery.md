@@ -66,9 +66,9 @@ is still up. Next steps:
 
 ```bash
 clawk gateway stop
-CLAWK_HOME="$HOME/.clawk" clawk sessions recover --source "$HOME/.clawk/state.db" --inspect-only
+CLAWK_HOME="$HOME/.clawksis" clawk sessions recover --source "$HOME/.clawksis/state.db" --inspect-only
 # if recoverable:
-CLAWK_HOME="$HOME/.clawk" clawk sessions recover --source "$HOME/.clawk/state.db" --output "$HOME/recovered-state.db"
+CLAWK_HOME="$HOME/.clawksis" clawk sessions recover --source "$HOME/.clawksis/state.db" --output "$HOME/recovered-state.db"
 ```
 
 or restore the newest snapshot from `state-snapshots/`.
@@ -80,8 +80,8 @@ Keep them stopped for the complete repair and verification window.
 
 ```bash
 clawk gateway stop
-CLAWK_HOME="$HOME/.clawk" clawk sessions repair --check-only
-CLAWK_HOME="$HOME/.clawk" clawk sessions repair
+CLAWK_HOME="$HOME/.clawksis" clawk sessions repair --check-only
+CLAWK_HOME="$HOME/.clawksis" clawk sessions repair
 ```
 
 `sessions repair` creates a SQLite backup by default and performs structural
@@ -93,14 +93,14 @@ After repair, verify the health probe, stale marker, trigger set, and canonical
 row counts before restarting the gateway:
 
 ```bash
-CLAWK_HOME="$HOME/.clawk" clawk sessions repair --check-only
-sqlite3 "$HOME/.clawk/state.db" \
+CLAWK_HOME="$HOME/.clawksis" clawk sessions repair --check-only
+sqlite3 "$HOME/.clawksis/state.db" \
   "SELECT key, value FROM state_meta WHERE key = 'fts_stale';"
-sqlite3 "$HOME/.clawk/state.db" \
+sqlite3 "$HOME/.clawksis/state.db" \
   "SELECT type, name FROM sqlite_master WHERE name IN
    ('messages_fts_insert','messages_fts_update','messages_fts_delete')
    ORDER BY name;"
-sqlite3 "$HOME/.clawk/state.db" \
+sqlite3 "$HOME/.clawksis/state.db" \
   "SELECT 'sessions', COUNT(*) FROM sessions
    UNION ALL SELECT 'messages', COUNT(*) FROM messages;"
 ```

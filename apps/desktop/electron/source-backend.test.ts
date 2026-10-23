@@ -82,7 +82,7 @@ test.skipIf(process.platform === 'win32')(
     Object.assign(env, {
       HOME: home,
       USERPROFILE: home,
-      CLAWK_HOME: path.join(home, '.clawk'),
+      CLAWK_HOME: path.join(home, '.clawksis'),
       CLAWK_RUNTIME_DIR: path.join(temp, 'tools'),
       CLAWK_DISABLE_LAZY_INSTALLS: '1',
       XDG_CONFIG_HOME: path.join(temp, 'config'),

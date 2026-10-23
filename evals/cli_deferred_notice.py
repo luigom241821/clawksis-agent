@@ -22,7 +22,7 @@ import fcntl
 
 def run_case(root, output, name, behind, early=False, cancel=False):
     with tempfile.TemporaryDirectory(prefix="clawk_test_notice_") as home:
-        hh = Path(home) / ".clawk"
+        hh = Path(home) / ".clawksis"
         hh.mkdir()
         (hh / "config.yaml").write_text(
             "model:\n  default: test-model\n  provider: custom\n"

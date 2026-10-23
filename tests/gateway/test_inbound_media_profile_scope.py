@@ -54,12 +54,12 @@ def test_routed_turn_rehomes_adapter_cached_attachments_a_b_a(two_homes):
     with _profile_runtime_scope(b):  # routed turn: B's mounts, B's cache roots
         rehome_inbound_media(event)
         note = GatewayInboundMixin._prepend_inbound_document_notes(event, "")
-        assert "/root/.clawk/cache/documents/doc_0123456789ab_report.pdf" in note  # sandbox form
+        assert "/root/.clawksis/cache/documents/doc_0123456789ab_report.pdf" in note  # sandbox form
         # The sandbox path names a file B's container actually mounts.
-        host = Path(from_agent_visible_cache_path("/root/.clawk/cache/documents/doc_0123456789ab_report.pdf"))
+        host = Path(from_agent_visible_cache_path("/root/.clawksis/cache/documents/doc_0123456789ab_report.pdf"))
         assert host.is_file() and host == b / "cache" / "documents" / "doc_0123456789ab_report.pdf"
         assert {Path(m["host_path"]) for m in get_cache_directory_mounts()} >= {host.parent, (b / "cache" / "images")}
-        assert "/root/.clawk/cache/documents/doc_0123456789ab_report.pdf" in event.text  # baked note repointed
+        assert "/root/.clawksis/cache/documents/doc_0123456789ab_report.pdf" in event.text  # baked note repointed
     assert event.media_urls == [str(b / "cache" / "documents" / "doc_0123456789ab_report.pdf"),
                                 str(b / "cache" / "images" / "img_1.jpg")]
     assert not Path(doc).exists() and not Path(img).exists()  # moved, not copied: A holds nothing of B's
@@ -82,4 +82,4 @@ def test_cache_media_bytes_returns_host_path_and_translates_in_note(two_homes):
     with _profile_runtime_scope(b):  # docker backend
         cached = cache_media_bytes(b"%PDF-1.4 x", filename="report.pdf", mime_type="application/pdf")
         assert Path(cached.path).is_file() and Path(cached.path).parent == b / "cache" / "documents"
-        assert cached.context_note().startswith("[document 'report.pdf' saved at: /root/.clawk/cache/documents/doc_")
+        assert cached.context_note().startswith("[document 'report.pdf' saved at: /root/.clawksis/cache/documents/doc_")

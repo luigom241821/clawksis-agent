@@ -39,7 +39,7 @@ def test_waiter_argv_uses_forward_slashes_on_windows():
     parts = shlex.split(bot_relay.waiter_command("C:\\Users\\joshu\\.clawk", ENV))
 
     assert "-c" not in parts and "--wait-reply" in parts
-    assert parts[parts.index("--wait-reply") + 1] == f"C:/Users/joshu/.clawk/bot_relay/replies/{ENV['id']}.json"
+    assert parts[parts.index("--wait-reply") + 1] == f"C:/Users/joshu/.clawksis/bot_relay/replies/{ENV['id']}.json"
     assert not any("\\" in part for part in parts)
 
 

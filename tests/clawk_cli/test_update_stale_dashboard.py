@@ -602,7 +602,7 @@ class TestFilterDashboardRespawnCandidates:
             "serve", "--host", "127.0.0.1", "--port", "0",
         ]
         assert _filter_dashboard_respawn_candidates([
-            (42, argv, "/home/u/.clawk/profiles/mini-cat"),
+            (42, argv, "/home/u/.clawksis/profiles/mini-cat"),
         ]) == []
 
     def test_skips_legacy_dashboard_port_zero(self):
@@ -667,7 +667,7 @@ class TestFilterDashboardRespawnCandidates:
         b = ["clawk", "dashboard", "--port", "8301"]
         out = _filter_dashboard_respawn_candidates([
             (1, a, None),
-            (2, b, "/home/u/.clawk/profiles/coder"),
+            (2, b, "/home/u/.clawksis/profiles/coder"),
         ])
         assert out == [a]
 
@@ -676,7 +676,7 @@ class TestFilterDashboardRespawnCandidates:
 
         a = ["clawk", "--profile", "default", "dashboard", "--port", "8300"]
         b = ["clawk", "dashboard", "--port", "8301"]
-        home = "/home/u/.clawk"
+        home = "/home/u/.clawksis"
         out = _filter_dashboard_respawn_candidates(
             [
                 (1, a, home),
@@ -700,10 +700,10 @@ class TestFilterDashboardRespawnCandidates:
         b = ["clawk", "dashboard", "--port", "8301"]
         out = _filter_dashboard_respawn_candidates(
             [
-                (1, a, "/home/u/.clawk"),
+                (1, a, "/home/u/.clawksis"),
                 (2, b, "/work/project/.clawk"),
             ],
-            own_home="/home/u/.clawk",
+            own_home="/home/u/.clawksis",
         )
         assert out == [a]
 
@@ -718,7 +718,7 @@ class TestFilterDashboardRespawnCandidates:
         ]
         out = _filter_dashboard_respawn_candidates(
             [(15364, argv, "/Users/u/.clawk-lifeos")],
-            own_home="/Users/u/.clawk",
+            own_home="/Users/u/.clawksis",
         )
         assert out == []
 
@@ -727,8 +727,8 @@ class TestFilterDashboardRespawnCandidates:
 
         argv = ["clawk", "serve", "--host", "127.0.0.1", "--port", "9118"]
         out = _filter_dashboard_respawn_candidates(
-            [(15364, argv, "/Users/u/.clawk")],
-            own_home="/Users/u/.clawk",
+            [(15364, argv, "/Users/u/.clawksis")],
+            own_home="/Users/u/.clawksis",
         )
         assert out == [argv]
 
@@ -757,7 +757,7 @@ class TestFilterDashboardRespawnCandidates:
         argv = ["clawk", "dashboard", "--port", "8300"]
         out = _filter_dashboard_respawn_candidates(
             [(1, argv, None)],
-            own_home="/home/u/.clawk",
+            own_home="/home/u/.clawksis",
         )
         assert out == [argv]
 
@@ -768,7 +768,7 @@ class TestFilterDashboardRespawnCandidates:
         from clawk_cli.dashboard_procs import _filter_dashboard_respawn_candidates
 
         monkeypatch.setattr(
-            clawk_constants, "get_clawk_home", lambda: Path("/home/u/.clawk")
+            clawk_constants, "get_clawk_home", lambda: Path("/home/u/.clawksis")
         )
         argv = ["clawk", "serve", "--port", "9118"]
         foreign = _filter_dashboard_respawn_candidates([
@@ -776,7 +776,7 @@ class TestFilterDashboardRespawnCandidates:
         ])
         assert foreign == []
         own = _filter_dashboard_respawn_candidates([
-            (1, argv, "/home/u/.clawk"),
+            (1, argv, "/home/u/.clawksis"),
         ])
         assert own == [argv]
 

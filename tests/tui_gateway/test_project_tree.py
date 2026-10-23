@@ -505,13 +505,13 @@ def test_junk_root_never_becomes_an_auto_project():
     # still groups normally.
     resolve = _resolver(
         {
-            "/home/me/.clawk": ("/home/me/.clawk", "/home/me/.clawk"),
+            "/home/me/.clawksis": ("/home/me/.clawksis", "/home/me/.clawksis"),
             "/www/app": ("/www/app", "/www/app"),
         }
     )
-    junk = _session("/home/me/.clawk", branch="main")
+    junk = _session("/home/me/.clawksis", branch="main")
     real = _session("/www/app", branch="main")
-    is_junk = lambda root: root == "/home/me/.clawk"
+    is_junk = lambda root: root == "/home/me/.clawksis"
 
     tree = pt.build_tree([], [junk, real], [], resolve, hydrate=True, is_junk_root=is_junk)
 
@@ -521,7 +521,7 @@ def test_junk_root_never_becomes_an_auto_project():
 
 
 def test_broad_default_non_git_cwd_stays_unscoped():
-    detached = _session("/home/test/.clawk")
+    detached = _session("/home/test/.clawksis")
 
     tree = pt.build_tree(
         [],
@@ -529,7 +529,7 @@ def test_broad_default_non_git_cwd_stays_unscoped():
         [],
         resolve=lambda _cwd: None,
         hydrate=True,
-        is_junk_cwd=lambda path: path in {"/home/test", "/home/test/.clawk"},
+        is_junk_cwd=lambda path: path in {"/home/test", "/home/test/.clawksis"},
     )
 
     assert _real_project_ids(tree) == []

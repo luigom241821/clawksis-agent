@@ -234,12 +234,12 @@ test.skipIf(process.platform === 'win32').each(['gui', 'lite', 'full'] as const)
 test('buildPosixCleanupScript waits for the PID, runs the uninstall module, removes bundle', (): void => {
   const script = buildPosixCleanupScript({
     desktopPid: 4321,
-    pythonExe: '/home/x/.clawk/clawksis-agent/venv/bin/python',
+    pythonExe: '/home/x/.clawksis/clawksis-agent/venv/bin/python',
     pythonPath: null,
-    agentRoot: '/home/x/.clawk/clawksis-agent',
+    agentRoot: '/home/x/.clawksis/clawksis-agent',
     uninstallArgs: ['-m', 'clawk_cli.uninstall', '--mode', 'gui'],
     appPath: '/opt/clawksis/linux-unpacked',
-    clawkHome: '/home/x/.clawk'
+    clawkHome: '/home/x/.clawksis'
   })
 
   assert.match(script, /^#!\/usr\/bin\/env bash\n/)

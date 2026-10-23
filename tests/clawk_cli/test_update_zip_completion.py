@@ -25,7 +25,7 @@ def _swap_leftovers(root):
 @pytest.fixture
 def zip_update(tmp_path, monkeypatch, isolated_source_completion):
     home = tmp_path / "home"
-    active = home / ".clawk"
+    active = home / ".clawksis"
     sibling = active / "profiles/other"
     sibling.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: home)

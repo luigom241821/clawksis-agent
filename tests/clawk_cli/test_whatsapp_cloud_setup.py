@@ -94,7 +94,7 @@ class TestWabaIdValidator:
 def isolated_home(tmp_path, monkeypatch):
     """Redirect CLAWK_HOME so save_env_value writes into a temp .env."""
     home = tmp_path / "home"
-    clawk = home / ".clawk"
+    clawk = home / ".clawksis"
     clawk.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: home)
     monkeypatch.setenv("CLAWK_HOME", str(clawk))

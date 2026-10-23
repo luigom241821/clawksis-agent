@@ -79,13 +79,13 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
         env.pop(var, None)
     env.update(
         HOME=str(home),
-        CLAWK_HOME=str(home / ".clawk"),
+        CLAWK_HOME=str(home / ".clawksis"),
         XDG_STATE_HOME=str(home / ".local" / "state"),
         PYTHONPATH=str(REPO_ROOT),
         NO_COLOR="1",
         NO_PROXY="127.0.0.1,localhost",
         no_proxy="127.0.0.1,localhost",
-        # The live-DB guard treats $HOME/.clawk/state.db of a pytest descendant as production;
+        # The live-DB guard treats $HOME/.clawksis/state.db of a pytest descendant as production;
         # this HOME is the test's own tmp dir (asserted above).
         CLAWK_STATE_DB_GUARD_BYPASS="1",
         CLAWK_DISABLE_LAZY_INSTALLS="1",
@@ -141,7 +141,7 @@ class Sandbox:
 
     @property
     def clawk_home(self) -> Path:
-        return self.home / ".clawk"
+        return self.home / ".clawksis"
 
     def env(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         return hermetic_env(self.home, extra)

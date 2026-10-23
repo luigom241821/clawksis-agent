@@ -241,7 +241,7 @@ class TestServiceIdentityForForeignHome:
     def test_default_and_named_profile_homes_keep_their_names(
         self, machine_home, monkeypatch
     ):
-        default_home = machine_home / ".clawk"
+        default_home = machine_home / ".clawksis"
         (default_home / "profiles" / "alpha").mkdir(parents=True)
 
         monkeypatch.setenv("CLAWK_HOME", str(default_home))
@@ -254,7 +254,7 @@ class TestServiceIdentityForForeignHome:
         self, machine_home, tmp_path, monkeypatch
     ):
         sudo_home = tmp_path / "alice"
-        sudo_default = sudo_home / ".clawk"
+        sudo_default = sudo_home / ".clawksis"
         sudo_default.mkdir(parents=True)
         monkeypatch.setattr(os, "geteuid", lambda: 0)
         monkeypatch.setenv("SUDO_USER", "alice")
@@ -1626,9 +1626,9 @@ class TestSystemUnitClawkHome:
     ):
         """A target-managed Node must suppress caller-specific PATH fallbacks."""
         target_home = tmp_path / "home" / "alice"
-        target_clawk = target_home / ".clawk"
+        target_clawk = target_home / ".clawksis"
         root_home = tmp_path / "root"
-        root_clawk = root_home / ".clawk"
+        root_clawk = root_home / ".clawksis"
         managed_dirs = _seed_pm_node_facts(target_clawk)
         root_clawk.mkdir(parents=True)
 
@@ -1731,7 +1731,7 @@ class TestSystemUnitClawkHome:
         caller_home.mkdir()
         target_home.mkdir()
         monkeypatch.setattr(Path, "home", staticmethod(lambda: caller_home))
-        monkeypatch.setenv("CLAWK_HOME", str(caller_home / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(caller_home / ".clawksis"))
         monkeypatch.setattr(
             gateway_cli,
             "_system_service_identity",
@@ -1745,8 +1745,8 @@ class TestSystemUnitClawkHome:
 
         unit = gateway_cli.generate_systemd_unit(system=True, run_as_user="alice")
 
-        assert f"CLAWK_HOME={target_home / '.clawk'}" in unit
-        assert str(caller_home / ".clawk") not in unit
+        assert f"CLAWK_HOME={target_home / '.clawksis'}" in unit
+        assert str(caller_home / ".clawksis") not in unit
 
     def test_user_unit_unaffected_by_change(self):
         # User-scope units should still use the calling user's CLAWK_HOME
@@ -1817,7 +1817,7 @@ class TestClawkHomeForTargetUser:
         monkeypatch.delenv("CLAWK_HOME", raising=False)
 
         result = gateway_cli._clawk_home_for_target_user("/home/alice")
-        assert result == "/home/alice/.clawk"
+        assert result == "/home/alice/.clawksis"
 
 
 class TestGeneratedUnitIncludesLocalBin:
@@ -2003,7 +2003,7 @@ class TestProfileArg:
             )
         )
         assert command[-4:] == ["--profile", "mybot", "gateway", "run"]
-        assert f"CLAWK_HOME={target_home / '.clawk' / 'profiles' / 'mybot'}" in unit
+        assert f"CLAWK_HOME={target_home / '.clawksis' / 'profiles' / 'mybot'}" in unit
 
     def test_launchd_plist_wraps_gateway_stderr_with_timestamps(
         self, tmp_path, monkeypatch

@@ -37,7 +37,7 @@ When you authenticate with a **service-account token**, that token is itself the
 
    ```ini
    [Service]
-   EnvironmentFile=-/home/youruser/.clawk/.op.env
+   EnvironmentFile=-/home/youruser/.clawksis/.op.env
    ```
 
    A token injected this way takes precedence — Clawksis detects that `OP_SERVICE_ACCOUNT_TOKEN` is already set and skips loading `.op.env` entirely.

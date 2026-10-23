@@ -114,7 +114,7 @@ arm_redirect() {
   arm_source_redirect "$REPO_ROOT" "$WORK_ROOT" "$SERVE_REPO"
   export HOME="$HOME_SANDBOX"
   export PATH="$HOME/.local/bin:$PATH"
-  export CLAWK_HOME="$HOME/.clawk"
+  export CLAWK_HOME="$HOME/.clawksis"
   export INSTALL_DIR="$CLAWK_HOME/clawksis-agent"
   export CLAWK_DESKTOP_USER_DATA_DIR="$WORK_ROOT/electron-user-data"
 }

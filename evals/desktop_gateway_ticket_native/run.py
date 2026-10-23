@@ -85,7 +85,7 @@ def main():
         temporary = temporary_directory.name
         base = Path(temporary).resolve()
         home, state = base / 'home', base / 'state'
-        sibling = home / '.clawk' / 'profiles' / 'sibling'
+        sibling = home / '.clawksis' / 'profiles' / 'sibling'
         for directory in (home, state, sibling, base / 'user-data', base / 'tmp'):
             directory.mkdir(parents=True, mode=0o700, exist_ok=True)
         env = {key: value for key, value in os.environ.items() if key.upper() in {

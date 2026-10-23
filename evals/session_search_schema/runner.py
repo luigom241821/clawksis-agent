@@ -49,7 +49,7 @@ def _load_api_key() -> str:
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if key:
         return key
-    env_path = Path.home() / ".clawk" / ".env"
+    env_path = Path.home() / ".clawksis" / ".env"
     if env_path.exists():
         for line in env_path.read_text().splitlines():
             if line.startswith("OPENROUTER_API_KEY="):

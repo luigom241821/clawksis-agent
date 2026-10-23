@@ -58,7 +58,7 @@ export const widgetSdk = {
 
 export type WidgetSdk = typeof widgetSdk
 
-const widgetsDir = () => join(process.env.CLAWK_HOME?.trim() || join(homedir(), '.clawk'), 'tui-widgets')
+const widgetsDir = () => join(process.env.CLAWK_HOME?.trim() || join(homedir(), '.clawksis'), 'tui-widgets')
 
 export interface UserWidgetLoadResult {
   /** App ids newly registered by this scan. */

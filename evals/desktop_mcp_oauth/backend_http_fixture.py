@@ -314,9 +314,9 @@ def main():
     if not args.isolated_worker:
         with tempfile.TemporaryDirectory(prefix="clawk-oauth-http-") as temp:
             home = Path(temp)
-            (home / ".clawk").mkdir()
+            (home / ".clawksis").mkdir()
             env = {"PATH": os.environ.get("PATH", ""), "HOME": temp,
-                   "CLAWK_HOME": str(home / ".clawk"), "LANG": "C.UTF-8", "TZ": "UTC",
+                   "CLAWK_HOME": str(home / ".clawksis"), "LANG": "C.UTF-8", "TZ": "UTC",
                    "PYTHONNOUSERSITE": "1"}
             completed = subprocess.run([sys.executable, str(Path(__file__).resolve()),
                 "--repo", str(repo), "--output", str(output), "--isolated-worker"],

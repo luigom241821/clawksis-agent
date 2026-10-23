@@ -45,10 +45,10 @@ def cli_world(tmp_path_factory) -> World:
     root = tmp_path_factory.mktemp("redact-cli")
     home, ws, keys = root / "home", root / "ws", Secrets()
     seed_workspace(ws, keys)
-    ctx = Ctx(keys, ws, home / ".clawk" / ".env")
+    ctx = Ctx(keys, ws, home / ".clawksis" / ".env")
     with FakeLLMServer(Director(ctx), api_key=keys.provider, record_get=True) as llm:
         ctx.port = llm.port
-        write_home(home / ".clawk", llm.base_url, api_key=keys.provider, env=keys.env(), config=CONFIG)
+        write_home(home / ".clawksis", llm.base_url, api_key=keys.provider, env=keys.env(), config=CONFIG)
         runs: dict[str, str] = {}
         for name, scenario in SCENARIOS.items():
             r = run_clawk(["chat", "-q", prompt_for(name, keys), "-Q"], home, cwd=ws, timeout=150)

@@ -96,7 +96,7 @@ Point the app at a specific source checkout, or sandbox it away from your real c
 
 ```bash
 CLAWK_DESKTOP_CLAWK_ROOT=/path/to/clone npm run dev
-CLAWK_HOME=$HOME/.clawk/cache/scratch/throwaway npm run dev
+CLAWK_HOME=$HOME/.clawksis/cache/scratch/throwaway npm run dev
 npm run dev:fake-boot   # exercise the startup overlay with deterministic delays
 ```
 

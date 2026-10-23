@@ -55,7 +55,7 @@ def _apply(secrets, cfg_extra=None, home=Path("/tmp/x/.clawk"), env=None):
     return report, env
 
 
-PROFILE_HOME = Path("/home/u/.clawk/profiles/milla")
+PROFILE_HOME = Path("/home/u/.clawksis/profiles/milla")
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ def test_profile_suffixed_var_hydrates_canonical():
 def test_hyphenated_profile_name_matches_underscore_suffix():
     _, env = _apply(
         {"SLACK_APP_TOKEN_MY_BOT": "xapp-1"},
-        home=Path("/home/u/.clawk/profiles/my-bot"),
+        home=Path("/home/u/.clawksis/profiles/my-bot"),
     )
     assert env["SLACK_APP_TOKEN"] == "xapp-1"
 

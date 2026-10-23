@@ -20,7 +20,7 @@ const human: DisplayLease = { ...agent, holder: 'human', viewer_hash: 'abc123abc
 
 const statusWith = (lease: DisplayLease): DisplayStatus => ({
   profile: 'ops',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: true,
   missing: [],

@@ -355,7 +355,7 @@ def test_direct_packaged_cli_exposes_shims_before_electron(tmp_path):
         shim = bin_dir / name
         shim.write_text(f'#!/bin/sh\nexec {shlex.join([sys.executable, "-I", "-c", code])} "$@"\n', encoding="utf-8")
         shim.chmod(0o755)
-    env = dict(os.environ, HOME=str(home), CLAWK_HOME=str(home / ".clawk"),
+    env = dict(os.environ, HOME=str(home), CLAWK_HOME=str(home / ".clawksis"),
                CLAWK_INSTALL_ROOT=str(repo), CLAWK_RUNTIME_DIR=str(tmp_path / "tools"))
     # Execute the package CLI directly. No Electron process or linking helper runs.
     # `--help` reaches main()'s boot bootstrap (which owns expose_cli) before argparse

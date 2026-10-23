@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 const MAX = 1000
 
-const dir = process.env.CLAWK_HOME ?? join(homedir(), '.clawk')
+const dir = process.env.CLAWK_HOME ?? join(homedir(), '.clawksis')
 
 const file = join(dir, '.clawk_history')
 

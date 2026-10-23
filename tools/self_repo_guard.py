@@ -555,7 +555,7 @@ def detect_self_repo_git_mutation(
 
 def _block_message(operation: str, root: Path) -> str:
     clawk_home = os.environ.get("CLAWK_HOME", "").strip()
-    scratch = (Path(clawk_home).expanduser() if clawk_home else Path.home() / ".clawk") / "scratch"
+    scratch = (Path(clawk_home).expanduser() if clawk_home else Path.home() / ".clawksis") / "scratch"
     return (
         f"Blocked: `{operation}` would rewrite Clawksis's live source checkout "
         f"({root}) and can mix module versions in this running process. "

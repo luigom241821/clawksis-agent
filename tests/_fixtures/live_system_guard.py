@@ -337,7 +337,7 @@ def _live_system_guard(request, monkeypatch):
         # The child must not resolve the REAL Clawksis root. Comparing CLAWK_HOME against the whole
         # account home refused every Windows sandbox: %TEMP% lives under %USERPROFILE%.
         from clawk_state_guard import _real_platform_state_root
-        real_root = _real_platform_state_root() or real_home / ".clawk"
+        real_root = _real_platform_state_root() or real_home / ".clawksis"
         try:
             return (Path(home).resolve() != real_home
                     and not Path(clawk_home).resolve().is_relative_to(real_root))

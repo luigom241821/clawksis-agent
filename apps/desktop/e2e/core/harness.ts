@@ -48,7 +48,7 @@ export function createCoreSandbox(label: string): CoreSandbox {
   fs.mkdirSync(parent, { recursive: true })
   const root = fs.mkdtempSync(path.join(parent, `core-${label}-`))
   const home = path.join(root, 'home')
-  const clawkHome = path.join(home, '.clawk')
+  const clawkHome = path.join(home, '.clawksis')
   const userDataDir = path.join(root, 'user-data')
   fs.mkdirSync(clawkHome, { recursive: true })
   fs.mkdirSync(userDataDir, { recursive: true })

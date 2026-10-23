@@ -289,7 +289,7 @@ clawk --version
 
 ### Environment variables
 
-Clawksis honors both `$env:X` (process-scope) and User environment variables (permanent, set in System Properties → Environment Variables). Setting API keys in `%USERPROFILE%\.clawk\.env` is the normal path — same as Linux:
+Clawksis honors both `$env:X` (process-scope) and User environment variables (permanent, set in System Properties → Environment Variables). Setting API keys in `%USERPROFILE%\.clawksis\.env` is the normal path — same as Linux:
 
 ```
 OPENROUTER_API_KEY=sk-or-...

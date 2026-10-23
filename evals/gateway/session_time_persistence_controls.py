@@ -16,7 +16,7 @@ home = Path(tempfile.mkdtemp(prefix="idle-controls-"))
 for key in list(os.environ):
     if key.startswith("CLAWK_") or key.endswith(("_API_KEY", "_TOKEN")):
         os.environ.pop(key, None)
-os.environ.update(HOME=str(home), CLAWK_HOME=str(home / ".clawk"), SESSION_IDLE_MINUTES="1", SESSION_RESET_HOUR="0")
+os.environ.update(HOME=str(home), CLAWK_HOME=str(home / ".clawksis"), SESSION_IDLE_MINUTES="1", SESSION_RESET_HOUR="0")
 sys.path.insert(0, str(repo))
 import clawk_yaml as yaml
 from gateway.config import load_gateway_config, GatewayConfig, Platform

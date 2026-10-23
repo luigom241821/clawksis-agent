@@ -15,7 +15,7 @@ from clawk_cli import gateway_service_owner
 
 UNIT = (
     "[Service]\n"
-    "ExecStart=/home/ace/.clawk/clawksis-agent/.clawk/bin/clawk gateway run\n"
+    "ExecStart=/home/ace/.clawksis/clawksis-agent/.clawk/bin/clawk gateway run\n"
     "WorkingDirectory={home}\n"
     'Environment="CLAWK_HOME={home}"\n'
 )

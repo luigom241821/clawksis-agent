@@ -43,7 +43,7 @@ from tools import browser_tool_install as bt_install
 def isolated_home(monkeypatch):
     """Temp CLAWK_HOME with config + clean credential env vars."""
     test_home = tempfile.mkdtemp(prefix="clawk_test_31179_")
-    clawk_home = os.path.join(test_home, ".clawk")
+    clawk_home = os.path.join(test_home, ".clawksis")
     os.makedirs(clawk_home)
     monkeypatch.setenv("CLAWK_HOME", clawk_home)
 

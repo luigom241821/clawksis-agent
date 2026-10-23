@@ -26,7 +26,7 @@ import pytest
 
 from tui_gateway import server as srv
 
-PROFILE_HOME = "/home/user/.clawk/profiles/work"
+PROFILE_HOME = "/home/user/.clawksis/profiles/work"
 
 class _InlineThread:
     """Drop-in for ``threading.Thread`` that runs the target synchronously.

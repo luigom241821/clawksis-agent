@@ -48,7 +48,7 @@ test('backend runs the store toolchain even after the login-shell PATH is merged
   // `clawk desktop` hands Electron a PATH with the PM store first; the
   // login-shell merge then puts nvm/Homebrew ahead of it in process.env.
   const env: Record<string, string> = {
-    PATH: '/Users/u/.clawk/tools/node-26.7.0-darwin-arm64/bin:/Users/u/.clawk/tools/uv-0.12.3-darwin-arm64:/usr/bin:/bin'
+    PATH: '/Users/u/.clawksis/tools/node-26.7.0-darwin-arm64/bin:/Users/u/.clawksis/tools/uv-0.12.3-darwin-arm64:/usr/bin:/bin'
   }
 
   const loginPath = '/Users/u/.nvm/versions/node/v20.0.0/bin:/opt/homebrew/bin:/usr/bin'
@@ -65,8 +65,8 @@ test('backend runs the store toolchain even after the login-shell PATH is merged
   const backend = buildDesktopBackendEnv({ currentEnv: env, platform: 'darwin', homedir: '/Users/u' })
 
   assert.deepEqual(backend.PATH.split(':').slice(0, 5), [
-    '/Users/u/.clawk/tools/node-26.7.0-darwin-arm64/bin',
-    '/Users/u/.clawk/tools/uv-0.12.3-darwin-arm64',
+    '/Users/u/.clawksis/tools/node-26.7.0-darwin-arm64/bin',
+    '/Users/u/.clawksis/tools/uv-0.12.3-darwin-arm64',
     '/Users/u/.nvm/versions/node/v20.0.0/bin',
     '/opt/homebrew/bin',
     '/usr/bin'
@@ -79,7 +79,7 @@ test('CLAWK_RUNTIME_DIR names the store; look-alike prefixes are not Clawksis-ow
   const backend = buildDesktopBackendEnv({
     currentEnv: {
       CLAWK_RUNTIME_DIR: store,
-      PATH: `/opt/homebrew/bin:/Users/u/.clawk/tools-old/bin:${store}/npm-12.0.2-darwin-arm64/bin:/usr/bin`
+      PATH: `/opt/homebrew/bin:/Users/u/.clawksis/tools-old/bin:${store}/npm-12.0.2-darwin-arm64/bin:/usr/bin`
     },
     platform: 'darwin',
     homedir: '/Users/u'
@@ -88,7 +88,7 @@ test('CLAWK_RUNTIME_DIR names the store; look-alike prefixes are not Clawksis-ow
   assert.deepEqual(backend.PATH.split(':').slice(0, 4), [
     `${store}/npm-12.0.2-darwin-arm64/bin`,
     '/opt/homebrew/bin',
-    '/Users/u/.clawk/tools-old/bin',
+    '/Users/u/.clawksis/tools-old/bin',
     '/usr/bin'
   ])
 })
@@ -122,11 +122,11 @@ test('buildDesktopBackendEnv forces PYTHONUTF8 unless the user set it explicitly
 test('normalizeClawkHomeRoot expands a literal leading ~ against the home directory, not cwd', () => {
   assert.equal(
     normalizeClawkHomeRoot('~/.clawksis', { pathModule: path.posix, homedir: '/Users/test' }),
-    '/Users/test/.clawk'
+    '/Users/test/.clawksis'
   )
   assert.equal(
     normalizeClawkHomeRoot('~/.clawksis/profiles/oracle', { pathModule: path.posix, homedir: '/Users/test' }),
-    '/Users/test/.clawk'
+    '/Users/test/.clawksis'
   )
   assert.equal(
     normalizeClawkHomeRoot('~\\.clawk', { pathModule: path.win32, homedir: 'C:\\Users\\test' }),
@@ -137,14 +137,14 @@ test('normalizeClawkHomeRoot expands a literal leading ~ against the home direct
 
 test('normalizeClawkHomeRoot maps profile homes back to the global Clawksis root', () => {
   assert.equal(
-    normalizeClawkHomeRoot('/Users/test/.clawk/profiles/oracle', { pathModule: path.posix }),
-    '/Users/test/.clawk'
+    normalizeClawkHomeRoot('/Users/test/.clawksis/profiles/oracle', { pathModule: path.posix }),
+    '/Users/test/.clawksis'
   )
   assert.equal(
     normalizeClawkHomeRoot('C:\\Users\\test\\AppData\\Local\\clawk\\profiles\\oracle', { pathModule: path.win32 }),
     'C:\\Users\\test\\AppData\\Local\\clawk'
   )
-  assert.equal(normalizeClawkHomeRoot('/Users/test/.clawk', { pathModule: path.posix }), '/Users/test/.clawk')
+  assert.equal(normalizeClawkHomeRoot('/Users/test/.clawksis', { pathModule: path.posix }), '/Users/test/.clawksis')
 })
 
 test('pathEnvKey finds the platform-cased PATH key', () => {

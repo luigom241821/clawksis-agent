@@ -151,7 +151,7 @@ class ClassicHome:
 
     @property
     def clawk_home(self) -> Path:
-        return self.home / ".clawk"
+        return self.home / ".clawksis"
 
     @property
     def work(self) -> Path:

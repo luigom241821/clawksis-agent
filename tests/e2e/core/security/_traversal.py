@@ -40,7 +40,7 @@ def run_tool_calls(home: Path, calls: list[tuple[str, dict[str, Any]]], *, cwd: 
     key = H.canary("sk-traversal")
     script: list[Any] = [ToolCall(name, args) for name, args in calls] + [Text("done")]
     with FakeLLMServer(script, api_key=key) as srv:
-        H.write_home(home / ".clawk", srv.base_url, api_key=key, config=config, env=env_lines)
+        H.write_home(home / ".clawksis", srv.base_url, api_key=key, config=config, env=env_lines)
         if prepare is not None:
             prepare()
         proc = H.run_clawk(["chat", "-q", "run the scripted tools", "-Q"], home, cwd=cwd,

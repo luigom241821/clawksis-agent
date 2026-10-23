@@ -539,7 +539,7 @@ for p in list_providers():
 Point `CLAWK_HOME` at a temp directory so you don't pollute your real config:
 
 ```bash
-export CLAWK_HOME=$HOME/.clawk/cache/scratch/clawk-plugin-test
+export CLAWK_HOME=$HOME/.clawksis/cache/scratch/clawk-plugin-test
 mkdir -p $CLAWK_HOME/plugins/model-providers/my-provider
 cat > $CLAWK_HOME/plugins/model-providers/my-provider/__init__.py <<'EOF'
 from providers import register_provider

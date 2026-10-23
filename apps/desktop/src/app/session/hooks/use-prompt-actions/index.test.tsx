@@ -3531,7 +3531,7 @@ describe('usePromptActions file attachment sync', () => {
       if (method === 'file.attach') {
         return {
           attached: true,
-          path: '/root/.clawk/desktop-attachments/report.txt',
+          path: '/root/.clawksis/desktop-attachments/report.txt',
           ref_text: '@file:.clawk/desktop-attachments/report.txt',
           uploaded: true
         } as never
@@ -3782,8 +3782,8 @@ describe('usePromptActions file attachment sync', () => {
       if (method === 'file.attach') {
         return {
           attached: true,
-          path: '/root/.clawk/attachments/report.txt',
-          ref_text: '@file:/root/.clawk/attachments/report.txt',
+          path: '/root/.clawksis/attachments/report.txt',
+          ref_text: '@file:/root/.clawksis/attachments/report.txt',
           uploaded: true
         } as never
       }

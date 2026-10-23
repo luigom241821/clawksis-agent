@@ -71,7 +71,7 @@ const bot: RosterRow = { name: 'ops', sourceScoped: true, connectionId: 'host-a'
 
 const status: DisplayStatus = {
   profile: 'ops',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: false,
   missing: ['tigervnc'],

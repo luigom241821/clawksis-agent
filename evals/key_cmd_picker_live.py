@@ -126,7 +126,7 @@ def main():
                 phase = f"{schema}/{surface}"
                 with tempfile.TemporaryDirectory(prefix="clawk-keycmd-live-") as tmp:
                     home = Path(tmp)
-                    state = home / ".clawk"
+                    state = home / ".clawksis"
                     state.mkdir()
                     mint_log = home / "helper-invocations"
                     helper = home / "mint.py"

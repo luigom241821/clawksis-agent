@@ -34,7 +34,7 @@ _V2_ORPHAN_ONLY_STATUS = {
 _PRE_V2_ONLY_STATUS = {
     "projects": [],
     "pre_v2_projects": [
-        {"path": "/home/user/.clawk/checkpoints/deadbeefcafebabe", "workdir": None, "exists": False},
+        {"path": "/home/user/.clawksis/checkpoints/deadbeefcafebabe", "workdir": None, "exists": False},
     ],
 }
 
@@ -43,7 +43,7 @@ _MIXED_STATUS = {
         {"hash": "abc123", "workdir": "/gone/v2-project", "exists": False, "commits": 4},
     ],
     "pre_v2_projects": [
-        {"path": "/home/user/.clawk/checkpoints/deadbeefcafebabe", "workdir": "/gone/pre-v2-project", "exists": False},
+        {"path": "/home/user/.clawksis/checkpoints/deadbeefcafebabe", "workdir": "/gone/pre-v2-project", "exists": False},
     ],
 }
 

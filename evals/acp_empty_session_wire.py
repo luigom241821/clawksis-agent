@@ -62,7 +62,7 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), Model)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     home = Path(tempfile.mkdtemp(prefix='clawk-acp-empty-'))
-    clawk = home / '.clawk'
+    clawk = home / '.clawksis'
     clawk.mkdir()
     (clawk / 'config.yaml').write_text(
         'model:\n  provider: custom\n  default: fixture-model\n'

@@ -5,7 +5,7 @@ Channel storage — per install, never home-global::
     update:
       installs:
         a4f3b2c1d0e9f8a7:                      # install id (sha16 of the
-          path: /home/u/.clawk/clawksis-agent   #   canonical install root)
+          path: /home/u/.clawksis/clawksis-agent   #   canonical install root)
           channel: canary
 
 One config.yaml serves many installs (host + docker gateway + desktop all

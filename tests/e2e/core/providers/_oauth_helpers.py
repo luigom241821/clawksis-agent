@@ -77,8 +77,8 @@ class FakeHome:
 
 def make_home(root: Path) -> FakeHome:
     home = root / "home"
-    (home / ".clawk").mkdir(parents=True, exist_ok=True)
-    fh = FakeHome(root=root, home=home, clawk_home=home / ".clawk")
+    (home / ".clawksis").mkdir(parents=True, exist_ok=True)
+    fh = FakeHome(root=root, home=home, clawk_home=home / ".clawksis")
     fh.write_config({})
     return fh
 

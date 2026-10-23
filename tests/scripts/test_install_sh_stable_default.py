@@ -39,7 +39,7 @@ def _git(cwd, *args, env=None):
 ])
 def test_install_lands_on_the_latest_stable_release(tmp_path, side, start, args, tagged, lands):
     origin, home, bin_dir = tmp_path / "origin", tmp_path / "home", tmp_path / "bin"
-    install = home / ".clawk" / "clawksis-agent"
+    install = home / ".clawksis" / "clawksis-agent"
     for d in (origin, home, bin_dir):
         d.mkdir()
     _git(origin, "init", "-q", "-b", "main")
@@ -67,7 +67,7 @@ def test_install_lands_on_the_latest_stable_release(tmp_path, side, start, args,
 
     result = subprocess.run(
         ["bash", str(ROOT / "scripts" / "install.sh"), "--stage", "repository", "--dir", str(install),
-         "--clawk-home", str(home / ".clawk"), "--non-interactive", *args],
+         "--clawk-home", str(home / ".clawksis"), "--non-interactive", *args],
         check=False, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=120, env=env,
     )
 

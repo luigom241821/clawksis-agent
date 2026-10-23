@@ -32,7 +32,7 @@ FAKE_KEY = "sk-fake-e2e-install-update"
 
 
 def real_uv() -> str | None:
-    cand = shutil.which("uv") or str(H.REAL_HOME / ".clawk" / "bin" / "uv")
+    cand = shutil.which("uv") or str(H.REAL_HOME / ".clawksis" / "bin" / "uv")
     return cand if cand and Path(cand).exists() else None
 
 
@@ -135,7 +135,7 @@ def new_sandbox(root: Path, origin: Path | None = None, *, pythonpath: Path | No
     wrap = root / "wrap"
     env = H.isolated_env(root, extra_path=[wrap], pythonpath=pythonpath)
     home = Path(env["HOME"])
-    shutil.rmtree(home / ".clawk")
+    shutil.rmtree(home / ".clawksis")
     (root / "tmp").mkdir(exist_ok=True)
     env["TMPDIR"] = str(root / "tmp")
     env["SHELL"] = "/bin/bash"

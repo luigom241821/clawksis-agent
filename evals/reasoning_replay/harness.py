@@ -26,7 +26,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-HOME = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawk")
+HOME = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawksis")
 AUTH_JSON = HOME / "auth.json"
 DOTENV = HOME / ".env"
 

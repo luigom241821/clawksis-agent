@@ -530,7 +530,7 @@ class TestInertContextDemotions:
     def test_prose_and_own_uninstall_step_never_block(self, tmp_path):
         files = dict(BASE_FILES)
         files["README.md"] = (
-            "## Uninstall\n\n```bash\nrm -rf \"$HOME/.clawk/plugins/crypto-prices\"\n```\n"
+            "## Uninstall\n\n```bash\nrm -rf \"$HOME/.clawksis/plugins/crypto-prices\"\n```\n"
             "Refused roots: `~/.ssh`, `~/.aws` and `/etc/passwd` are never listed.\n"
             "Cleanup of a broken home: `rm -rf $HOME`\n"
         )
@@ -545,7 +545,7 @@ class TestInertContextDemotions:
     @pytest.mark.parametrize("path", ["uninstall.sh", "skills/ops/SKILL.md", "skills/ops/reference.md"])
     def test_same_rm_where_it_executes_stays_dangerous(self, tmp_path, path):
         files = dict(BASE_FILES)
-        files[path] = "```bash\nrm -rf \"$HOME/.clawk/plugins/crypto-prices\"\n```\n"
+        files[path] = "```bash\nrm -rf \"$HOME/.clawksis/plugins/crypto-prices\"\n```\n"
         result = scan_plugin(_mk_plugin(tmp_path, files), source="owner/repo")
         assert result.verdict == "dangerous"
         assert should_allow_plugin_install(result, force=True)[0] is False

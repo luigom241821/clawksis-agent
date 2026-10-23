@@ -60,7 +60,7 @@ def profile_and_root(tmp_path, monkeypatch):
     """Wire a profile auth store + a distinct global-root auth store on disk.
 
     The pytest seat belt in ``_write_through_provider_state_to_global_root``
-    only refuses the *real* user's ``$HOME/.clawk/auth.json``; a tmp_path
+    only refuses the *real* user's ``$HOME/.clawksis/auth.json``; a tmp_path
     root is allowed, so point HOME away from the tmp root to keep the guard
     from tripping on these fixtures.
     """

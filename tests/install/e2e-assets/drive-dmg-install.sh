@@ -42,8 +42,8 @@ SETUP_PID=$!
 log "launched $APP_BIN (pid $SETUP_PID)"
 cleanup() {
   kill "$SETUP_PID" 2>/dev/null || true
-  if [ -d "$HOME/.clawk/logs" ]; then
-    cp -R "$HOME/.clawk/logs" "$PROOF_DIR/bootstrap-logs"
+  if [ -d "$HOME/.clawksis/logs" ]; then
+    cp -R "$HOME/.clawksis/logs" "$PROOF_DIR/bootstrap-logs"
   fi
 }
 trap cleanup EXIT
@@ -115,7 +115,7 @@ installed_app() {
   done
   return 1
 }
-BOOTSTRAP_LOG="$HOME/.clawk/logs/bootstrap-installer.log"
+BOOTSTRAP_LOG="$HOME/.clawksis/logs/bootstrap-installer.log"
 bootstrap_completed() {
   [ -f "$BOOTSTRAP_LOG" ] || return 1
   local line

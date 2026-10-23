@@ -10,7 +10,7 @@ for key in list(os.environ):
     if key.startswith("CLAWK_") or key.endswith(("_API_KEY", "_TOKEN")):
         os.environ.pop(key, None)
 os.environ["HOME"] = str(home)
-os.environ["CLAWK_HOME"] = str(home / ".clawk")
+os.environ["CLAWK_HOME"] = str(home / ".clawksis")
 sys.path.insert(0, sys.argv[1])
 from gateway.config import GatewayConfig, Platform
 from gateway.session import SessionStore, SessionSource

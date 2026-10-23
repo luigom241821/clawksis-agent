@@ -206,7 +206,7 @@ class Sinks:
 
 
 def collect(home: Path, requests: list[dict], platform_journal: Path | None = None) -> Sinks:
-    hh = home / ".clawk"
+    hh = home / ".clawksis"
     logs = {str(p.relative_to(hh / "logs")): p.read_text(encoding="utf-8", errors="replace")
             for p in sorted((hh / "logs").rglob("*")) if p.is_file()}
     store = {"state.db (decoded rows)": db_blob(hh / "state.db")}

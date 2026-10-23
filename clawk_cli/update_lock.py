@@ -97,7 +97,7 @@ def update_marker_path() -> Path:
     try:
         from clawk_constants import get_default_clawk_root
     except ImportError:  # a partial tree (an -I -S completion child of a stubbed checkout)
-        home = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawk")
+        home = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawksis")
         root = home.parent.parent if home.parent.name == "profiles" else home
         return root / MARKER_NAME
     return get_default_clawk_root() / MARKER_NAME

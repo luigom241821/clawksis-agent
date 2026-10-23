@@ -139,9 +139,9 @@ function baseDeps(overrides: Record<string, unknown> = {}) {
   const fs = makeFs({})
 
   return {
-    legacyActivePath: '/home/u/.clawk/active_profile',
-    clawkHome: '/home/u/.clawk',
-    profilesRoot: '/home/u/.clawk/profiles',
+    legacyActivePath: '/home/u/.clawksis/active_profile',
+    clawkHome: '/home/u/.clawksis',
+    profilesRoot: '/home/u/.clawksis/profiles',
     existsSync: fs.existsSync,
     readFileSync: fs.readFileSync,
     statSync: fs.statSync,
@@ -206,9 +206,9 @@ test('readLegacyActiveProfile returns null for empty/whitespace content', () => 
 // ---------------------------------------------------------------------------
 
 test('findRunningGatewayProfiles returns [] when no pid files exist', () => {
-  const fs = makeFs({ '/home/u/.clawk/profiles/coder': { dir: true } })
+  const fs = makeFs({ '/home/u/.clawksis/profiles/coder': { dir: true } })
   assert.deepEqual(
-    findRunningGatewayProfiles('/home/u/.clawk/profiles', ['coder'], {
+    findRunningGatewayProfiles('/home/u/.clawksis/profiles', ['coder'], {
       ...fs,
       isClawksisProcess: () => true
     }),
@@ -220,8 +220,8 @@ test('findRunningGatewayProfiles drops stale (non-clawk) recycled PIDs', () => {
   // Two profiles have pid files, but only coder's pid is a live clawk process.
   // The recycled PID at 5678 belongs to an unrelated process (e.g. Chrome).
   const fs = makeFs({
-    '/home/u/.clawk/profiles/coder/gateway.pid': { content: '{"pid":1234}' },
-    '/home/u/.clawk/profiles/writer/gateway.pid': { content: '{"pid":5678}' }
+    '/home/u/.clawksis/profiles/coder/gateway.pid': { content: '{"pid":1234}' },
+    '/home/u/.clawksis/profiles/writer/gateway.pid': { content: '{"pid":5678}' }
   })
 
   const deps = {
@@ -229,16 +229,16 @@ test('findRunningGatewayProfiles drops stale (non-clawk) recycled PIDs', () => {
     isClawksisProcess: (pid: number) => pid === 1234
   }
 
-  assert.deepEqual(findRunningGatewayProfiles('/home/u/.clawk/profiles', ['coder', 'writer'], deps), ['coder'])
+  assert.deepEqual(findRunningGatewayProfiles('/home/u/.clawksis/profiles', ['coder', 'writer'], deps), ['coder'])
 })
 
 test('findRunningGatewayProfiles tolerates malformed pid files', () => {
   const fs = makeFs({
-    '/home/u/.clawk/profiles/coder/gateway.pid': { content: '{not json' }
+    '/home/u/.clawksis/profiles/coder/gateway.pid': { content: '{not json' }
   })
 
   assert.deepEqual(
-    findRunningGatewayProfiles('/home/u/.clawk/profiles', ['coder'], {
+    findRunningGatewayProfiles('/home/u/.clawksis/profiles', ['coder'], {
       ...fs,
       isClawksisProcess: () => true
     }),
@@ -248,13 +248,13 @@ test('findRunningGatewayProfiles tolerates malformed pid files', () => {
 
 test('findRunningGatewayProfiles drops non-integer and non-positive PIDs', () => {
   const fs = makeFs({
-    '/home/u/.clawk/profiles/coder/gateway.pid': { content: '{"pid":-1}' },
-    '/home/u/.clawk/profiles/writer/gateway.pid': { content: '{"pid":1.5}' },
-    '/home/u/.clawk/profiles/extra/gateway.pid': { content: '{"pid":0}' }
+    '/home/u/.clawksis/profiles/coder/gateway.pid': { content: '{"pid":-1}' },
+    '/home/u/.clawksis/profiles/writer/gateway.pid': { content: '{"pid":1.5}' },
+    '/home/u/.clawksis/profiles/extra/gateway.pid': { content: '{"pid":0}' }
   })
 
   assert.deepEqual(
-    findRunningGatewayProfiles('/home/u/.clawk/profiles', ['coder', 'writer', 'extra'], {
+    findRunningGatewayProfiles('/home/u/.clawksis/profiles', ['coder', 'writer', 'extra'], {
       ...fs,
       isClawksisProcess: () => true
     }),
@@ -264,12 +264,12 @@ test('findRunningGatewayProfiles drops non-integer and non-positive PIDs', () =>
 
 test('findRunningGatewayProfiles preserves order of allProfiles', () => {
   const fs = makeFs({
-    '/home/u/.clawk/profiles/coder/gateway.pid': { content: '{"pid":1}' },
-    '/home/u/.clawk/profiles/writer/gateway.pid': { content: '{"pid":2}' }
+    '/home/u/.clawksis/profiles/coder/gateway.pid': { content: '{"pid":1}' },
+    '/home/u/.clawksis/profiles/writer/gateway.pid': { content: '{"pid":2}' }
   })
 
   const deps = { ...fs, isClawksisProcess: () => true }
-  assert.deepEqual(findRunningGatewayProfiles('/home/u/.clawk/profiles', ['coder', 'writer'], deps), [
+  assert.deepEqual(findRunningGatewayProfiles('/home/u/.clawksis/profiles', ['coder', 'writer'], deps), [
     'coder',
     'writer'
   ])
@@ -323,9 +323,9 @@ test('listProfileDirs returns [] for missing profiles root', () => {
 
 test('listProfileDirs includes default and any name passing the regex', () => {
   const fs = makeFs({
-    '/home/u/.clawk/profiles/default': { dir: true },
-    '/home/u/.clawk/profiles/coder': { dir: true },
-    '/home/u/.clawk/profiles/writer': { dir: true }
+    '/home/u/.clawksis/profiles/default': { dir: true },
+    '/home/u/.clawksis/profiles/coder': { dir: true },
+    '/home/u/.clawksis/profiles/writer': { dir: true }
   })
 
   assert.deepEqual(listProfileDirs(baseDeps({ ...fs })), ['default', 'coder', 'writer'])
@@ -333,9 +333,9 @@ test('listProfileDirs includes default and any name passing the regex', () => {
 
 test('listProfileDirs skips files (not directories) and invalid names', () => {
   const fs = makeFs({
-    '/home/u/.clawk/profiles/default': { dir: true },
-    '/home/u/.clawk/profiles/some-file.txt': { dir: false },
-    '/home/u/.clawk/profiles/UPPERCASE': { dir: true } // regex rejects
+    '/home/u/.clawksis/profiles/default': { dir: true },
+    '/home/u/.clawksis/profiles/some-file.txt': { dir: false },
+    '/home/u/.clawksis/profiles/UPPERCASE': { dir: true } // regex rejects
   })
 
   assert.deepEqual(listProfileDirs(baseDeps({ ...fs })), ['default'])
@@ -410,9 +410,9 @@ test('migrateActiveProfileIfMissing is a no-op when a user-selected preference f
 
   const fs = makeFs({
     '/cfg/active-profile.json': { content: '{"profile":"coder"}' },
-    '/home/u/.clawk/profiles/coder': { dir: true },
-    '/home/u/.clawk/profiles/writer': { dir: true },
-    '/home/u/.clawk/profiles/writer/state.db': { size: 400 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/profiles/coder': { dir: true },
+    '/home/u/.clawksis/profiles/writer': { dir: true },
+    '/home/u/.clawksis/profiles/writer/state.db': { size: 400 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({
@@ -430,9 +430,9 @@ test('migrateActiveProfileIfMissing writes legacy choice with no _migrated flag'
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/active_profile': { content: 'coder' },
-    '/home/u/.clawk/profiles/coder': { dir: true },
-    '/home/u/.clawk/profiles/writer': { dir: true }
+    '/home/u/.clawksis/active_profile': { content: 'coder' },
+    '/home/u/.clawksis/profiles/coder': { dir: true },
+    '/home/u/.clawksis/profiles/writer': { dir: true }
   })
 
   const deps = baseDeps({
@@ -450,8 +450,8 @@ test('migrateActiveProfileIfMissing writes heuristic choice with _migrated=true'
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/profiles/coder/state.db': { size: 50 * 1024 * 1024, mtime: NOW - 86_400_000 },
-    '/home/u/.clawk/profiles/writer/state.db': { size: 200 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/profiles/coder/state.db': { size: 50 * 1024 * 1024, mtime: NOW - 86_400_000 },
+    '/home/u/.clawksis/profiles/writer/state.db': { size: 200 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({
@@ -472,7 +472,7 @@ test('migrateActiveProfileIfMissing is a no-op for single-profile (default-only)
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/state.db': { size: 10 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/state.db': { size: 10 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({
@@ -507,8 +507,8 @@ test('migrateActiveProfileIfMissing prefers a single running gateway over heuris
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/profiles/coder/gateway.pid': { content: '{"pid":42}' },
-    '/home/u/.clawk/profiles/writer/state.db': { size: 500 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/profiles/coder/gateway.pid': { content: '{"pid":42}' },
+    '/home/u/.clawksis/profiles/writer/state.db': { size: 500 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({
@@ -528,21 +528,21 @@ test('migrateActiveProfileIfMissing prefers a single running gateway over heuris
 // ---------------------------------------------------------------------------
 
 test('profileStateDbPath puts default at clawkHome, named under profilesRoot', () => {
-  assert.equal(profileStateDbPath('default', '/home/u/.clawk', '/home/u/.clawk/profiles'), '/home/u/.clawk/state.db')
+  assert.equal(profileStateDbPath('default', '/home/u/.clawksis', '/home/u/.clawksis/profiles'), '/home/u/.clawksis/state.db')
   assert.equal(
-    profileStateDbPath('conduit', '/home/u/.clawk', '/home/u/.clawk/profiles'),
-    '/home/u/.clawk/profiles/conduit/state.db'
+    profileStateDbPath('conduit', '/home/u/.clawksis', '/home/u/.clawksis/profiles'),
+    '/home/u/.clawksis/profiles/conduit/state.db'
   )
 })
 
 test('profileGatewayPidPath puts default at clawkHome', () => {
   assert.equal(
-    profileGatewayPidPath('default', '/home/u/.clawk', '/home/u/.clawk/profiles'),
-    '/home/u/.clawk/gateway.pid'
+    profileGatewayPidPath('default', '/home/u/.clawksis', '/home/u/.clawksis/profiles'),
+    '/home/u/.clawksis/gateway.pid'
   )
   assert.equal(
-    profileGatewayPidPath('coder', '/home/u/.clawk', '/home/u/.clawk/profiles'),
-    '/home/u/.clawk/profiles/coder/gateway.pid'
+    profileGatewayPidPath('coder', '/home/u/.clawksis', '/home/u/.clawksis/profiles'),
+    '/home/u/.clawksis/profiles/coder/gateway.pid'
   )
 })
 
@@ -554,14 +554,14 @@ test('withDefaultCandidate always leads with default and dedupes', () => {
 
 test('findRunningGatewayProfiles sees default gateway.pid at clawkHome', () => {
   const fs = makeFs({
-    '/home/u/.clawk/gateway.pid': { content: '{"pid":99}' },
-    '/home/u/.clawk/profiles/coder/gateway.pid': { content: '{"pid":11}' }
+    '/home/u/.clawksis/gateway.pid': { content: '{"pid":99}' },
+    '/home/u/.clawksis/profiles/coder/gateway.pid': { content: '{"pid":11}' }
   })
 
   assert.deepEqual(
-    findRunningGatewayProfiles('/home/u/.clawk/profiles', ['default', 'coder'], {
+    findRunningGatewayProfiles('/home/u/.clawksis/profiles', ['default', 'coder'], {
       ...fs,
-      clawkHome: '/home/u/.clawk',
+      clawkHome: '/home/u/.clawksis',
       isClawksisProcess: pid => pid === 99
     }),
     ['default']
@@ -575,9 +575,9 @@ test('migrateActiveProfileIfMissing does not pin a tiny named profile over a lar
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/profiles/conduit': { dir: true },
-    '/home/u/.clawk/state.db': { size: 409 * 1024 * 1024, mtime: NOW - 86_400_000 },
-    '/home/u/.clawk/profiles/conduit/state.db': { size: 2 * 1024 * 1024, mtime: NOW - 60_000 }
+    '/home/u/.clawksis/profiles/conduit': { dir: true },
+    '/home/u/.clawksis/state.db': { size: 409 * 1024 * 1024, mtime: NOW - 86_400_000 },
+    '/home/u/.clawksis/profiles/conduit/state.db': { size: 2 * 1024 * 1024, mtime: NOW - 60_000 }
   })
 
   const deps = baseDeps({
@@ -595,9 +595,9 @@ test('migrateActiveProfileIfMissing still pins a named profile that actually bea
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/profiles/work': { dir: true },
-    '/home/u/.clawk/state.db': { size: 5 * 1024 * 1024, mtime: NOW - 86_400_000 },
-    '/home/u/.clawk/profiles/work/state.db': { size: 200 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/profiles/work': { dir: true },
+    '/home/u/.clawksis/state.db': { size: 5 * 1024 * 1024, mtime: NOW - 86_400_000 },
+    '/home/u/.clawksis/profiles/work/state.db': { size: 200 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({
@@ -615,8 +615,8 @@ test('migrateActiveProfileIfMissing does not pin default when only default gatew
   let written: unknown = null
 
   const fs = makeFs({
-    '/home/u/.clawk/gateway.pid': { content: '{"pid":7}' },
-    '/home/u/.clawk/state.db': { size: 10 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/gateway.pid': { content: '{"pid":7}' },
+    '/home/u/.clawksis/state.db': { size: 10 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({
@@ -649,9 +649,9 @@ test('migrateActiveProfileIfMissing repairs a pre-existing heuristic pin when de
 
   const fs = makeFs({
     '/cfg/active-profile.json': { content: '{"profile":"conduit","_migrated":true}' },
-    '/home/u/.clawk/profiles/conduit': { dir: true },
-    '/home/u/.clawk/state.db': { size: 409 * 1024 * 1024, mtime: NOW - 86_400_000 },
-    '/home/u/.clawk/profiles/conduit/state.db': { size: 2 * 1024 * 1024, mtime: NOW - 60_000 }
+    '/home/u/.clawksis/profiles/conduit': { dir: true },
+    '/home/u/.clawksis/state.db': { size: 409 * 1024 * 1024, mtime: NOW - 86_400_000 },
+    '/home/u/.clawksis/profiles/conduit/state.db': { size: 2 * 1024 * 1024, mtime: NOW - 60_000 }
   })
 
   const deps = baseDeps({
@@ -670,9 +670,9 @@ test('migrateActiveProfileIfMissing leaves a still-correct heuristic pin alone',
 
   const fs = makeFs({
     '/cfg/active-profile.json': { content: '{"profile":"work","_migrated":true}' },
-    '/home/u/.clawk/profiles/work': { dir: true },
-    '/home/u/.clawk/state.db': { size: 5 * 1024 * 1024, mtime: NOW - 86_400_000 },
-    '/home/u/.clawk/profiles/work/state.db': { size: 200 * 1024 * 1024, mtime: NOW - 86_400_000 }
+    '/home/u/.clawksis/profiles/work': { dir: true },
+    '/home/u/.clawksis/state.db': { size: 5 * 1024 * 1024, mtime: NOW - 86_400_000 },
+    '/home/u/.clawksis/profiles/work/state.db': { size: 200 * 1024 * 1024, mtime: NOW - 86_400_000 }
   })
 
   const deps = baseDeps({

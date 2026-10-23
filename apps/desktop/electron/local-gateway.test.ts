@@ -14,11 +14,11 @@ test('the ensure client inherits the caller-scrubbed parent env, not the raw Des
   const result = await runGatewayEnsure(
     { command: process.execPath, args: printEnv, env: { OWN: '1' }, shell: false },
     process.cwd(),
-    '/home/x/.clawk',
+    '/home/x/.clawksis',
     { PATH: process.env.PATH ?? '', OWN: '0' }
   )
 
-  expect(JSON.parse(result.stdout)).toEqual({ leak: null, home: '/home/x/.clawk', own: '1' })
+  expect(JSON.parse(result.stdout)).toEqual({ leak: null, home: '/home/x/.clawksis', own: '1' })
 })
 
 test('a shell-delegated ensure quotes a spaced Windows install path (#74064)', async () => {

@@ -237,7 +237,7 @@ class OwnerProcess:
 def home(tmp_path: Path) -> Path:
     home = tmp_path / "home"
     # The model is never called: the launcher hands off to the TUI stand-in before any turn.
-    write_home(home / ".clawk", "http://127.0.0.1:9/v1", api_key=canary("unused-key"))
+    write_home(home / ".clawksis", "http://127.0.0.1:9/v1", api_key=canary("unused-key"))
     probe = tmp_path / "tui-probe" / "dist"
     probe.mkdir(parents=True)
     (probe / "entry.js").write_text(PROBE_ENTRY, encoding="utf-8")

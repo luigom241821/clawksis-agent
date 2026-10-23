@@ -206,7 +206,7 @@ def test_mcp_server_runs_on_the_managed_node_and_an_abi_mismatch_names_the_rebui
     managed = user["marker"].read_text(encoding="utf-8").split()[0] if user["marker"].exists() else ""
     assert I.TRACEBACK not in out, I.describe(probe)
     assert not ran_js, f"the user's node ({USER_NODE_VERSION}) ran the MCP server instead of Clawksis's: {ran_js}"
-    assert managed.startswith(str(sb.home / ".clawk")), (
+    assert managed.startswith(str(sb.home / ".clawksis")), (
         f"the MCP server did not run on Clawksis's managed node (ran on {managed!r}):\n" + I.describe(probe))
     assert probe.returncode == 1, "`clawk mcp test` passed for a server that died at startup:\n" + I.describe(probe)
     # The failure reaches the user with the remedy: drop the npx entry, or rebuild with Clawksis's own npm

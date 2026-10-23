@@ -50,7 +50,7 @@ import { displayRequest, isEventForBotScreen, resolveScreenWsUrl } from './scree
 
 const bot = { name: 'ops' } as RosterRow
 const orphan = { name: 'ops', remoteSource: true } as RosterRow
-const key = '/home/clawk/.clawk'
+const key = '/home/clawk/.clawksis'
 
 describe('isEventForBotScreen', () => {
   it('ignores a same-profile-path event that arrived from another host', () => {

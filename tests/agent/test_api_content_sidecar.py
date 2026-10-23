@@ -469,9 +469,9 @@ def wire_env():
     t.start()
 
     test_home = tempfile.mkdtemp(prefix="clawk_api_content_")
-    os.makedirs(os.path.join(test_home, ".clawk"))
+    os.makedirs(os.path.join(test_home, ".clawksis"))
     prev_home = os.environ.get("CLAWK_HOME")
-    os.environ["CLAWK_HOME"] = os.path.join(test_home, ".clawk")
+    os.environ["CLAWK_HOME"] = os.path.join(test_home, ".clawksis")
 
     from run_agent import AIAgent
 

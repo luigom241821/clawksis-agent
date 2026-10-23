@@ -183,7 +183,7 @@ describe('GatewayClient websocket attach mode', () => {
     delete process.env.CLAWK_TUI_GATEWAY_URL
     delete process.env.CLAWK_TUI_SIDECAR_URL
     const gw = new GatewayClient(async () => ({
-      url: 'ws://127.0.0.1:9/api/ws?token=secret', protocols: [], instance_id: 'owner-1', profile_id: '/home/u/.clawk/profiles/work'
+      url: 'ws://127.0.0.1:9/api/ws?token=secret', protocols: [], instance_id: 'owner-1', profile_id: '/home/u/.clawksis/profiles/work'
     }))
 
     try {
@@ -191,7 +191,7 @@ describe('GatewayClient websocket attach mode', () => {
       await vi.advanceTimersByTimeAsync(0)
       const tail = gw.getLogTail(20)
       expect(tail).toMatch(/^\[lifecycle\] attached shared gateway /m)
-      expect(tail).toContain('profile=/home/u/.clawk/profiles/work')
+      expect(tail).toContain('profile=/home/u/.clawksis/profiles/work')
       expect(tail).toContain('instance=owner-1')
       expect(tail).not.toContain('secret')
     } finally {

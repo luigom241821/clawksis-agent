@@ -69,7 +69,7 @@ class Layout:
 
     def __post_init__(self) -> None:
         self.home, self.out = self.root / "home", self.root / "outside"
-        self.ws, self.hh = self.home / "work", self.home / ".clawk"
+        self.ws, self.hh = self.home / "work", self.home / ".clawksis"
         for d in (self.ws, self.out, self.hh, self.home / ".ssh"):
             d.mkdir(parents=True, exist_ok=True)
 

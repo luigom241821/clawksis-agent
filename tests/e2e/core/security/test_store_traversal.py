@@ -127,7 +127,7 @@ def store(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Store]:
                                          "content": _skill_md(f"staged-skill-{i}", t)})
                for i, t in enumerate(skill_texts)]
     with FakeLLMServer([*script, Text("staged")], api_key=key) as srv:
-        H.write_home(home / ".clawk", srv.base_url, api_key=key, config=_STORE_CONFIG)
+        H.write_home(home / ".clawksis", srv.base_url, api_key=key, config=_STORE_CONFIG)
         b = TuiBackend(home, root / "tui.log")
         try:
             sid = b.ok("session.create", {})["session_id"]
@@ -135,7 +135,7 @@ def store(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Store]:
             staged = _tool_results(srv)
             assert len(staged) == 5 and all(r.get("staged") for r in staged), f"writes were not staged: {staged}"
             ids = [r["pending_id"] for r in staged]
-            s = Store(b, sid, home / ".clawk", outside, ids[:3], memory_texts, ids[3:], skill_texts)
+            s = Store(b, sid, home / ".clawksis", outside, ids[:3], memory_texts, ids[3:], skill_texts)
             assert s.pending_ids("memory") == set(ids[:3]) and s.pending_ids("skills") == set(ids[3:]), \
                 f"pending store on disk does not match the staged ids: {sorted((s.clawk_home / 'pending').rglob('*'))}"
             yield s
@@ -221,14 +221,14 @@ _DELETE_STEPS: tuple[tuple[str, str, str], ...] = (
 def deletes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[DeleteRun]:
     root = tmp_path_factory.mktemp("deletes")
     home = root / "home"
-    skills = home / ".clawk" / "skills"
+    skills = home / ".clawksis" / "skills"
     for rel in ("research/my-skill", "research/free-skill", "research/spare-skill", "autonomous-ai-agents/clawksis-agent"):
         (skills / rel).mkdir(parents=True)
         (skills / rel / "SKILL.md").write_text(_skill_md(rel.rsplit("/", 1)[1]), encoding="utf-8")
     key = H.canary("sk-delete")
     run = DeleteRun()
     with FakeLLMServer([], api_key=key) as srv:
-        H.write_home(home / ".clawk", srv.base_url, api_key=key)
+        H.write_home(home / ".clawksis", srv.base_url, api_key=key)
         pin = H.run_clawk(["curator", "pin", "my-skill"], home, timeout=90)
         assert pin.returncode == 0, f"clawk curator pin failed: {pin.stdout}\n{pin.stderr[-2000:]}"
         b = TuiBackend(home, root / "tui.log")

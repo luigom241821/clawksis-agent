@@ -302,7 +302,7 @@ def test_desktop_ssh_backend_spawn_shape_is_desktop_owned(monkeypatch):
     monkeypatch.setenv("CLAWK_DESKTOP", "1")
     monkeypatch.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)
     ssh_argv = ["serve", "--isolated", "--host", "127.0.0.1", "--port", "0",
-                "--ssh-session-token-file", "/home/u/.clawk/desktop-ssh/abc.token"]
+                "--ssh-session-token-file", "/home/u/.clawksis/desktop-ssh/abc.token"]
 
     assert pi.is_desktop_owned_backend(ssh_argv) is True
     monkeypatch.setattr(sys, "argv", ["clawk", *ssh_argv])

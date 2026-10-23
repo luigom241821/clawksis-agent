@@ -151,7 +151,7 @@ test('resolveStagedUpdaterBinary hands Windows the staged installer it finds', (
 })
 
 test('resolveStagedUpdaterBinary returns null off Windows even when clawk-setup is staged (#74836)', () => {
-  const home = '/Users/clawk/.clawk'
+  const home = '/Users/clawk/.clawksis'
   let probes = 0
 
   const resolved = resolveStagedUpdaterBinary(home, {
@@ -216,7 +216,7 @@ test('resolveUpdateScriptHandoff returns null when the checkout predates the scr
 })
 
 test('resolveUpdateScriptHandoff is Windows-only (POSIX updates in place)', () => {
-  const handoff = resolveUpdateScriptHandoff('/home/clawk/.clawk/clawksis-agent', {
+  const handoff = resolveUpdateScriptHandoff('/home/clawk/.clawksis/clawksis-agent', {
     isWindows: false,
     fileExists: () => true
   })
@@ -262,7 +262,7 @@ test('wrapHandoffForDetachedConsole runs the script inside a non-detached hidden
 })
 
 test('resolvePosixScriptHandoff returns the bash recipe when the script exists', () => {
-  const root = '/home/clawk/.clawk/clawksis-agent'
+  const root = '/home/clawk/.clawksis/clawksis-agent'
   const expected = path.join(root, 'scripts', 'desktop-update', 'posix.sh')
 
   const handoff = resolvePosixScriptHandoff(root, {
@@ -276,7 +276,7 @@ test('resolvePosixScriptHandoff returns the bash recipe when the script exists',
 })
 
 test('resolvePosixScriptHandoff is null when the checkout predates the script', () => {
-  const handoff = resolvePosixScriptHandoff('/home/clawk/.clawk/clawksis-agent', {
+  const handoff = resolvePosixScriptHandoff('/home/clawk/.clawksis/clawksis-agent', {
     isWindows: false,
     fileExists: () => false
   })

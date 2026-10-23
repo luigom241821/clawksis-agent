@@ -88,7 +88,7 @@ def _git(*args: str, cwd: Path, check: bool = True) -> str:
 
 
 def _real_uv() -> str | None:
-    cand = shutil.which("uv") or str(H.REAL_HOME / ".clawk" / "bin" / "uv")
+    cand = shutil.which("uv") or str(H.REAL_HOME / ".clawksis" / "bin" / "uv")
     return cand if cand and Path(cand).exists() else None
 
 

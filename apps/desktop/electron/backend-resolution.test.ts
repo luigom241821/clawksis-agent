@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createInstalledRuntimeGate } from './backend-resolution'
 
-const ROOT = '/home/u/.clawk/clawksis-agent'
+const ROOT = '/home/u/.clawksis/clawksis-agent'
 const active = { label: 'active runtime' }
 
 function gate(env: NodeJS.ProcessEnv) {

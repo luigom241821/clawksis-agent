@@ -75,7 +75,7 @@ def test_foreign_tenants_host_gateway_never_serves_this_home(tmp_path, monkeypat
 def test_own_standalone_gateway_is_not_a_multiplexer_refusing_its_restart(tmp_path, monkeypatch, gw):
     """#120871 (T1/T6 standalone fleet): argus's own host record is ours to restart."""
     fake_home = tmp_path / "fakehome"
-    own_home = fake_home / ".clawk" / "profiles" / "argus"
+    own_home = fake_home / ".clawksis" / "profiles" / "argus"
     _use_home(monkeypatch, fake_home, own_home)
     _publish_host(monkeypatch, own_home, ("argus",))
 
@@ -89,7 +89,7 @@ def test_own_standalone_gateway_is_not_a_multiplexer_refusing_its_restart(tmp_pa
 def test_satellite_served_by_same_tenants_multiplexer_is_still_refused(tmp_path, monkeypatch, gw):
     """Control: the default multiplexer of OUR tenant lists coder -> refused, hint names the owner."""
     fake_home = tmp_path / "fakehome"
-    root = fake_home / ".clawk"
+    root = fake_home / ".clawksis"
     _use_home(monkeypatch, fake_home, root / "profiles" / "coder")
     _publish_host(monkeypatch, root, ("default", "coder"))
 
@@ -109,7 +109,7 @@ def test_cron_status_restart_hint_names_the_profile_hosting_the_scheduler(tmp_pa
     from clawk_cli import cron as cron_mod
 
     fake_home = tmp_path / "fakehome"
-    own_home = fake_home / ".clawk" / "profiles" / "argus"
+    own_home = fake_home / ".clawksis" / "profiles" / "argus"
     _use_home(monkeypatch, fake_home, own_home)
     _publish_host(monkeypatch, own_home, ("argus",))
     monkeypatch.setattr(cron_mod, "_active_cron_provider_name", lambda: "builtin")

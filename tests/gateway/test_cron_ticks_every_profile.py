@@ -38,7 +38,7 @@ class _CapturedTicker:
 def isolated_profiles(tmp_path, monkeypatch):
     """A scratch HOME so profile enumeration can never read or write the live install."""
     fake_home = tmp_path / "fakehome"
-    clawk_home = fake_home / ".clawk"
+    clawk_home = fake_home / ".clawksis"
     (clawk_home / "profiles" / "secondary").mkdir(parents=True)
     # A dir is only a profile once it carries an identity marker.
     (clawk_home / "profiles" / "secondary" / "config.yaml").write_text("{}\n")

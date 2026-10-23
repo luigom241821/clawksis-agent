@@ -38,7 +38,7 @@ class TestGetSubprocessHome:
         """Host installs should not hide real ~/.ssh, ~/.gitconfig, ~/.azure, etc."""
         self._host_mode(monkeypatch)
         real_home = tmp_path / "real-home"
-        clawk_home = real_home / ".clawk" / "profiles" / "coder"
+        clawk_home = real_home / ".clawksis" / "profiles" / "coder"
         profile_home = clawk_home / "home"
         profile_home.mkdir(parents=True)
         monkeypatch.setenv("HOME", str(real_home))
@@ -51,7 +51,7 @@ class TestGetSubprocessHome:
         """A systemd system unit with no HOME at all should still get real HOME repaired."""
         self._host_mode(monkeypatch)
         real_home = tmp_path / "real-home"
-        clawk_home = real_home / ".clawk" / "profiles" / "coder"
+        clawk_home = real_home / ".clawksis" / "profiles" / "coder"
         profile_home = clawk_home / "home"
         profile_home.mkdir(parents=True)
         monkeypatch.delenv("HOME", raising=False)

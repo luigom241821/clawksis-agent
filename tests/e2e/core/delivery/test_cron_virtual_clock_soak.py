@@ -567,7 +567,7 @@ def soak_env(tmp_path, monkeypatch):
         if key.endswith("_API_KEY") or key in ("INVOCATION_ID", "CLAWK_TIMEZONE"):
             monkeypatch.delenv(key, raising=False)
     home_root = tmp_path / "home"
-    clawk_home = home_root / ".clawk"
+    clawk_home = home_root / ".clawksis"
     clawk_home.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home_root))
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))

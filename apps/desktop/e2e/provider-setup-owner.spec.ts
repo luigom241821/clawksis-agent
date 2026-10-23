@@ -267,8 +267,8 @@ test('Settings provider setup stays on its gateway/profile across A → B → A'
   const original = createSandbox('provider-owner')
   const localHome = path.join(original.root, 'local')
   const remoteHome = path.join(original.root, 'remote')
-  const sandbox: Sandbox = { ...original, clawkHome: path.join(localHome, '.clawk') }
-  const remoteClawkHome = path.join(remoteHome, '.clawk')
+  const sandbox: Sandbox = { ...original, clawkHome: path.join(localHome, '.clawksis') }
+  const remoteClawkHome = path.join(remoteHome, '.clawksis')
   const remoteProfileHome = path.join(remoteClawkHome, 'profiles', PROFILE)
   const python = pythonBinary()
   const localEnv = isolatedEnv(localHome, sandbox.clawkHome)

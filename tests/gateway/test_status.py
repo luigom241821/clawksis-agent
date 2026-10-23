@@ -818,7 +818,7 @@ class TestScopedLocks:
             "pid": 873,
             "start_time": None,
             "kind": "clawk-gateway",
-            "argv": ["/Users/user/.clawk/clawksis-agent/clawk_cli/main.py", "gateway", "run", "--replace"],
+            "argv": ["/Users/user/.clawksis/clawksis-agent/clawk_cli/main.py", "gateway", "run", "--replace"],
         }))
 
         # Post-#21561 the liveness probe routes through

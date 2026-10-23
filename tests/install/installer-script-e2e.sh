@@ -170,13 +170,13 @@ ok "serve.git main = $OLD_SHA ($INSTALL_REF), update target $TARGET_SHA ($TARGET
 arm_source_redirect "$REPO_ROOT" "$WORK_ROOT" "$SERVE_REPO"
 
 # Isolated HOME: the runner's real one may carry a preinstalled clawk or a
-# developer config, and old installer scripts hardcode $HOME/.clawk (the
+# developer config, and old installer scripts hardcode $HOME/.clawksis (the
 # CLAWK_HOME env override is newer than tags we sample). GIT_CONFIG_GLOBAL
 # above keeps working -- an explicit path wins over $HOME/.gitconfig.
 export HOME="$WORK_ROOT/home"
 mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
-export CLAWK_HOME="$HOME/.clawk"
+export CLAWK_HOME="$HOME/.clawksis"
 export CLAWK_DESKTOP_USER_DATA_DIR="$WORK_ROOT/electron-user-data"
 mkdir -p "$CLAWK_HOME"
 

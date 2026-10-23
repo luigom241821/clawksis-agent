@@ -284,7 +284,7 @@ RUN touch ./README.md
 # --cache puts uv's cache at /opt/clawksis/uv-cache, the seed path that
 # pm.packages.uv_cache_dir() merges into $CLAWK_HOME/cache/uv on first use.
 # Do not leave the cache at its default: CLAWK_HOME is not set yet in this
-# stage, so the default is /root/.clawk/cache/uv, which nothing reads. A plugin
+# stage, so the default is /root/.clawksis/cache/uv, which nothing reads. A plugin
 # install then runs with an empty cache and builds python-olm from source.
 RUN python3 -m pm.build_env --source /opt/clawksis --python /usr/local/bin/python3 \
     --cache /opt/clawksis/uv-cache \

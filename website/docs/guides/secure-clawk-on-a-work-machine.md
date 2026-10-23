@@ -64,7 +64,7 @@ Patterns are case-insensitive [fnmatch](https://docs.python.org/3/library/fnmatc
 `CLAWK_WRITE_SAFE_ROOT` restricts `write_file` and `patch` to the directory prefix(es) you list — anything outside is hard-blocked. Multiple roots are separated by `:` on Unix:
 
 ```bash
-export CLAWK_WRITE_SAFE_ROOT=/path/to/project:/home/you/.clawk
+export CLAWK_WRITE_SAFE_ROOT=/path/to/project:/home/you/.clawksis
 ```
 
 Sensitive paths inside the safe root are still blocked — pointing it at `$HOME` does not allow writing `~/.ssh/id_rsa`.
@@ -171,7 +171,7 @@ terminal:
 And in `~/.clawksis/.env`, if you want the write sandbox:
 
 ```bash
-CLAWK_WRITE_SAFE_ROOT=/path/to/project:/home/you/.clawk
+CLAWK_WRITE_SAFE_ROOT=/path/to/project:/home/you/.clawksis
 ```
 
 ## See Also

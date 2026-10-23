@@ -48,7 +48,7 @@ def _killed_mid_write(tmp_path: Path, rel: str, committed: dict[str, str] | None
     for f, text in (committed or {}).items():
         (root / f).write_text(text, encoding="utf-8")
     (root / "clawk_cli/main.py").write_text("def main():\n    print('APP_REACHED')\n    return 0\n", encoding="utf-8")
-    env = {"HOME": str(home), "CLAWK_HOME": str(home / ".clawk"), "PATH": os.environ.get("PATH", ""),
+    env = {"HOME": str(home), "CLAWK_HOME": str(home / ".clawksis"), "PATH": os.environ.get("PATH", ""),
            "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
     git_exe = shutil.which("git") or "git"
 

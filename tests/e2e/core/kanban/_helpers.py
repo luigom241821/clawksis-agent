@@ -65,7 +65,7 @@ class Board:
 
     def __post_init__(self) -> None:
         self.home = self.root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.clawk_home.mkdir(parents=True, exist_ok=True)
         (self.clawk_home / "config.yaml").write_text(
             "model:\n"

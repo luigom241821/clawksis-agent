@@ -36,7 +36,7 @@ def completion(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("CLAWK_HOME", str(home / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(home / ".clawksis"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "store"))
     source = tmp_path / "selected source"
     source.mkdir()
@@ -77,11 +77,11 @@ def completion(tmp_path, monkeypatch):
     _put(site, "selected_dependency.py", "VALUE = 'selected generation'\n")
     _put(runtime_facts_path(source).parent, "facts.json", json.dumps({
         "packages": {"venv": {"environment": str(generation)}}}))
-    _put(home / ".clawk", "config.yaml",
+    _put(home / ".clawksis", "config.yaml",
          f"_config_version: {DEFAULT_CONFIG['_config_version'] - 1}\nmodel:\n  default: retained-model\n")
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("CLAWK_", "PYTHON", "PYTEST_", "VIRTUAL_ENV", "npm_", "NPM_"))}
-    env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawk"),
+    env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawksis"),
                CLAWK_RUNTIME_DIR=str(tmp_path / "store"),
                PYTHONPATH="/obsolete/pre-pm/site-packages", PYTHONHOME="/obsolete/python",
                NPM_CONFIG_OFFLINE="true", NPM_CONFIG_CACHE=str(tmp_path / "npm-cache"))
@@ -244,7 +244,7 @@ def completion(tmp_path, monkeypatch):
     def run(fault=""):
         return subprocess.run([str(python), "-I", "-B", str(runner), str(context), str(result), fault],
                               cwd=tmp_path, env=env, capture_output=True, text=True, timeout=90, check=False)
-    return source, home / ".clawk", request, context, result, run
+    return source, home / ".clawksis", request, context, result, run
 
 
 @pytest.mark.platforms("posix")

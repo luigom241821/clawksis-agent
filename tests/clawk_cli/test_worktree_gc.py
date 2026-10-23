@@ -229,7 +229,7 @@ class TestReclaim:
         archived = list((profile_home / "archive" / "worktree-prune").rglob("NOTES.md"))
         assert archived, "untracked file must be archived under the profile home, not destroyed"
         assert archived[0].read_text() == "important scribbles\n"
-        assert not (native_home / ".clawk").exists()
+        assert not (native_home / ".clawksis").exists()
 
     def test_dry_run_changes_nothing(self, repo):
         tree, _ = _add_worktree(repo, "clawk-clean")

@@ -156,8 +156,8 @@ def catalog_cap(finding: Finding) -> Optional[str]:
 # ``..``, nothing chained. Documented shapes: ``plugins/<name>`` / ``skills/<name>``, a profile-scoped
 # ``profiles/<profile>/{plugins,roles,...}/<name>``, ``desktop-plugins/<name>``, and the plugin's own
 # data dir ``~/.clawksis/<name>`` — and up to a few such operands on one line (``rm -rf ~/.clawksis/profiles/N/plugins/crew
-# ~/.clawksis/profiles/N/roles/crew``). It lands at medium (a note). A wider target (``$HOME``, ``$HOME/.clawk``,
-# ``$HOME/.clawk/plugins/*``) only gets the generic prose step (high, caution) and the same line in a ``.sh``
+# ~/.clawksis/profiles/N/roles/crew``). It lands at medium (a note). A wider target (``$HOME``, ``$HOME/.clawksis``,
+# ``$HOME/.clawksis/plugins/*``) only gets the generic prose step (high, caution) and the same line in a ``.sh``
 # stays critical (#115353).
 _UNINSTALL_HOME = r'(?:\$HOME|\$\{HOME\}|~)/\.clawk'
 

@@ -1007,7 +1007,7 @@ class TestLifecycleGuardModule:
 
     def test_python_script_with_pathlib_division_not_blocked(self, tmp_path):
         """#77131: a .py cron script using pathlib division (Path.home() /
-        ".clawk") must NOT be blocked.
+        ".clawksis") must NOT be blocked.
 
         Before the fix, the shell-script reference walk tokenized Python
         sources and treated pathlib's bare "/" operator as an executable
@@ -1021,7 +1021,7 @@ class TestLifecycleGuardModule:
         script = tmp_path / "digest.py"
         script.write_text(
             "from pathlib import Path\n"
-            'ENV = Path.home() / ".clawk" / ".env"\n'
+            'ENV = Path.home() / ".clawksis" / ".env"\n'
             'print("digest ok")\n'
         )
         check_gateway_lifecycle("clean prompt", str(script))
@@ -1751,7 +1751,7 @@ class TestLifecycleGuardDataArgumentExemption:
         "'systemctl stop clawk-gateway'\"",
         # grep/rg pattern arguments hunting for the lifecycle string.
         "grep -c 'systemctl restart clawk-gateway' /var/log/syslog",
-        "rg 'clawk gateway restart' /home/user/.clawk/logs/",
+        "rg 'clawk gateway restart' /home/user/.clawksis/logs/",
         "journalctl -u clawk-gateway --grep 'systemctl restart clawk-gateway'",
         # SQL with stop/restart column/value words but no command shape.
         'sqlite3 stats.db "SELECT stop_time, restart_reason FROM '

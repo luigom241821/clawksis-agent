@@ -83,7 +83,7 @@ def locked_project(tmp_path):
     config.mkdir()
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("UV_", "PYTHON")) and key != "VIRTUAL_ENV"}
-    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home / ".clawk"),
+    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(home / ".clawksis"),
                XDG_CONFIG_HOME=str(config), XDG_CONFIG_DIRS=str(config),
                UV_CACHE_DIR=str(tmp_path / "cache"), UV_PYTHON=sys.executable, UV_OFFLINE="1")
     _run([uv, "lock", "--python", sys.executable], cwd=source, env=env)

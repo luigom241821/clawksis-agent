@@ -30,7 +30,7 @@ $RealUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 
 function Find-RealPython {
   $cands = @(
-    (Join-Path $env:USERPROFILE '.clawk\clawksis-agent\venv\Scripts\python.exe')
+    (Join-Path $env:USERPROFILE '.clawksis\clawksis-agent\venv\Scripts\python.exe')
   )
   if ($Checkout) {
     $cands += (Join-Path $Checkout '.venv\Scripts\python.exe')
@@ -99,7 +99,7 @@ $env:USERPROFILE = Join-Path $Root 'home'
 New-Item -ItemType Directory -Force -Path $env:USERPROFILE | Out-Null
 $env:GIT_CONFIG_GLOBAL = Join-Path $Root 'gitconfig-test'
 Set-Content -LiteralPath $env:GIT_CONFIG_GLOBAL -Value @()
-$env:CLAWK_HOME = Join-Path $env:USERPROFILE '.clawk'
+$env:CLAWK_HOME = Join-Path $env:USERPROFILE '.clawksis'
 $env:CLAWK_DESKTOP_USER_DATA_DIR = Join-Path $Root 'electron-user-data'
 Remove-Item Env:\CLAWK_DATA_DIR_SUFFIX -ErrorAction SilentlyContinue
 

@@ -85,7 +85,7 @@ const bot: RosterRow = { name: 'default' }
 // which is what makes this viewer the lease holder (`iHold`) and puts `client.viewOnly = false`.
 const status: DisplayStatus = {
   profile: 'default',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: true,
   missing: [],

@@ -57,7 +57,7 @@ describe("fetchJSON error contract", () => {
       detail: {
         error: "state_db_corrupt",
         message: "state.db corrupt — run `clawk doctor` (then `clawk doctor --fix` or `clawk sessions repair`).",
-        path: "/home/u/.clawk/state.db",
+        path: "/home/u/.clawksis/state.db",
       },
     };
     vi.stubGlobal(

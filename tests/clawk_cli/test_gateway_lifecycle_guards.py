@@ -199,7 +199,7 @@ def test_sudo_system_stop_checks_the_units_home_not_roots(tmp_path, monkeypatch,
     runs the invoking user's home. The live-work check must ask the unit's home, without adopting it."""
     import clawk_constants
     root_home, user_home = tmp_path / "root", tmp_path / "user" / ".clawk"
-    (root_home / ".clawk").mkdir(parents=True)
+    (root_home / ".clawksis").mkdir(parents=True)
     user_home.mkdir(parents=True)
     _unit(tmp_path / "systemd" / "clawk-gateway.service", user_home)
     monkeypatch.setattr(gw, "_SYSTEM_UNIT_DIR", tmp_path / "systemd")

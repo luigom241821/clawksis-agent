@@ -125,7 +125,7 @@ describe('task attachment compatibility', () => {
     setApiRequestConnection('local')
     detail = {
       ...legacyDetail,
-      attachments: [{ id: 7, filename: 'notes.txt', stored_path: '/home/me/.clawk/kanban/notes.txt' }]
+      attachments: [{ id: 7, filename: 'notes.txt', stored_path: '/home/me/.clawksis/kanban/notes.txt' }]
     }
     openDrawer()
     const download = await screen.findByRole('button', { name: 'Download notes.txt' })
@@ -134,7 +134,7 @@ describe('task attachment compatibility', () => {
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith({
         connectionId: 'local',
-        path: '/home/me/.clawk/kanban/notes.txt',
+        path: '/home/me/.clawksis/kanban/notes.txt',
         suggestedName: 'notes.txt'
       })
     )
@@ -273,7 +273,7 @@ describe('task modal dialog', () => {
   })
 
   it('shows the workspace path as its own value, not prefixed with the raw kind', async () => {
-    const path = '/Users/example/.clawk/kanban/workspaces/a_very_long_directory_name_that_must_wrap'
+    const path = '/Users/example/.clawksis/kanban/workspaces/a_very_long_directory_name_that_must_wrap'
     detail = {
       ...legacyDetail,
       attachments: [],

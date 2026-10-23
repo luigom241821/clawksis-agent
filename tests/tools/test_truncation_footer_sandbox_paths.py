@@ -27,7 +27,7 @@ def test_truncation_footers_render_the_sandbox_visible_cache_path(tmp_path, monk
 
     for text, subdir in ((web_out, "cache/web"), (snap_out, "cache/web"), (deleg_out, "cache/delegation")):
         path = _footer_path(text)
-        assert path.startswith(f"/root/.clawk/{subdir}/"), path
+        assert path.startswith(f"/root/.clawksis/{subdir}/"), path
         # The bytes still live on the host under CLAWK_HOME; only the rendered path is translated.
         assert os.path.exists(str(home / subdir / os.path.basename(path)))
 

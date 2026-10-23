@@ -94,7 +94,7 @@ class Backend:
                  aux=None) -> None:
         self.root = root
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         self.llm = FakeLLMServer(responder, aux=aux)
         self.extra_config = extra_config
         self.extra_env = env or {}

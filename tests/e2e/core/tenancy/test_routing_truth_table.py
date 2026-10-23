@@ -276,13 +276,13 @@ def _run_case(case: Case, root: Path) -> tuple[Fleet, list[LegOutcome]]:
         home = root / case.id / "home"
         config, env = base_config(fleet)
         auth = case.setup(config, env, fleet)
-        write_home(home / ".clawk", config, env, auth)
+        write_home(home / ".clawksis", config, env, auth)
         for name, (pconfig, penv) in case.profiles(fleet).items():
-            write_home(home / ".clawk" / "profiles" / name, pconfig, penv)
+            write_home(home / ".clawksis" / "profiles" / name, pconfig, penv)
         outcomes = []
         for leg in case.legs:
             marks, egress_mark = fleet.marks(), len(trap.attempts)
-            clawk_home = home / ".clawk" / "profiles" / leg.profile if leg.profile else None
+            clawk_home = home / ".clawksis" / "profiles" / leg.profile if leg.profile else None
             run = run_clawk(leg.argv, home, clawk_home=clawk_home, proxy=trap.url, timeout=leg.timeout)
             outcomes.append(LegOutcome(leg, run, fleet.since(marks), trap.attempts[egress_mark:]))
         return fleet, outcomes
@@ -357,7 +357,7 @@ def test_tui_gateway_model_switch_routing(tmp_path: Path, request: pytest.Fixtur
         "model": MODEL_ID, "provider": "anthropic", "base_url": fleet.url("alias")}  # id the host lists
     pool_state = {"fail": False}
     fleet.script("pool", lambda _r: Error(429, "scripted pool exhaustion") if pool_state["fail"] else None)
-    write_home(home / ".clawk", config, env, pool_auth("pool-host", fleet.keys["pool"]))
+    write_home(home / ".clawksis", config, env, pool_auth("pool-host", fleet.keys["pool"]))
     gw = TuiGateway(home, proxy=trap.url)
     try:
         gw.wait(gw.event("gateway.ready"), timeout=120)

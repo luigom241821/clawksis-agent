@@ -61,14 +61,14 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
            if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES)) and k not in _DROP}
     env.update(
         HOME=str(home),
-        CLAWK_HOME=str(home / ".clawk"),
+        CLAWK_HOME=str(home / ".clawksis"),
         XDG_STATE_HOME=str(home / ".local" / "state"),
         PYTHONPATH=str(REPO_ROOT),
         NO_COLOR="1",
         TERM="dumb",
         NO_PROXY="127.0.0.1,localhost",
         no_proxy="127.0.0.1,localhost",
-        # the live-DB guard treats $HOME/.clawk/state.db of a pytest descendant as production;
+        # the live-DB guard treats $HOME/.clawksis/state.db of a pytest descendant as production;
         # this HOME is the test's own tmp dir (asserted above).
         CLAWK_STATE_DB_GUARD_BYPASS="1",
         CLAWK_ACCEPT_HOOKS="1",

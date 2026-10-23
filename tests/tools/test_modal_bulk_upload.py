@@ -145,7 +145,7 @@ class TestModalBulkUpload:
 
         src = tmp_path / "large.bin"
         src.write_bytes(_os.urandom(1024 * 1024 + 512 * 1024))
-        files = [(str(src), "/root/.clawk/large.bin")]
+        files = [(str(src), "/root/.clawksis/large.bin")]
 
         _exec_calls, _, stdin_mock = _wire_async_exec(env)
         env._modal_bulk_upload(files)

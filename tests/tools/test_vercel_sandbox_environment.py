@@ -296,7 +296,7 @@ class TestFileSync:
             lambda: [
                 {
                     "host_path": str(src),
-                    "container_path": "/root/.clawk/credentials/token.txt",
+                    "container_path": "/root/.clawksis/credentials/token.txt",
                 }
             ],
         )
@@ -308,7 +308,7 @@ class TestFileSync:
         uploaded = vercel_sdk.current.write_files_calls[0]
         assert uploaded == [
             {
-                "path": "/home/vercel/.clawk/credentials/token.txt",
+                "path": "/home/vercel/.clawksis/credentials/token.txt",
                 "content": b"secret-token",
             }
         ]
@@ -323,7 +323,7 @@ class TestFileSync:
             lambda: [
                 {
                     "host_path": str(src),
-                    "container_path": "/root/.clawk/credentials/token.txt",
+                    "container_path": "/root/.clawksis/credentials/token.txt",
                 }
             ],
         )
@@ -341,7 +341,7 @@ class TestFileSync:
         assert result["returncode"] == 0
         assert vercel_sdk.current.write_files_calls[-1] == [
             {
-                "path": "/home/vercel/.clawk/credentials/token.txt",
+                "path": "/home/vercel/.clawksis/credentials/token.txt",
                 "content": b"updated-secret-token",
             }
         ]
@@ -358,7 +358,7 @@ class TestFileSync:
             lambda: [
                 {
                     "host_path": str(src),
-                    "container_path": "/root/.clawk/credentials/token.txt",
+                    "container_path": "/root/.clawksis/credentials/token.txt",
                 }
             ],
         )
@@ -412,7 +412,7 @@ class TestFileSync:
             lambda: [
                 {
                     "host_path": str(src),
-                    "container_path": "/root/.clawk/credentials/token.txt",
+                    "container_path": "/root/.clawksis/credentials/token.txt",
                 }
             ],
         )

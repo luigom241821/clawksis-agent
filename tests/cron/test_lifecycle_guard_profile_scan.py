@@ -41,7 +41,7 @@ def test_nonmatching_flag_runs_finish():
 from cron import lifecycle_guard as guard
 
 for command in (
-    "rclone lsf $HOME/.clawk --recursive --files-only " + "--exclude " * 58,
+    "rclone lsf $HOME/.clawksis --recursive --files-only " + "--exclude " * 58,
     "clawk " + "--quiet " * 1000,
     "clawk -p default " + "--quiet " * 1000 + "gateway status",
     "clawk " + ("--option" + " " * 100 + "value " ) * 58,

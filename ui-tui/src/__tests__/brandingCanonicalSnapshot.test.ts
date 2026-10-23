@@ -29,7 +29,7 @@ const snapshot = {
       { connected: false, disabled: true, name: 'linear', status: 'disabled', tools: 0, transport: 'stdio' }
     ],
     model: 'anthropic/claude-opus-5.5',
-    profile_id: '/home/u/.clawk',
+    profile_id: '/home/u/.clawksis',
     profile_name: 'default',
     provider: 'nous',
     reasoning_effort: 'high',

@@ -24,7 +24,7 @@ def tmp_files(tmp_path):
     return files
 
 
-def _make_get_files(tmp_files, remote_base="/root/.clawk"):
+def _make_get_files(tmp_files, remote_base="/root/.clawksis"):
     """Return a get_files_fn that maps local files to remote paths."""
     mapping = [(hp, f"{remote_base}/{name}") for name, hp in tmp_files.items()]
 
@@ -34,7 +34,7 @@ def _make_get_files(tmp_files, remote_base="/root/.clawk"):
     return get_files
 
 
-def _make_manager(tmp_files, remote_base="/root/.clawk", upload=None, delete=None):
+def _make_manager(tmp_files, remote_base="/root/.clawksis", upload=None, delete=None):
     """Create a FileSyncManager with test callbacks."""
     return FileSyncManager(
         get_files_fn=_make_get_files(tmp_files, remote_base),
@@ -80,7 +80,7 @@ class TestMtimeSkip:
             uploaded.extend(Path(staged).read_text(encoding="utf-8") for staged, _remote in files)
 
         mgr = FileSyncManager(
-            get_files_fn=lambda: [(str(token), "/root/.clawk/token.json")],
+            get_files_fn=lambda: [(str(token), "/root/.clawksis/token.json")],
             upload_fn=MagicMock(),
             delete_fn=MagicMock(),
             bulk_upload_fn=bulk_upload,
@@ -107,7 +107,7 @@ class TestMtimeSkip:
             uploaded.extend(Path(staged).read_text(encoding="utf-8") for staged, _remote in files)
 
         mgr = FileSyncManager(
-            get_files_fn=lambda: [(str(token), "/root/.clawk/token.json")],
+            get_files_fn=lambda: [(str(token), "/root/.clawksis/token.json")],
             upload_fn=MagicMock(),
             delete_fn=MagicMock(),
             bulk_upload_fn=bulk_upload,
@@ -321,7 +321,7 @@ class TestEdgeCases:
 
         upload = MagicMock()
         mgr = FileSyncManager(
-            get_files_fn=lambda: [(str(f), "/root/.clawk/ephemeral.txt")],
+            get_files_fn=lambda: [(str(f), "/root/.clawksis/ephemeral.txt")],
             upload_fn=upload,
             delete_fn=MagicMock(),
         )
@@ -347,12 +347,12 @@ class TestConcurrency:
 
         def get_files():
             return [
-                (str(path), f"/root/.clawk/cache/images/{path.name}")
+                (str(path), f"/root/.clawksis/cache/images/{path.name}")
                 for path in sorted(tmp_path.glob("*.png"))
             ]
 
         def upload(_host_path, remote_path):
-            if remote_path == f"/root/.clawk/cache/images/{new_file.name}":
+            if remote_path == f"/root/.clawksis/cache/images/{new_file.name}":
                 upload_started.set()
                 sync_back_transport_started.wait(timeout=1.0)
                 release_upload.set()
@@ -400,13 +400,13 @@ class TestSyncBackSecurity:
             lambda: [
                 {
                     "host_path": str(credential),
-                    "container_path": "/root/.clawk/credentials/token.json",
+                    "container_path": "/root/.clawksis/credentials/token.json",
                 }
             ],
         )
         monkeypatch.setattr(
             "tools.credential_files.iter_skills_files",
-            lambda container_base="/root/.clawk": [
+            lambda container_base="/root/.clawksis": [
                 {
                     "host_path": str(skill),
                     "container_path": f"{container_base}/skills/skill.py",
@@ -415,7 +415,7 @@ class TestSyncBackSecurity:
         )
         monkeypatch.setattr(
             "tools.credential_files.iter_cache_files",
-            lambda container_base="/root/.clawk": [],
+            lambda container_base="/root/.clawksis": [],
         )
 
         def bulk_download(dest: Path) -> None:
@@ -429,7 +429,7 @@ class TestSyncBackSecurity:
                     tar.addfile(info, io.BytesIO(data))
 
         mgr = FileSyncManager(
-            get_files_fn=lambda: iter_sync_files("/root/.clawk"),
+            get_files_fn=lambda: iter_sync_files("/root/.clawksis"),
             upload_fn=MagicMock(),
             delete_fn=MagicMock(),
             bulk_download_fn=bulk_download,

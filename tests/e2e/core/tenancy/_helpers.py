@@ -55,7 +55,7 @@ def real_user_home() -> Path:
 def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
     """Child env: fake HOME (profile root anchor) + CLAWK_HOME under it, nothing credential-shaped."""
     home = home.resolve()
-    assert home != real_user_home() and home / ".clawk" != real_user_home() / ".clawk", home
+    assert home != real_user_home() and home / ".clawksis" != real_user_home() / ".clawk", home
     env = {k: v for k, v in os.environ.items()
            if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))}
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy", "XDG_STATE_HOME",
@@ -66,14 +66,14 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
         env.pop(var, None)
     env.update(
         HOME=str(home),
-        CLAWK_HOME=str(home / ".clawk"),
+        CLAWK_HOME=str(home / ".clawksis"),
         XDG_STATE_HOME=str(home / ".local" / "state"),
         PYTHONPATH=str(REPO_ROOT),
         NO_COLOR="1",
         TERM="dumb",
         NO_PROXY="127.0.0.1,localhost",
         no_proxy="127.0.0.1,localhost",
-        # The live-DB guard treats $HOME/.clawk/state.db of a pytest descendant as production;
+        # The live-DB guard treats $HOME/.clawksis/state.db of a pytest descendant as production;
         # this HOME is the test's own tmp dir (asserted above).
         CLAWK_STATE_DB_GUARD_BYPASS="1",
         CLAWK_ACCEPT_HOOKS="1",

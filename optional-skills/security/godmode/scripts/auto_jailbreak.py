@@ -43,7 +43,7 @@ try:
 except NameError:
     # __file__ not defined when loaded via exec() — search standard paths
     _SKILL_DIR = (
-        Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+        Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
         / "skills"
         / "security"
         / "godmode"
@@ -75,7 +75,7 @@ if _race_path.exists():
 # Clawksis config paths
 # ═══════════════════════════════════════════════════════════════════
 
-CLAWK_HOME = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+CLAWK_HOME = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
 CONFIG_PATH = CLAWK_HOME / "config.yaml"
 PREFILL_PATH = CLAWK_HOME / "prefill.json"
 

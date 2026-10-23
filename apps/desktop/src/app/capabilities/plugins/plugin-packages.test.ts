@@ -48,7 +48,7 @@ describe('mergePluginPackages', () => {
         agent({
           name: 'subscription-meter',
           has_desktop_half: true,
-          install_dir: '/home/u/.clawk/plugins/clawk-subscription-meter'
+          install_dir: '/home/u/.clawksis/plugins/clawk-subscription-meter'
         })
       ]
     )
@@ -85,7 +85,7 @@ describe('mergePluginPackages', () => {
           name: 'Clawksis Talk',
           description: 'GPT-Live subscription or explicit API voice, with Clawksis task delegation.',
           packageName: 'clawk-talk',
-          file: '/Users/me/.clawk/desktop-plugins/clawk-talk/plugin.js'
+          file: '/Users/me/.clawksis/desktop-plugins/clawk-talk/plugin.js'
         })
       ],
       [agent({ name: 'clawk-talk', has_desktop_half: true, version: '0.21.0' })]
@@ -109,7 +109,7 @@ describe('mergePluginPackages', () => {
         desktop({
           id: 'clawk-talk',
           name: 'Clawksis Talk',
-          file: '/Users/me/.clawk/desktop-plugins/clawk-talk/plugin.js'
+          file: '/Users/me/.clawksis/desktop-plugins/clawk-talk/plugin.js'
         })
       ],
       [agent({ name: 'clawk-talk', has_desktop_half: true })]
@@ -123,7 +123,7 @@ describe('mergePluginPackages', () => {
 
   it('leaves a same-named standalone desktop plugin alone when the agent package has no desktop half', () => {
     const rows = mergePluginPackages(
-      [desktop({ id: 'clock', name: 'Clock', file: '/Users/me/.clawk/desktop-plugins/clock/plugin.js' })],
+      [desktop({ id: 'clock', name: 'Clock', file: '/Users/me/.clawksis/desktop-plugins/clock/plugin.js' })],
       [agent({ name: 'clock' })]
     )
 

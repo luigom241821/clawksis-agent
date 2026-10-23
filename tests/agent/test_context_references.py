@@ -405,7 +405,7 @@ def test_binary_reference_block_maps_host_attachment_to_container_path(tmp_path:
 
     assert result.expanded
     # Default container base for the docker backend is /root/.clawk.
-    assert "/root/.clawk/attachments/archive.zip" in result.message
+    assert "/root/.clawksis/attachments/archive.zip" in result.message
     assert "binary file, not inlined" in result.message
 
 
@@ -432,7 +432,7 @@ def test_oversized_text_reference_maps_host_attachment_to_container_path(
     assert result.expanded
     assert not result.blocked
     attached_context = result.message.split("--- Attached Context ---", 1)[1]
-    assert "/root/.clawk/attachments/large.txt" in attached_context
+    assert "/root/.clawksis/attachments/large.txt" in attached_context
     assert "too large to inline safely" in result.message
 
 
@@ -457,7 +457,7 @@ def test_binary_reference_block_keeps_host_path_on_local_backend(tmp_path: Path,
 
     assert result.expanded
     assert str(payload) in result.message
-    assert "/root/.clawk/attachments/" not in result.message
+    assert "/root/.clawksis/attachments/" not in result.message
 
 
 # ── Gateway container + Remote SSH execution backend (#110174) ───────────────

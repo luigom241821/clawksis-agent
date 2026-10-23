@@ -38,7 +38,7 @@ vi.mock('@/clawk', () => ({
 const RUNTIME_ID = 'runtime-tile'
 const STORED_ID = 'stored-tile'
 const HOST_PATH = 'C:\\Users\\alice\\Pictures\\photo.png'
-const STAGED_PATH = '/root/.clawk/attachments/photo.png'
+const STAGED_PATH = '/root/.clawksis/attachments/photo.png'
 const THUMBNAIL = 'data:image/png;base64,dGh1bWJuYWls'
 const FULL_SOURCE = 'data:image/png;base64,b3JpZ2luYWw='
 

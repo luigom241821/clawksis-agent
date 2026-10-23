@@ -27,7 +27,7 @@ import pytest
 
 def _real_clawk_home() -> Path:
     """Where the operator's logs live, ignoring any test sandboxing."""
-    return Path.home() / ".clawk"
+    return Path.home() / ".clawksis"
 
 
 def _all_file_destinations() -> list[str]:

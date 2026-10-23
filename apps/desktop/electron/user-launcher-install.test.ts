@@ -49,12 +49,12 @@ test.skipIf(process.platform === 'win32')(
       vi.stubEnv('HOME', home)
       vi.stubEnv('PATH', '/usr/bin:/bin:/usr/sbin:/sbin')
 
-      const found = userLauncherInstallRoot(false, path.join(home, '.clawk'))
+      const found = userLauncherInstallRoot(false, path.join(home, '.clawksis'))
       assert.deepEqual(found, { launcher, root })
 
       const backend = await resolveSourceInstallationBackend(root, ['serve'], {
         isWindows: false,
-        clawkHome: path.join(home, '.clawk')
+        clawkHome: path.join(home, '.clawksis')
       })
 
       assert.equal(backend?.command, launcher)
@@ -71,7 +71,7 @@ test('a user-bin launcher is ignored when it reports no Clawksis source tree', (
 
   try {
     const home: string = path.join(base, 'home')
-    const clawkHome: string = path.join(home, '.clawk')
+    const clawkHome: string = path.join(home, '.clawksis')
     const notSource: string = path.join(base, 'elsewhere')
     fs.mkdirSync(notSource)
     publishLauncher(path.join(clawkHome, 'bin'), notSource)

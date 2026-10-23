@@ -135,6 +135,36 @@ CONTENT_MAP = [
 # rebrandea; solo los nombres de modelo Herme quedan intactos.
 _MODEL_ID_RE = re.compile(r"(?:nousresearch/)?[Hh]ermes[ _-]?[34][\w.\-]*")
 
+# Carpeta HOME del usuario: en el fork es ``~/.clawksis``. El blanket
+# hermes->clawk de CONTENT_MAP la convertiria en ``.clawk`` (que si es el nombre
+# correcto para la config LOCAL de un proyecto: ``<repo>/.clawk/skills``,
+# ``.clawk.md``). Estas reglas detectan los contextos inequivocos de HOME y los
+# mapean a ``.clawksis`` antes del blanket. ``{old}`` es el nombre de origen.
+_HOME_CTX = [
+    # Path.home() / ".hermes"
+    r"(Path\.home\(\)\s*/\s*)([\"']){old}\2",
+    # <algo>home<algo> / ".hermes"  (fake_home, tmp_home, home, real_home ...)
+    r"(\b\w*[Hh][Oo][Mm][Ee]\w*\)?\s*/\s*)([\"']){old}\2",
+    # join(homedir(), '.hermes') / join(home, ".hermes") / expanduser("~"), ".hermes"
+    r"(\b\w*(?:[Hh]ome(?:[Dd]ir)?|expanduser)\w*(?:\([^()]*\))?\s*,\s*)([\"']){old}\2",
+    # process.env.HOME || '~', '.hermes'
+    r"(process\.env\.HOME[^,;\n]{0,20},\s*)([\"']){old}\2",
+    # $HOME/.hermes, ${HOME}/.hermes, %USERPROFILE%\.hermes, $env:USERPROFILE '.hermes
+    r"((?:\$\{?HOME\}?|%USERPROFILE%|\$env:USERPROFILE|\$HOME)[/\\\s']+)(){old}(?=[/\\'\"\s`)]|$)",
+    # /root/.hermes, /home/<user>/.hermes, /Users/<user>/.hermes, C:\\Users\\x\\.hermes
+    r"((?:/root|/home/[\w.-]+|/Users/[\w.-]+)/)(){old}(?=[/'\"\s`)]|$)",
+]
+
+
+def home_fix(text: str, old: str = ".hermes", new: str = ".clawksis") -> str:
+    """Mapea la carpeta HOME ``old`` -> ``new`` solo en contextos de HOME."""
+    esc = re.escape(old)
+    for pat in _HOME_CTX:
+        rx = re.compile(pat.replace("{old}", esc) + r"(?![\w.-])")
+        text = rx.sub(lambda m: m.group(1) + m.group(2) + new + m.group(2), text)
+    return text
+
+
 # Solo estos tipos de archivo se rebrandean en contenido (igual que rebrand.sh).
 REBRAND_EXTS = {
     ".py",
@@ -210,6 +240,7 @@ def rebrand(content: bytes, path: str) -> bytes:
         return key
 
     text = _MODEL_ID_RE.sub(_stash, text)
+    text = home_fix(text)
     for old, new in CONTENT_MAP:
         text = text.replace(old, new)
     for key, orig in stash.items():

@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as temporary:
         "print(json.dumps(observed), flush=True)\n"
         "os._exit(0)\n"
     )
-    env = {"HOME": str(home), "CLAWK_HOME": str(home / ".clawk"),
+    env = {"HOME": str(home), "CLAWK_HOME": str(home / ".clawksis"),
            "PATH": os.defpath, "LANG": "C.UTF-8", "TZ": "UTC"}
     for name, entry in entries.items():
         command = command_map["commands"][name]

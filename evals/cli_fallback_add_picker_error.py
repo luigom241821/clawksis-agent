@@ -46,7 +46,7 @@ def _persisted_model(root: Path, env: dict) -> dict:
 
 def run(root: Path, output: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="clawk_test_fallback_") as home:
-        hh = Path(home) / ".clawk"
+        hh = Path(home) / ".clawksis"
         hh.mkdir()
         (hh / "config.yaml").write_text(CONFIG, encoding="utf-8")
         (hh / ".env").write_text("OPENROUTER_API_KEY=local-not-used\n", encoding="utf-8")

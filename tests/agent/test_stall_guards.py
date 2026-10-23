@@ -263,11 +263,11 @@ def test_stub_carries_spillover_path_when_first_result_persisted():
     agent = _fake_agent()
     args = {"query": "big"}
     agent._tool_guardrails.record_persisted_result(
-        "c1", "/home/u/.clawk/cache/spillover/c1.txt"
+        "c1", "/home/u/.clawksis/cache/spillover/c1.txt"
     )
     agent._append("web_search", args, _BIG, tool_call_id="c1")
     r2 = agent._append("web_search", args, _BIG, tool_call_id="c2")
-    assert "/home/u/.clawk/cache/spillover/c1.txt" in r2
+    assert "/home/u/.clawksis/cache/spillover/c1.txt" in r2
 
 
 def test_stub_includes_args_summary_for_compression_safety():

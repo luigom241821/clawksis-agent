@@ -24,7 +24,7 @@ test('default data roots append the suffix literally on each platform', (): void
     const home: string = platform === 'win32' ? 'C:\\Users\\test' : '/home/test'
     const local: string = paths.join(home, 'AppData', 'Local')
     const userData: string = paths.join(home, 'app-data', 'Clawksis')
-    const base: string = platform === 'win32' ? paths.join(local, 'clawk') : paths.join(home, '.clawk')
+    const base: string = platform === 'win32' ? paths.join(local, 'clawk') : paths.join(home, '.clawksis')
 
     for (const suffix of ['', '-asdfasdf', 'magic-test', ' spaced ']) {
       const env: NodeJS.ProcessEnv = { LOCALAPPDATA: local, CLAWK_DATA_DIR_SUFFIX: suffix }

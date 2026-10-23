@@ -30,9 +30,9 @@ def cell(tmp_path):
     (root / "clawk_cli").mkdir(parents=True)
     shutil.copyfile(REPO / "clawk_cli/update_pause_record.py", root / "clawk_cli/update_pause_record.py")
     home = tmp_path / "home"
-    (home / ".clawk").mkdir(parents=True)
+    (home / ".clawksis").mkdir(parents=True)
     env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home),
-           "CLAWK_HOME": str(home / ".clawk"), "PYTHONPATH": str(REPO),
+           "CLAWK_HOME": str(home / ".clawksis"), "PYTHONPATH": str(REPO),
            "PYTHONDONTWRITEBYTECODE": "1"}
     children = []
 
@@ -53,7 +53,7 @@ def cell(tmp_path):
         children.append(proc)
         return proc
 
-    yield tmp_path, home / ".clawk", launch
+    yield tmp_path, home / ".clawksis", launch
     for proc in children:
         if proc.poll() is None:
             proc.kill()

@@ -126,7 +126,7 @@ ai.clawk.gateway = {
 \tpath = /Users/u/Library/LaunchAgents/ai.clawk.gateway.plist
 \tstate = running
 \tpid = 59038
-\tprogram = /Users/u/.clawk/bin/clawk
+\tprogram = /Users/u/.clawksis/bin/clawk
 }
 """
 

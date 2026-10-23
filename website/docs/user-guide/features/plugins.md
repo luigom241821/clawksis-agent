@@ -814,7 +814,7 @@ every finding stays in the report with file and line:
   `.rst`, `.html`) can never on its own produce **dangerous**: a command or
   credential path quoted there (an uninstall step, a refusal list naming
   `~/.ssh`) steps down one severity, and a README removing the plugin's
-  **own** install directory (`rm -rf "$HOME/.clawk/plugins/<name>"`) is a
+  **own** install directory (`rm -rf "$HOME/.clawksis/plugins/<name>"`) is a
   note. Agent-facing shapes keep full severity — prompt injection, Markdown
   exfil, agent-config edits, `curl … | sh` one-liners, an `authorized_keys`
   append, a leaked provider key — and so does anything under a bundled

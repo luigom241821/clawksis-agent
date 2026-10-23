@@ -72,7 +72,7 @@ def test_feature_use_counts_each_area_once_per_day_and_collapses_unknown_areas(m
 def test_friction_detail_is_checked_against_its_own_kind_and_capped_per_day(marks):
     _rpc("shared_metrics.desktop_friction", kind="renderer_crash", detail="oom")
     _rpc("shared_metrics.desktop_friction", kind="renderer_crash", detail="network")  # a disconnect word
-    _rpc("shared_metrics.desktop_friction", kind="error_toast", detail="ENOSPC: /home/alice/.clawk is full")
+    _rpc("shared_metrics.desktop_friction", kind="error_toast", detail="ENOSPC: /home/alice/.clawksis is full")
     _rpc("shared_metrics.desktop_friction", kind="made_up", detail="crash")
     for _ in range(desktop.FRICTION_DAILY_CAP + 5):
         _rpc("shared_metrics.desktop_friction", kind="slow_frame", detail="1s_to_5s")

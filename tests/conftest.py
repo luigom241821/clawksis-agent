@@ -97,7 +97,7 @@ def _clawk_home_points_at_production(value: str) -> bool:
         from clawk_state_guard import _real_platform_state_root
 
         resolved = Path(value).expanduser().resolve()
-        real_root = _real_platform_state_root() or (Path.home() / ".clawk").resolve()
+        real_root = _real_platform_state_root() or (Path.home() / ".clawksis").resolve()
     except Exception:
         return True
     if resolved == real_root:
@@ -129,7 +129,7 @@ if _CLAWK_EXPORTED_TMP:
 
 from clawk_state_guard import _real_platform_state_root
 
-_real_test_root = _real_platform_state_root() or (Path.home() / ".clawk").resolve()
+_real_test_root = _real_platform_state_root() or (Path.home() / ".clawksis").resolve()
 _guarded_tmp_roots = [_real_test_root]
 _custom_test_home = os.environ.get("CLAWK_HOME")
 if _custom_test_home:
@@ -642,7 +642,7 @@ def _capture_real_kanban_root() -> Path:
         return get_default_clawk_root().resolve()
     # No pre-existing CLAWK_HOME: the real root is the platform default,
     # NOT the sandbox tempdir now sitting in the env.
-    return (Path.home() / ".clawk").resolve()
+    return (Path.home() / ".clawksis").resolve()
 
 
 _REAL_KANBAN_ROOT = _capture_real_kanban_root()
@@ -1418,7 +1418,7 @@ def _moa_caches_isolated():
 
 # ── Real-home tripwire (universal read/write guard) ──────────────────────────
 # The hermetic sandbox redirects get_clawk_home(), but TWO escape classes
-# remain: (a) code hardcoding Path.home()/".clawk" (the exact restatement
+# remain: (a) code hardcoding Path.home()/".clawksis" (the exact restatement
 # class AGENTS.md bans — the Path.home()/.clawk/profiles bug the 2026-09-03
 # deployment review caught in pm/plugins_state.py), and (b) imports freezing
 # real-home paths before fixtures run. The kanban guard (#69283) covers one
@@ -1444,7 +1444,7 @@ def _capture_real_clawk_root() -> list[Path]:
 
     roots: list[Path] = []
     try:
-        default_root = (Path.home() / ".clawk").resolve()
+        default_root = (Path.home() / ".clawksis").resolve()
         roots.append(default_root)
     except Exception:
         pass

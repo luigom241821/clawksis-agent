@@ -131,7 +131,7 @@ For isolated local testing, use one `CLAWK_HOME` for plugin enablement and the
 agent run:
 
 ```bash
-export CLAWK_HOME=$HOME/.clawk/cache/scratch/clawk-middleware-test
+export CLAWK_HOME=$HOME/.clawksis/cache/scratch/clawk-middleware-test
 mkdir -p "$CLAWK_HOME"
 clawk plugins enable <plugin-name>
 clawk chat --query 'Reply exactly ok'
@@ -194,7 +194,7 @@ def normalize_terminal_workdir(**kwargs):
     if kwargs.get("tool_name") != "terminal":
         return None
     args = dict(kwargs["args"])
-    args.setdefault("workdir", str(Path.home() / ".clawk" / "cache" / "scratch" / "clawk-middleware-demo"))
+    args.setdefault("workdir", str(Path.home() / ".clawksis" / "cache" / "scratch" / "clawk-middleware-demo"))
     return {
         "args": args,
         "source": "middleware-demo",

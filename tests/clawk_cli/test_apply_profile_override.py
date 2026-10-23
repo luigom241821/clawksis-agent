@@ -222,7 +222,7 @@ class TestApplyProfileOverrideClawkHomeGuard:
         (profile_dir / "config.yaml").write_text(
             "{}\n", encoding="utf-8"
         )  # identity marker: a bare dir does not resolve
-        (root_home / ".clawk").mkdir(parents=True, exist_ok=True)
+        (root_home / ".clawksis").mkdir(parents=True, exist_ok=True)
 
         monkeypatch.setattr(Path, "home", lambda: root_home)
         monkeypatch.setenv("SUDO_USER", "clawk")
@@ -248,7 +248,7 @@ class TestApplyProfileOverrideClawkHomeGuard:
         assert os.environ.get("CLAWK_HOME") == str(profile_dir)
         assert sys.argv == ["clawk", "gateway", "install", "--system"]
         # Same identity gate as ``-p`` without sudo: a marker-less shell is not a profile.
-        (user_home / ".clawk" / "profiles" / "ghost" / "cron").mkdir(parents=True)
+        (user_home / ".clawksis" / "profiles" / "ghost" / "cron").mkdir(parents=True)
         assert _resolve_sudo_user_profile_env("ghost") is None
 
 

@@ -139,7 +139,7 @@ def start_rig(root: Path, script: list[Response] | Responder, *, config: dict[st
     ca = make_test_ca(root / "ca", [VENDOR_HOST])
     proxy = TLSInterceptProxy(srv, ca, [VENDOR_HOST]).start()  # type: ignore[arg-type]
     home = root / "home"
-    rig = Rig(root=root, home=home, clawk_home=home / ".clawk", project=root / "project", srv=srv,
+    rig = Rig(root=root, home=home, clawk_home=home / ".clawksis", project=root / "project", srv=srv,
               proxy=proxy, ca_pem=ca.ca_pem)
     rig.clawk_home.mkdir(parents=True)
     rig.project.mkdir()

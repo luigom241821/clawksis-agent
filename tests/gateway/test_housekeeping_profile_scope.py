@@ -46,7 +46,7 @@ def _profile(home: Path, base_url: str) -> None:
 def two_homes(tmp_path, monkeypatch):
     """Launch home A (= multiplex ``default``) and served named profile B under ``A/profiles/b``."""
     fake_home = tmp_path / "home"
-    a = fake_home / ".clawk"
+    a = fake_home / ".clawksis"
     b = a / "profiles" / "b"
     _profile(a, "https://a.example/v1")
     _profile(b, "https://b.example/v1")

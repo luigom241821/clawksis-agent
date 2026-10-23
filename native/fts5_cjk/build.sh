@@ -13,7 +13,7 @@ if ! echo '#include <sqlite3ext.h>' | gcc -E -xc - >/dev/null 2>&1; then
 fi
 
 gcc -shared -fPIC -O2 -Wall -Wextra $CFLAGS_EXTRA fts5_cjk.c -o libfts5_cjk.so
-dest="${1:-$HOME/.clawk/lib}"
+dest="${1:-$HOME/.clawksis/lib}"
 mkdir -p "$dest"
 install -m 0644 libfts5_cjk.so "$dest/libfts5_cjk.so"
 echo "installed: $dest/libfts5_cjk.so"

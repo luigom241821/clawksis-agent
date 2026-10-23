@@ -108,7 +108,7 @@ const bot: RosterRow = { name: 'default' }
 
 const status: DisplayStatus = {
   profile: 'default',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: true,
   missing: [],

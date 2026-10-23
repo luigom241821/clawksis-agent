@@ -415,7 +415,7 @@ class TestSyncBackSizeCap:
         files = {"root/.clawk/skill.md": b"remote_version"}
         mgr = _make_manager(
             tmp_path,
-            file_mapping=[(host_file, "/root/.clawk/skill.md")],
+            file_mapping=[(host_file, "/root/.clawksis/skill.md")],
             bulk_download_fn=_make_download_fn(files),
         )
 
@@ -465,10 +465,10 @@ class TestSyncBackWindowsHost:
         _write_file(host_file, b"v1")
         mgr = _make_manager(
             tmp_path,
-            [(str(host_file), "/root/.clawk/skill.py")],
+            [(str(host_file), "/root/.clawksis/skill.py")],
             bulk_download_fn=download,
         )
-        mgr._pushed_hashes["/root/.clawk/skill.py"] = _sha256_bytes(b"v1")
+        mgr._pushed_hashes["/root/.clawksis/skill.py"] = _sha256_bytes(b"v1")
         mgr.sync_back(clawk_home=tmp_path / ".clawk")
         assert host_file.read_bytes() == b"v2"
         assert not seen["dest"].exists()  # staging tar removed after use
@@ -477,7 +477,7 @@ class TestSyncBackWindowsHost:
     def test_posix_remote_keys_match_on_windows(self, tmp_path):
         host_file = tmp_path / "host" / "skill.py"
         _write_file(host_file, b"v1")
-        mapping = [(str(host_file), "/root/.clawk/skills/a/skill.py")]
+        mapping = [(str(host_file), "/root/.clawksis/skills/a/skill.py")]
         mgr = _make_manager(
             tmp_path,
             mapping,
@@ -488,7 +488,7 @@ class TestSyncBackWindowsHost:
                 }
             ),
         )
-        mgr._pushed_hashes["/root/.clawk/skills/a/skill.py"] = _sha256_bytes(b"v1")
+        mgr._pushed_hashes["/root/.clawksis/skills/a/skill.py"] = _sha256_bytes(b"v1")
         mgr.sync_back(clawk_home=tmp_path / ".clawk")
         assert (
             host_file.read_bytes() == b"v2"

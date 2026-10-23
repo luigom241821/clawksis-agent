@@ -140,10 +140,10 @@ When there is no port, or you must not disturb the user's window:
 
 ```bash
 cd apps/desktop
-CLAWK_HOME=$HOME/.clawk/cache/scratch/cdp-probe-home \
+CLAWK_HOME=$HOME/.clawksis/cache/scratch/cdp-probe-home \
 CLAWK_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 \
 CLAWK_DESKTOP_CDP_PORT=9333 \
-  npx electron . --user-data-dir=$HOME/.clawk/cache/scratch/cdp-probe-userdata
+  npx electron . --user-data-dir=$HOME/.clawksis/cache/scratch/cdp-probe-userdata
 ```
 
 The separate `--user-data-dir` dodges Electron's single-instance lock, so it

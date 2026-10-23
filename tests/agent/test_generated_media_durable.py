@@ -73,5 +73,5 @@ def test_generated_dir_is_mounted_from_the_writers_location(tmp_path, monkeypatc
 
     path = save_b64_image(base64.b64encode(PNG_1PX).decode(), prefix="red_test")
     mounts = {m["container_path"]: m["host_path"] for m in get_cache_directory_mounts()}
-    assert "/root/.clawk/cache/generated" in mounts, sorted(mounts)
-    assert path.is_relative_to(Path(mounts["/root/.clawk/cache/generated"]).resolve())
+    assert "/root/.clawksis/cache/generated" in mounts, sorted(mounts)
+    assert path.is_relative_to(Path(mounts["/root/.clawksis/cache/generated"]).resolve())

@@ -46,7 +46,7 @@ class TestGenerateTitle:
         """The titler receives the opener AFTER @-reference expansion: the generated ref carries a
         `--- Context Warnings ---` (or `--- Attached Context ---`) footer, which must not turn a
         paste-only opener into "instruction + trailing preview" (live wire finding on #114984)."""
-        ref = "@file:/home/u/.clawk/attachments/pasted_content_2026-09-18_14-09-43-735_d0ee85.txt"
+        ref = "@file:/home/u/.clawksis/attachments/pasted_content_2026-09-18_14-09-43-735_d0ee85.txt"
         preview = "Quarterly incident analysis for the database cluster"
         for footer in (f"\n\n--- Context Warnings ---\n- {ref}: path is outside the allowed workspace",
                        "\n\n--- Attached Context ---\n\n### file: pasted_content.txt\n" + preview):

@@ -62,7 +62,7 @@ def build_cli(data, out, tmp_path):
     return subprocess.run(
         [sys.executable, "-B", "-m", "scripts.build.agent", "--inputs", str(document), "--out", str(out)],
         cwd=tmp_path, env={"PATH": os.environ["PATH"], "HOME": str(home),
-                          "CLAWK_HOME": str(home / ".clawk"), "PYTHONPATH": str(ROOT)},
+                          "CLAWK_HOME": str(home / ".clawksis"), "PYTHONPATH": str(ROOT)},
         capture_output=True, text=True, timeout=30,
         check=False,
     )

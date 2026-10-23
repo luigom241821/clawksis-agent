@@ -96,7 +96,7 @@ it('a self-upgradable backend keeps the update instruction', async () => {
 
 const packagesMissing: DisplayStatus = {
   profile: 'default',
-  profile_key: '/home/clawk/.clawk',
+  profile_key: '/home/clawk/.clawksis',
   supported: true,
   installed: false,
   missing: ['tigervnc-standalone-server'],

@@ -301,9 +301,9 @@ def test_seven_physical_else_if_levels_block(tmp_path, capsys):
 # --- HX001 / HX003 / HX012 precision ---
 
 @pytest.mark.parametrize("expr, flagged", [
-    ('Path.home() / ".clawk"', True),
+    ('Path.home() / ".clawksis"', True),
     ('Path.home() / ".clawk/profiles"', True),
-    ('Path.home() / ".clawk" / "x"', True),
+    ('Path.home() / ".clawksis" / "x"', True),
     ('Path.home() / ".clawk-profile-exports"', False),
     ('Path.home() / ".clawk_backup"', False),
     ('os.path.expanduser("~/.clawksis")', True),

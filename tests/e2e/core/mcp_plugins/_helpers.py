@@ -109,7 +109,7 @@ class E2EHome:
         real_root = Path(pwd.getpwuid(os.getuid()).pw_dir, ".clawk").resolve()  # windows-footgun: ok — module is skipif(not linux)
         fixture = self.clawk_home.resolve()
         assert fixture != real_root and fixture.parent != real_root / "profiles", fixture
-        assert fixture == (self.home / ".clawk").resolve(), fixture
+        assert fixture == (self.home / ".clawksis").resolve(), fixture
         env = {k: v for k, v in os.environ.items()
                if (k in _PASSTHROUGH_ENV or k.startswith("LC_")) and not k.endswith(_SECRET_ENV_SUFFIXES)}
         env.update({
@@ -141,7 +141,7 @@ def _select_test_dependencies(eh: E2EHome) -> None:
 def build_home(root: Path, base_url: str, *, mcp_servers: dict[str, dict] | None = None,
                extra: dict[str, Any] | None = None) -> E2EHome:
     home = root / "home"
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     project = root / "project"
     for d in (clawk_home, project):
         d.mkdir(parents=True, exist_ok=True)

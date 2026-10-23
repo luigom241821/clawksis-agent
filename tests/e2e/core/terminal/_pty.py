@@ -107,7 +107,7 @@ class PtyClawksis:
         """``llm=None``: the caller already wrote ``root/home/.clawk`` (e.g. a native-runtime home)."""
         self.root = root
         self.home = root / "home"
-        self.clawk_home = self.home / ".clawk"
+        self.clawk_home = self.home / ".clawksis"
         operator = (_operator_home() / ".clawk").resolve()
         assert operator not in (self.clawk_home.resolve(), *self.clawk_home.resolve().parents), (
             f"sandbox {self.clawk_home} sits inside the operator's Clawksis home")

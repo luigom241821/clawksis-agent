@@ -477,7 +477,7 @@ The registry handles schema collection, dispatch, availability checking, and err
 
 **Path references in tool schemas**: If the schema description mentions file paths (e.g. default output directories), use `display_clawk_home()` to make them profile-aware. The schema is generated at import time, which is after `_apply_profile_override()` sets `CLAWK_HOME`.
 
-**State files**: If a tool stores persistent state (caches, logs, checkpoints), use `get_clawk_home()` for the base directory — never `Path.home() / ".clawk"`. This ensures each profile gets its own state.
+**State files**: If a tool stores persistent state (caches, logs, checkpoints), use `get_clawk_home()` for the base directory — never `Path.home() / ".clawksis"`. This ensures each profile gets its own state.
 
 **Agent-level tools** (todo, memory): intercepted by `run_agent.py` before `handle_function_call()`. See `tools/todo_tool.py` for the pattern.
 
@@ -1410,7 +1410,7 @@ automatically scope to the active profile.
 
 1. **Use `get_clawk_home()` for all CLAWK_HOME paths.** Import from `clawk_constants`.
 
-   NEVER hardcode `~/.clawksis` or `Path.home() / ".clawk"` in code that reads/writes state.
+   NEVER hardcode `~/.clawksis` or `Path.home() / ".clawksis"` in code that reads/writes state.
 
    ```python
    # GOOD
@@ -1421,7 +1421,7 @@ automatically scope to the active profile.
 
    # BAD — breaks profiles
 
-   config_path = Path.home() / ".clawk" / "config.yaml"
+   config_path = Path.home() / ".clawksis" / "config.yaml"
    ```
 
 2. **Use `display_clawk_home()` for user-facing messages.** Import from `clawk_constants`.
@@ -1444,11 +1444,11 @@ automatically scope to the active profile.
 
    which is AFTER `_apply_profile_override()` sets the env var. Just use `get_clawk_home()`,
 
-   not `Path.home() / ".clawk"`.
+   not `Path.home() / ".clawksis"`.
 
 4. **Tests that mock `Path.home()` must also set `CLAWK_HOME`** — since code now uses
 
-   `get_clawk_home()` (reads env var), not `Path.home() / ".clawk"`:
+   `get_clawk_home()` (reads env var), not `Path.home() / ".clawksis"`:
 
    ```python
 
@@ -1472,7 +1472,7 @@ automatically scope to the active profile.
 
 6. **Profile operations are HOME-anchored, not CLAWK_HOME-anchored** — `_get_profiles_root()`
 
-   returns `Path.home() / ".clawk" / "profiles"`, NOT `get_clawk_home() / "profiles"`.
+   returns `Path.home() / ".clawksis" / "profiles"`, NOT `get_clawk_home() / "profiles"`.
 
    This is intentional — it lets `clawk -p coder profile list` see all profiles regardless
 

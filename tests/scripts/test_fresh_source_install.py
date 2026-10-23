@@ -44,7 +44,7 @@ def test_current_installer_publishes_real_dependencies_and_warm_path(tmp_path, s
     shutil.copy2(python, bootstrap / f"bin/python{minor}")
     (bootstrap / "bin/python3").symlink_to(f"python{minor}")
     env = {"PATH": os.environ["PATH"], "HOME": str(home), "LANG": "C.UTF-8",
-           "CLAWK_HOME": str(home / ".clawk"), "UV_PYTHON_INSTALL_DIR": str(managed),
+           "CLAWK_HOME": str(home / ".clawksis"), "UV_PYTHON_INSTALL_DIR": str(managed),
            "UV_PYTHON_DOWNLOADS": "never", "UV_CACHE_DIR": str(tmp_path / "cache")}
     canary = tmp_path / "ambient-bin"
     canary.mkdir()

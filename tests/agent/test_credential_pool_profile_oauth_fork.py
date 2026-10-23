@@ -33,7 +33,7 @@ def fleet(tmp_path, monkeypatch):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("CLAWK_HOME", str(root))
     # The pytest seat-belt in the root write-through compares the global path
-    # against $HOME/.clawk/auth.json; our root is elsewhere, so writes go.
+    # against $HOME/.clawksis/auth.json; our root is elsewhere, so writes go.
     import clawk_constants
     clawk_constants._default_clawk_root_memo = None  # type: ignore[attr-defined]
 

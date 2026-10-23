@@ -37,7 +37,7 @@ for command, description in cases.items():
 def test_nonmatching_flag_runs_finish():
     _run('''
 from tools.approval_detection import detect_dangerous_command
-for prefix in ("rclone lsf $HOME/.clawk --recursive --files-only", "clawk", "docker",
+for prefix in ("rclone lsf $HOME/.clawksis --recursive --files-only", "clawk", "docker",
                "docker compose", "podman"):
     for run in ("--exclude " * 58, "--opt val " * 58, "--opt=val " * 58, "--opt" + " " * 100 + "val "):
         assert detect_dangerous_command(f"{prefix} {run}ps 2>/dev/null")[0] is False, prefix

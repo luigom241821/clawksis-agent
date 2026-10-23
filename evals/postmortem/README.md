@@ -32,7 +32,7 @@ P=.venv/bin/python
 # 1. cost buckets, depth/duration shares, context-size reconstruction, excess-cache-write proxy, cap replay
 $P -m evals.postmortem.forensics.tokens     --db state_copy.db [--root <session_id>] [--cap 200000 --floor 65000]
 # 2. per-call cache behaviour from the logs (coverage fraction is printed first; quote nothing without it)
-$P -m evals.postmortem.forensics.logcalls   --db state_copy.db --logs "$HOME/.clawk/logs/agent.log*"
+$P -m evals.postmortem.forensics.logcalls   --db state_copy.db --logs "$HOME/.clawksis/logs/agent.log*"
 # 3. delegation: timeouts, orphaned children, polling, batch-join delay, truncated summaries
 $P -m evals.postmortem.forensics.delegation --db state_copy.db
 # 4. tool friction: hardline false blocks, foreground refusals, whole-file rewrites, output volume

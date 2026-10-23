@@ -40,7 +40,7 @@ if (-not $artifact) { throw "no uv artifact for $target" }
 $pyPin = $lock.packages.python
 $pyVersion = if ($pyPin) { ($pyPin.version -split '\+')[0] -replace '^(\d+\.\d+).*', '$1' } else { '3.11' }
 
-$store = if ($env:CLAWK_RUNTIME_DIR) { $env:CLAWK_RUNTIME_DIR } else { Join-Path $HOME '.clawk/tools' }
+$store = if ($env:CLAWK_RUNTIME_DIR) { $env:CLAWK_RUNTIME_DIR } else { Join-Path $HOME '.clawksis/tools' }
 $entry = Join-Path $store "uv-$($uvPin.version)-$target"
 $uv = Join-Path $entry 'uv.exe'
 
@@ -122,7 +122,7 @@ if (-not (Test-Path $envFile)) {
 # ---------------------------------------------------------------------------
 # Seed bundled skills into ~/.clawksis/skills/
 # ---------------------------------------------------------------------------
-$skillsDir = if ($env:CLAWK_HOME) { Join-Path $env:CLAWK_HOME 'skills' } else { Join-Path $HOME '.clawk/skills' }
+$skillsDir = if ($env:CLAWK_HOME) { Join-Path $env:CLAWK_HOME 'skills' } else { Join-Path $HOME '.clawksis/skills' }
 New-Item -ItemType Directory -Force -Path $skillsDir | Out-Null
 $sync = Join-Path $repo 'tools/skills_sync.py'
 $venvPy = Join-Path $repo 'venv/Scripts/python.exe'

@@ -1134,7 +1134,7 @@ def test_named_profile_action_isolates_parent_env_and_loads_target_env(
     import clawk_cli.web_server as ws
 
     user_home = tmp_path / "user"
-    default_home = user_home / ".clawk"
+    default_home = user_home / ".clawksis"
     target_home = default_home / "profiles" / "verifier"
     target_home.mkdir(parents=True)
 

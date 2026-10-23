@@ -603,13 +603,13 @@ def test_reuse_environment_fingerprint_ignores_volatile_temp_mounts(tmp_path, mo
     stable_source = str(tmp_path / "data")
     process_a = docker_env._reuse_environment_fingerprint(
         image="python:3.11",
-        mount_args=["-v", f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawk/skills:ro",
+        mount_args=["-v", f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawksis/skills:ro",
                     "-v", f"{stable_source}:/data:ro"],
         clawk_home="/profiles/alpha",
     )
     process_b = docker_env._reuse_environment_fingerprint(
         image="python:3.11",
-        mount_args=["-v", f"{temp_root}/clawk-skills-safe-d4e5f6:/root/.clawk/skills:ro",
+        mount_args=["-v", f"{temp_root}/clawk-skills-safe-d4e5f6:/root/.clawksis/skills:ro",
                     "-v", f"{stable_source}:/data:ro"],
         clawk_home="/profiles/alpha",
     )
@@ -617,7 +617,7 @@ def test_reuse_environment_fingerprint_ignores_volatile_temp_mounts(tmp_path, mo
     # A real mount change still forces a fresh container.
     assert process_a != docker_env._reuse_environment_fingerprint(
         image="python:3.11",
-        mount_args=["-v", f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawk/skills:ro",
+        mount_args=["-v", f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawksis/skills:ro",
                     "-v", f"{tmp_path}/other-data:/data:ro"],
         clawk_home="/profiles/alpha",
     )
@@ -768,7 +768,7 @@ def test_symlinked_skills_tree_reuses_container_across_processes(monkeypatch, tm
     # comes from canonicalization, not from the mount happening to be stable.
     mounts = []
     for entry in docker_env._readonly_skill_mount_args():
-        if entry not in ("-v",) and ":/root/.clawk/skills" in entry:
+        if entry not in ("-v",) and ":/root/.clawksis/skills" in entry:
             mounts.append(entry)
     assert mounts, "expected a skills mount from the symlink-safe copy"
 
@@ -1598,7 +1598,7 @@ def test_credential_mount_skipped_when_source_is_directory(monkeypatch, tmp_path
 
     # Mock get_credential_file_mounts to return the corrupted entry
     fake_mounts = [
-        {"host_path": str(corrupted_dir), "container_path": "/root/.clawk/google_token.json"},
+        {"host_path": str(corrupted_dir), "container_path": "/root/.clawksis/google_token.json"},
     ]
     monkeypatch.setattr(
         "tools.credential_files.get_credential_file_mounts",
@@ -1632,7 +1632,7 @@ def test_credential_mount_skipped_when_source_missing(monkeypatch, tmp_path, cap
     calls = _mock_subprocess_run(monkeypatch)
 
     fake_mounts = [
-        {"host_path": str(missing_path), "container_path": "/root/.clawk/deleted_token.json"},
+        {"host_path": str(missing_path), "container_path": "/root/.clawksis/deleted_token.json"},
     ]
     monkeypatch.setattr(
         "tools.credential_files.get_credential_file_mounts",

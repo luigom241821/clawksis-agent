@@ -44,7 +44,7 @@ BATCH_MARKER = "context compression attempt telemetry: "
 
 
 def default_log() -> Path:
-    home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawk")
+    home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
     return Path(home) / "logs" / "agent.log"
 
 

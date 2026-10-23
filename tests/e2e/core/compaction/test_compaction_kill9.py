@@ -86,10 +86,10 @@ print("CHILD-FINISHED", result.status, flush=True)
 
 def _child_env(home: Path) -> dict:
     # Probe hygiene: tmp HOME/CLAWK_HOME, no provider keys. The in-test db guard detects pytest by
-    # process ancestry and would read this tmp $HOME/.clawk as the production root; the documented
+    # process ancestry and would read this tmp $HOME/.clawksis as the production root; the documented
     # child-process escape hatch is safe because every path here lives under tmp_path.
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawk"), PYTHONPATH=str(REPO), PYTHONUNBUFFERED="1",
+    env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawksis"), PYTHONPATH=str(REPO), PYTHONUNBUFFERED="1",
                CLAWK_STATE_DB_GUARD_BYPASS="1")
     return env
 

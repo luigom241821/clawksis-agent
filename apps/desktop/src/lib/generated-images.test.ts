@@ -12,11 +12,11 @@ describe('generatedImageFromResult', () => {
     expect(
       generatedImageFromResult({
         agent_visible_image: '/container/cache/cat.png',
-        host_image: '/Users/me/.clawk/cache/images/cat.png',
-        image: '/Users/me/.clawk/cache/images/cat.png',
+        host_image: '/Users/me/.clawksis/cache/images/cat.png',
+        image: '/Users/me/.clawksis/cache/images/cat.png',
         success: true
       })
-    ).toBe('/Users/me/.clawk/cache/images/cat.png')
+    ).toBe('/Users/me/.clawksis/cache/images/cat.png')
   })
 
   it('ignores failed image generation results', () => {

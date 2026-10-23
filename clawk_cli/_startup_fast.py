@@ -129,7 +129,7 @@ def active_profile_may_override_home(clawk_root: str) -> bool:
 
 
 def _default_home() -> str:
-    return os.path.join(os.path.expanduser("~"), ".clawk")
+    return os.path.join(os.path.expanduser("~"), ".clawksis")
 
 
 def _resolved_home() -> str:

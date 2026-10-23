@@ -101,7 +101,7 @@ def chaos_config(
 def write_chaos_home(root: Path, base_url: str, **cfg: Any) -> tuple[Path, Path]:
     """Create ``root/home`` (fake $HOME) and ``root/home/.clawk`` (CLAWK_HOME)."""
     home = root / "home"
-    clawk_home = home / ".clawk"
+    clawk_home = home / ".clawksis"
     clawk_home.mkdir(parents=True, exist_ok=True)
     (clawk_home / "config.yaml").write_text(chaos_config(base_url, **cfg), encoding="utf-8")
     (clawk_home / ".env").write_text("OPENAI_API_KEY=sk-fake-chaos\n", encoding="utf-8")

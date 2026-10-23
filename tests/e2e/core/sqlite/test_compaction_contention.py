@@ -128,11 +128,11 @@ def rig(request, tmp_path_factory):
     ctx = "  context_length: 128000\n"
     write_clawk_home(ch.clawk_home, server.base_url, extra_config=MICRO_CONFIG + DB_CONFIG)
     tui_home = ch.root / "tui-home"
-    write_clawk_home(tui_home / ".clawk", server.base_url, extra_config=DB_CONFIG)
-    for home in (ch.clawk_home, tui_home / ".clawk"):
+    write_clawk_home(tui_home / ".clawksis", server.base_url, extra_config=DB_CONFIG)
+    for home in (ch.clawk_home, tui_home / ".clawksis"):
         cfg = home / "config.yaml"
         cfg.write_text(cfg.read_text(encoding="utf-8").replace(ctx, "  context_length: 64000\n"), encoding="utf-8")
-    yield Rig(ch, server, aux, {"HOME": str(tui_home), "CLAWK_HOME": str(tui_home / ".clawk")})
+    yield Rig(ch, server, aux, {"HOME": str(tui_home), "CLAWK_HOME": str(tui_home / ".clawksis")})
     ch.shutdown()
     server.stop()
 

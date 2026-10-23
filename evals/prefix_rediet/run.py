@@ -27,7 +27,7 @@ TIMEOUT = {"term_slow_tests": 600}
 def _inference_env():
     env = dict(os.environ)
     if not env.get("PRD_INFERENCE_KEY"):
-        home = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawk")
+        home = Path(os.environ.get("CLAWK_HOME") or Path.home() / ".clawksis")
         nous = json.loads((home / "auth.json").read_text())["providers"]["nous"]
         env["PRD_INFERENCE_URL"], env["PRD_INFERENCE_KEY"] = nous["inference_base_url"], nous["agent_key"]
     return env

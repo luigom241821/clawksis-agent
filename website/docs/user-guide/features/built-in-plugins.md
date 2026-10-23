@@ -180,7 +180,7 @@ enabled = true
 
 [[components.config.atof.sinks]]
 type = "file"
-output_directory = "/home/you/.clawk/telemetry/nemo-relay/atof"
+output_directory = "/home/you/.clawksis/telemetry/nemo-relay/atof"
 filename = "clawk-atof.jsonl"
 mode = "append"
 
@@ -188,7 +188,7 @@ mode = "append"
 enabled = true
 agent_name = "Clawksis"
 model_name = "unknown"
-output_directory = "/home/you/.clawk/telemetry/nemo-relay/atif"
+output_directory = "/home/you/.clawksis/telemetry/nemo-relay/atif"
 filename_template = "trajectory-{session_id}.json"
 
 [components.config.opentelemetry]
@@ -201,7 +201,7 @@ unknown_field = "warn"
 unsupported_value = "error"
 ```
 
-Then add `CLAWK_NEMO_RELAY_PLUGINS_TOML=/home/you/.clawk/relay-plugins.toml` to `.env` and restart the gateway.
+Then add `CLAWK_NEMO_RELAY_PLUGINS_TOML=/home/you/.clawksis/relay-plugins.toml` to `.env` and restart the gateway.
 
 #### Session-span segmentation (continuous sessions)
 
