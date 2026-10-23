@@ -3277,6 +3277,20 @@ OPTIONAL_ENV_VARS = {
         "Tenor API key",
         "https://developers.google.com/tenor/guides/quickstart",
     ),
+    "ETORO_API_KEY": _skill(
+        "eToro Public API key, sent as x-api-key (read-only market data and portfolio for "
+        "the `kronos` skill)",
+        "eToro public API key",
+        "https://api-portal.etoro.com",
+        help="eToro > Settings > Trading > API Key Management; pair it with ETORO_USER_KEY",
+    ),
+    "ETORO_USER_KEY": _skill(
+        "eToro user key, sent as x-user-key (read-only market data and portfolio for the "
+        "`kronos` skill)",
+        "eToro user key",
+        "https://api-portal.etoro.com",
+        help="Shown once when the key is created; keys belong to the real OR demo account",
+    ),
     # ── Honcho ──
     "HONCHO_API_KEY": _tool(
         "Honcho API key for AI-native persistent memory",

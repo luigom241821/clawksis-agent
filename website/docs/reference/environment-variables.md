@@ -215,6 +215,8 @@ Secrets consumed by specific bundled / optional skills. Each is only needed if y
 | `LINEAR_API_KEY` | `linear` | Linear personal API key. |
 | `AIRTABLE_API_KEY` | `airtable` | Airtable personal access token. |
 | `TENOR_API_KEY` | `gif-search` | Tenor API key for GIF search. |
+| `ETORO_API_KEY` | `kronos` | eToro Public API key (sent as `x-api-key`). The skill uses it read-only: market data and portfolio, never trading. Create it in eToro under Settings > Trading > API Key Management. |
+| `ETORO_USER_KEY` | `kronos` | eToro user key (sent as `x-user-key`), paired with `ETORO_API_KEY`. A key pair belongs to either the real or the demo account. |
 
 ### Langfuse Observability
 
