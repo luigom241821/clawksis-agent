@@ -133,7 +133,14 @@ CONTENT_MAP = [
 # proveedor y fallan en runtime. Se preservan haciendo stash/unstash alrededor
 # del CONTENT_MAP (ver ``rebrand``). "Hermes" como producto/agente SI se
 # rebrandea; solo los nombres de modelo Herme quedan intactos.
-_MODEL_ID_RE = re.compile(r"(?:nousresearch/)?[Hh]ermes[ _-]?[34][\w.\-]*")
+_MODEL_ID_RE = re.compile(
+    r"(?:nousresearch/)?[Hh]ermes[ _-]?[34][\w.\-]*"
+    # Mirror content-addressed (sha256) de binarios de terceros (uv, git...) que
+    # usa el instalador: es un host real de Nous, verificado por hash. NO
+    # confundir con los releases de Hermes (source_releases.py), que el fork no
+    # debe descargar.
+    r"|https://hermes-assets\.nousresearch\.com/upstream/[\w/.\-]*"
+)
 
 # Carpeta HOME del usuario: en el fork es ``~/.clawksis``. El blanket
 # hermes->clawk de CONTENT_MAP la convertiria en ``.clawk`` (que si es el nombre

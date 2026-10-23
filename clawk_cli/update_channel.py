@@ -22,7 +22,8 @@ same path, and the channel opt-in must survive that.
   (it knows its own id — the user never types a sha).
 * Shown by ``clawk update --install-id`` and the desktop About page.
 * Source installs select an R2 channel name, or use an explicit branch override.
-  Unconfigured official checkouts track ``stable``; forks and mirrors keep ``main``.
+  Unconfigured source checkouts track ``main`` (Clawksis publishes no stable
+  source releases); packaged bundles track their artifact channel.
   Bundles derive their channel from their baked identity, never these records.
   ``external`` installs have no configurable channel; the steward owns updates.
 
@@ -155,7 +156,10 @@ def default_channel(project_root: Optional[Path] = None) -> str:
     root = Path(project_root) if project_root is not None else install_root()
     stamp = _read_stamp(root)
     if not _package_channel(stamp):
-        return CHANNEL_STABLE if _tracks_official_origin(root) else CHANNEL_MAIN
+        # Clawksis does not publish stable source releases (no release bucket),
+        # so every source checkout -- the fork's official repo included --
+        # keeps following main, as `clawk update` always has for this fork.
+        return CHANNEL_MAIN
     if stamp.get("source") == "channel-build":
         request = stamp.get("channelBuild")
         if not isinstance(request, dict):
