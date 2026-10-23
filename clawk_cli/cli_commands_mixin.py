@@ -209,10 +209,10 @@ def _print_side_result_panel(cli, *, header_lines, body, title_suffix, empty_not
         from clawk_cli.skin_engine import get_active_skin
         _skin = get_active_skin()
         label = _skin.get_branding("response_label", "∇ Clawksis")
-        _resp_color = _maybe_remap_for_light_mode(_skin.get_color("response_border", "#CD7F32"))
-        _resp_text = _maybe_remap_for_light_mode(_skin.get_color("banner_text", "#FFF8DC"))
+        _resp_color = _maybe_remap_for_light_mode(_skin.get_color("response_border", "#4A3496"))
+        _resp_text = _maybe_remap_for_light_mode(_skin.get_color("banner_text", "#E8E0FF"))
     except Exception:
-        label, _resp_color, _resp_text = "∇ Clawksis", "#CD7F32", "#FFF8DC"
+        label, _resp_color, _resp_text = "∇ Clawksis", "#4A3496", "#E8E0FF"
     rich_console.print(Panel(
         _render_final_assistant_content(body, mode=cli.final_response_markdown),
         title=f"[{_resp_color} bold]{label} {title_suffix}[/]", title_align="left",

@@ -448,6 +448,18 @@ def main() -> int:
     print(f"[sync] {len(changes)} cambios de archivo en upstream\n")
 
     replaced, added, deleted, already, skipped, diverged = [], [], [], [], [], []
+    # Modo ejecutable de upstream (100755): write_bytes no lo conserva, y sin
+    # +x se rompen el lanzador `clawk`, los run de s6 en Docker, scripts...
+    exec_paths = {
+        ln.split("\t", 1)[1]
+        for ln in git("ls-tree", "-r", target_sha).splitlines()
+        if ln.startswith("100755 ")
+    }
+
+    def write_target(dest: Path, data: bytes, up_path: str) -> None:
+        dest.write_bytes(data)
+        if up_path in exec_paths:
+            dest.chmod(dest.stat().st_mode | 0o111)
 
     for status, up_path in changes:
         if any(fnmatch.fnmatch(up_path, pat) for pat in skip_patterns):
@@ -479,7 +491,7 @@ def main() -> int:
                 added.append(fork_path)
                 if args.apply:
                     dest.parent.mkdir(parents=True, exist_ok=True)
-                    dest.write_bytes(targ_r)
+                    write_target(dest, targ_r, up_path)
             else:
                 diverged.append((
                     fork_path,
@@ -491,7 +503,7 @@ def main() -> int:
         elif norm(ours) == norm(base_r):
             replaced.append(fork_path)
             if args.apply:
-                dest.write_bytes(match_eol(targ_r, ours))
+                write_target(dest, match_eol(targ_r, ours), up_path)
         else:
             diverged.append((fork_path, up_path, "cambios propios del fork"))
 

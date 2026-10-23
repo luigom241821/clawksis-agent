@@ -482,10 +482,10 @@ class CLIStreamMixin:
                 from clawk_cli.skin_engine import get_active_skin
                 _skin = get_active_skin()
                 label = _skin.get_branding("response_label", "∇ Clawksis")
-                _text_hex = _skin.get_color("banner_text", "#FFF8DC")
+                _text_hex = _skin.get_color("banner_text", "#E8E0FF")
             except Exception:
                 label = "∇ Clawksis"
-                _text_hex = "#FFF8DC"
+                _text_hex = "#E8E0FF"
             try:  # true-color escape so streamed text matches the Rich Panel appearance
                 _r, _g, _b = (int(_text_hex[i:i + 2], 16) for i in (1, 3, 5))
                 self._stream_text_ansi = f"\033[38;2;{_r};{_g};{_b}m"

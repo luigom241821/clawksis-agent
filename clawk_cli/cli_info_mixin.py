@@ -147,7 +147,7 @@ class CLIInfoMixin:
     def show_banner(self):
         """Display the welcome banner in Claude Code style."""
         from cli import _build_compact_banner, get_tool_definitions, logger
-        from clawk_cli.banner import build_welcome_banner
+        from clawk_cli.banner import build_welcome_banner, print_recent_changes
         self.console.clear()
         store, gateway_inventory, ctx_len, banner_kw = banner_plan(self, self.console)
         on_gateway = store is not None  # its tools come from the gateway: never enumerated here
@@ -207,6 +207,10 @@ class CLIInfoMixin:
                     save_banner_snapshot(tools, self.enabled_toolsets, availability, tmap)
                 except Exception:
                     logger.debug("banner snapshot save failed", exc_info=True)
+
+            # Clawksis "Novedades" panel: the last few commits (best-effort; a no-op outside a
+            # git checkout). Opt out with CLAWK_HIDE_CHANGELOG=1.
+            print_recent_changes(self.console)
 
         # Tool discovery is deferred on the Termux bare prompt path (warnings show once tools
         # init). On the snapshot fast path the check walks every check_fn (~180ms) — run it in
@@ -571,9 +575,9 @@ class CLIInfoMixin:
             _tip = get_random_tip()
             try:
                 from clawk_cli.skin_engine import get_active_skin
-                _tip_color = get_active_skin().get_color("banner_dim", "#B8860B")
+                _tip_color = get_active_skin().get_color("banner_dim", "#4A3496")
             except Exception:
-                _tip_color = "#B8860B"
+                _tip_color = "#4A3496"
             self._console_print(f"[dim {_tip_color}]{t('cli.tip_line', tip=_tip)}[/]")
         except Exception:
             pass

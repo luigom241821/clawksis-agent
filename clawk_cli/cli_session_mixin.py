@@ -297,11 +297,11 @@ class CLISessionMixin:
         try:
             from clawk_cli.skin_engine import get_active_skin
             skin = get_active_skin()
-            separator_color = skin.get_color("banner_dim", "#B8860B")
-            accent_color = skin.get_color("ui_accent", "#FFBF00")
-            label_color = skin.get_color("ui_label", "#DAA520")
+            separator_color = skin.get_color("banner_dim", "#4A3496")
+            accent_color = skin.get_color("ui_accent", "#6C4FD6")
+            label_color = skin.get_color("ui_label", "#6C4FD6")
         except Exception:
-            separator_color, accent_color, label_color = "#B8860B", "#FFBF00", "cyan"
+            separator_color, accent_color, label_color = "#4A3496", "#6C4FD6", "cyan"
         sep = f" [dim {separator_color}]·[/] "
         toolsets_info = ""
         if self.enabled_toolsets and "all" not in self.enabled_toolsets:
