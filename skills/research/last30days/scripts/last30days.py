@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: E402
 """last30days CLI."""
 
 from __future__ import annotations
@@ -455,7 +454,7 @@ def subrun_kwargs_for(
     """
 
     def _choose(plan_key: str, resolved_key: str | None = None):
-        if plan_key in plan_entry and plan_entry[plan_key]:
+        if plan_entry.get(plan_key):
             return plan_entry[plan_key]
         if resolved_key is not None and resolved.get(resolved_key):
             return resolved[resolved_key]
@@ -585,11 +584,13 @@ def _show_runtime_ui(
 ) -> None:
     counts = {source: len(items) for source, items in report.items_by_source.items()}
     display_sources = list(
-        dict.fromkeys([
-            *report.query_plan.source_weights.keys(),
-            *report.items_by_source.keys(),
-            *report.errors_by_source.keys(),
-        ])
+        dict.fromkeys(
+            [
+                *report.query_plan.source_weights.keys(),
+                *report.items_by_source.keys(),
+                *report.errors_by_source.keys(),
+            ]
+        )
     )
     progress.end_processing()
     progress.show_complete(
@@ -613,7 +614,7 @@ def _show_runtime_ui(
         progress.show_promo(promo, diag=diag)
 
 
-def _write_last_run(topic: str, report: "schema.Report") -> None:
+def _write_last_run(topic: str, report: schema.Report) -> None:
     try:
         if env.CONFIG_DIR is None:
             return
@@ -624,7 +625,7 @@ def _write_last_run(topic: str, report: "schema.Report") -> None:
         }
         payload = {
             "topic": topic,
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
             "sources": counts,
             "total": sum(counts.values()),
         }

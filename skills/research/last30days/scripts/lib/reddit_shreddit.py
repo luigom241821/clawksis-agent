@@ -39,7 +39,7 @@ SVC_TIMEOUT = 12
 # or <shreddit-comment-tree-stats> (lookahead requires whitespace or '>').
 _COMMENT_START = re.compile(r"<shreddit-comment(?=[\s>])[^>]*>")
 _TOTAL_COMMENTS = re.compile(r'total-comments="(\d+)"')
-_PARA = re.compile(r"<p[^>]*>(.*?)</p>", re.S)
+_PARA = re.compile(r"<p[^>]*>(.*?)</p>", re.DOTALL)
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
 _NEXT_RTJSON = re.compile(r'id="t1_[A-Za-z0-9]+-(?:comment|post)-rtjson-content"')
@@ -106,9 +106,9 @@ def _body_for(html_text: str, thing_id: str) -> str:
     return _WS.sub(" ", _html.unescape(text)).strip()
 
 
-def parse_comments(html_text: str, limit: int = MAX_COMMENTS) -> List[Dict[str, Any]]:
+def parse_comments(html_text: str, limit: int = MAX_COMMENTS) -> list[dict[str, Any]]:
     """Parse <shreddit-comment> elements into scored comment dicts (sorted desc)."""
-    comments: List[Dict[str, Any]] = []
+    comments: list[dict[str, Any]] = []
     for m in _COMMENT_START.finditer(html_text or ""):
         tag = m.group(0)
         author = _attr(tag, "author") or "[deleted]"
@@ -123,15 +123,17 @@ def parse_comments(html_text: str, limit: int = MAX_COMMENTS) -> List[Dict[str, 
         except ValueError:
             score = 0
         permalink = _attr(tag, "permalink")
-        comments.append({
-            "score": score,
-            "author": author,
-            "body": body[:300],
-            "excerpt": body[:200],
-            "permalink": permalink,
-            "date": _iso_to_date(_attr(tag, "created")),
-            "url": f"https://reddit.com{permalink}" if permalink else "",
-        })
+        comments.append(
+            {
+                "score": score,
+                "author": author,
+                "body": body[:300],
+                "excerpt": body[:200],
+                "permalink": permalink,
+                "date": _iso_to_date(_attr(tag, "created")),
+                "url": f"https://reddit.com{permalink}" if permalink else "",
+            }
+        )
 
     comments.sort(key=lambda c: c.get("score", 0), reverse=True)
     return comments[:limit]
@@ -145,7 +147,7 @@ def _total_comments(html_text: str) -> Optional[int]:
 def fetch_comments(
     post_url: str,
     timeout: int = SVC_TIMEOUT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch and parse top comments for a Reddit post via the shreddit endpoint.
 
     Args:

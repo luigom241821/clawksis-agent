@@ -13,6 +13,7 @@ Adapted from ShinMegamiBoson/OpenPlanter (MIT). Differences:
   - Configurable column names via flags
   - Optional --seed for reproducibility
 """
+
 from __future__ import annotations
 
 import argparse
@@ -203,7 +204,9 @@ def analyze(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--donations", required=True)
     p.add_argument("--donation-date-col", required=True)
     p.add_argument("--donation-amount-col", required=True)

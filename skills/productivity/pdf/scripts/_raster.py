@@ -2,6 +2,7 @@
 
 Returns PIL Images so callers can annotate/save. Not a CLI.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -15,6 +16,7 @@ def available_backends() -> list[str]:
     backends = []
     try:
         import pypdfium2
+
         backends.append("pypdfium2")
     except ImportError:
         pass
@@ -31,7 +33,9 @@ def missing_hints() -> list[str]:
     ]
 
 
-def rasterize_page(pdf_path: str, page: int, dpi: int = 150, password: str | None = None):
+def rasterize_page(
+    pdf_path: str, page: int, dpi: int = 150, password: str | None = None
+):
     """Render one 1-based page to a PIL Image, or None if no backend works.
 
     Raises ValueError for an out-of-range page when a backend is present.
@@ -48,6 +52,7 @@ def rasterize_page(pdf_path: str, page: int, dpi: int = 150, password: str | Non
 
 def _via_pdfium(pdf_path: str, page: int, dpi: int, password: str | None):
     import pypdfium2 as pdfium
+
     doc = pdfium.PdfDocument(pdf_path, password=password)
     try:
         if not 1 <= page <= len(doc):
@@ -60,13 +65,16 @@ def _via_pdfium(pdf_path: str, page: int, dpi: int, password: str | None):
 
 def _via_pdftoppm(pdf_path: str, page: int, dpi: int, password: str | None):
     from PIL import Image
+
     with tempfile.TemporaryDirectory() as tmp:
         prefix = str(Path(tmp) / "page")
         cmd = ["pdftoppm", "-png", "-r", str(dpi), "-f", str(page), "-l", str(page)]
         if password:
             cmd += ["-upw", password]
         cmd += [pdf_path, prefix]
-        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", check=False
+        )
         if proc.returncode != 0:
             raise ValueError(f"pdftoppm failed: {proc.stderr.strip()}")
         produced = sorted(Path(tmp).glob("page*.png"))

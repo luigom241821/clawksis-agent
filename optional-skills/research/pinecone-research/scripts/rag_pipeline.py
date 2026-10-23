@@ -6,6 +6,7 @@ Usage:
     python rag_pipeline.py --index-name agent-memory --action index --docs-dir ./docs
     python rag_pipeline.py --index-name agent-memory --action query --query "How does X work?"
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,7 +20,10 @@ def get_pinecone_client():
     try:
         from pinecone import Pinecone
     except ImportError:
-        print("Error: pinecone-client not installed. Run: pip install pinecone-client", file=sys.stderr)
+        print(
+            "Error: pinecone-client not installed. Run: pip install pinecone-client",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     api_key = os.environ.get("PINECONE_API_KEY")
@@ -59,11 +63,13 @@ def load_documents(docs_dir: str) -> list[dict]:
     for filepath in sorted(docs_path.rglob("*.txt")):
         text = filepath.read_text(encoding="utf-8").strip()
         if text:
-            docs.append({
-                "id": str(filepath.relative_to(docs_path)),
-                "text": text,
-                "metadata": {"source": str(filepath.name)},
-            })
+            docs.append(
+                {
+                    "id": str(filepath.relative_to(docs_path)),
+                    "text": text,
+                    "metadata": {"source": str(filepath.name)},
+                }
+            )
     return docs
 
 
@@ -72,7 +78,10 @@ def index_documents(index, docs: list[dict], batch_size: int = 100):
     try:
         from langchain_openai import OpenAIEmbeddings
     except ImportError:
-        print("Error: langchain-openai not installed. Run: pip install langchain-openai", file=sys.stderr)
+        print(
+            "Error: langchain-openai not installed. Run: pip install langchain-openai",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     embeddings = OpenAIEmbeddings()
@@ -80,11 +89,13 @@ def index_documents(index, docs: list[dict], batch_size: int = 100):
 
     for doc in docs:
         embedding = embeddings.embed_query(doc["text"])
-        vectors.append({
-            "id": doc["id"],
-            "values": embedding,
-            "metadata": {**doc["metadata"], "text": doc["text"][:1000]},
-        })
+        vectors.append(
+            {
+                "id": doc["id"],
+                "values": embedding,
+                "metadata": {**doc["metadata"], "text": doc["text"][:1000]},
+            }
+        )
 
     # Batch upsert
     for i in range(0, len(vectors), batch_size):
@@ -100,7 +111,10 @@ def query_index(index, query: str, top_k: int = 5):
     try:
         from langchain_openai import OpenAIEmbeddings
     except ImportError:
-        print("Error: langchain-openai not installed. Run: pip install langchain-openai", file=sys.stderr)
+        print(
+            "Error: langchain-openai not installed. Run: pip install langchain-openai",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     embeddings = OpenAIEmbeddings()
@@ -127,7 +141,9 @@ def main():
     parser.add_argument("--action", choices=["index", "query", "stats"], required=True)
     parser.add_argument("--docs-dir", help="Directory of .txt files to index")
     parser.add_argument("--query", help="Query string for retrieval")
-    parser.add_argument("--top-k", type=int, default=5, help="Number of results to return")
+    parser.add_argument(
+        "--top-k", type=int, default=5, help="Number of results to return"
+    )
     args = parser.parse_args()
 
     pc = get_pinecone_client()

@@ -16,6 +16,7 @@ Spec format (UTF-8 JSON):
   ]
 }
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,7 +48,10 @@ def build_pdf(spec: dict, out_path: str) -> int:
             TableStyle,
         )
     except ImportError:
-        print("Missing dependency: install with 'python3 -m pip install reportlab'", file=sys.stderr)
+        print(
+            "Missing dependency: install with 'python3 -m pip install reportlab'",
+            file=sys.stderr,
+        )
         return 2
 
     page_size = letter if str(spec.get("page_size", "A4")).lower() == "letter" else A4
@@ -117,7 +121,9 @@ def build_pdf(spec: dict, out_path: str) -> int:
 
 def main() -> int:
     _reconfigure_stdio()
-    parser = argparse.ArgumentParser(description="Create a PDF from a JSON spec (reportlab).")
+    parser = argparse.ArgumentParser(
+        description="Create a PDF from a JSON spec (reportlab)."
+    )
     parser.add_argument("spec", help="Path to UTF-8 JSON spec file")
     parser.add_argument("-o", "--output", required=True, help="Output PDF path")
     args = parser.parse_args()

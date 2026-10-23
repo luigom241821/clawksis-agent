@@ -30,100 +30,102 @@ SUFFIXES = [
 ]
 
 # Base noise words shared across most modules
-NOISE_WORDS = frozenset({
-    # Articles/prepositions/conjunctions
-    "a",
-    "an",
-    "the",
-    "is",
-    "are",
-    "was",
-    "were",
-    "and",
-    "or",
-    "of",
-    "in",
-    "on",
-    "for",
-    "with",
-    "about",
-    "to",
-    # Question words
-    "how",
-    "what",
-    "which",
-    "who",
-    "why",
-    "when",
-    "where",
-    "does",
-    "should",
-    "could",
-    "would",
-    # Research/meta descriptors
-    "best",
-    "top",
-    "good",
-    "great",
-    "awesome",
-    "killer",
-    "latest",
-    "new",
-    "news",
-    "update",
-    "updates",
-    "trendiest",
-    "trending",
-    "hottest",
-    "hot",
-    "popular",
-    "viral",
-    "practices",
-    "features",
-    "guide",
-    "tutorial",
-    "recommendations",
-    "advice",
-    "review",
-    "reviews",
-    "usecases",
-    "examples",
-    "comparison",
-    "versus",
-    "vs",
-    "plugin",
-    "plugins",
-    "skill",
-    "skills",
-    "tool",
-    "tools",
-    # Prompting meta words
-    "prompt",
-    "prompts",
-    "prompting",
-    "techniques",
-    "tips",
-    "tricks",
-    "methods",
-    "strategies",
-    "approaches",
-    # Action words
-    "using",
-    "uses",
-    "use",
-    # Misc filler
-    "people",
-    "saying",
-    "think",
-    "said",
-    "lately",
-})
+NOISE_WORDS = frozenset(
+    {
+        # Articles/prepositions/conjunctions
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "and",
+        "or",
+        "of",
+        "in",
+        "on",
+        "for",
+        "with",
+        "about",
+        "to",
+        # Question words
+        "how",
+        "what",
+        "which",
+        "who",
+        "why",
+        "when",
+        "where",
+        "does",
+        "should",
+        "could",
+        "would",
+        # Research/meta descriptors
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "killer",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trendiest",
+        "trending",
+        "hottest",
+        "hot",
+        "popular",
+        "viral",
+        "practices",
+        "features",
+        "guide",
+        "tutorial",
+        "recommendations",
+        "advice",
+        "review",
+        "reviews",
+        "usecases",
+        "examples",
+        "comparison",
+        "versus",
+        "vs",
+        "plugin",
+        "plugins",
+        "skill",
+        "skills",
+        "tool",
+        "tools",
+        # Prompting meta words
+        "prompt",
+        "prompts",
+        "prompting",
+        "techniques",
+        "tips",
+        "tricks",
+        "methods",
+        "strategies",
+        "approaches",
+        # Action words
+        "using",
+        "uses",
+        "use",
+        # Misc filler
+        "people",
+        "saying",
+        "think",
+        "said",
+        "lately",
+    }
+)
 
 
 def extract_core_subject(
     topic: str,
     *,
-    noise: Optional[FrozenSet[str]] = None,
+    noise: Optional[frozenset[str]] = None,
     max_words: Optional[int] = None,
     strip_suffixes: bool = False,
 ) -> str:
@@ -171,7 +173,7 @@ def extract_core_subject(
     return result.rstrip("?!.") if not max_words else (result or topic.lower().strip())
 
 
-def extract_compound_terms(topic: str) -> List[str]:
+def extract_compound_terms(topic: str) -> list[str]:
     """Detect multi-word terms that should be quoted in search queries.
 
     Identifies:
@@ -180,7 +182,7 @@ def extract_compound_terms(topic: str) -> List[str]:
 
     Returns list of terms suitable for quoting (e.g., '"multi-agent"').
     """
-    terms: List[str] = []
+    terms: list[str] = []
 
     # Hyphenated terms
     for match in re.finditer(r"\b\w+-\w+(?:-\w+)*\b", topic):

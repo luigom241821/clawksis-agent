@@ -8,6 +8,7 @@ OPENCORPORATES_API_TOKEN in env or pass --token.
 Without a token, this script falls back to scraping the public HTML
 search page (limited fields, more brittle, no jurisdiction filter).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,9 @@ COLUMNS = [
 ]
 
 
-def _via_api(query: str, jurisdiction: str | None, token: str, limit: int) -> list[dict]:
+def _via_api(
+    query: str, jurisdiction: str | None, token: str, limit: int
+) -> list[dict]:
     params = {
         "q": query,
         "api_token": token,
@@ -60,7 +63,9 @@ def _via_html(query: str, limit: int) -> list[dict]:
     """Best-effort HTML fallback when no API token is available."""
     params = {"q": query, "utf8": "✓"}
     url = f"{HTML_URL}?{urllib.parse.urlencode(params)}"
-    body = get(url, user_agent="Mozilla/5.0 clawk-osint").decode("utf-8", errors="replace")
+    body = get(url, user_agent="Mozilla/5.0 clawk-osint").decode(
+        "utf-8", errors="replace"
+    )
     # Each result is in <li class="company"> ... </li> with name, url, status
     pattern = re.compile(
         r'<li[^>]*class="[^"]*company[^"]*"[^>]*>.*?'
@@ -146,7 +151,11 @@ def fetch(
                 "status": c.get("current_status", "") or c.get("inactive", "") or "",
                 "registered_address": addr,
                 "opencorporates_url": c.get("opencorporates_url", "") or "",
-                "officers_count": str(c.get("officers", {}).get("total_count", "") if c.get("officers") else ""),
+                "officers_count": str(
+                    c.get("officers", {}).get("total_count", "")
+                    if c.get("officers")
+                    else ""
+                ),
                 "source": source_tag,
             }
         )
@@ -166,7 +175,9 @@ def fetch(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--query", required=True, help="Company name search")
     p.add_argument(
         "--jurisdiction",

@@ -82,15 +82,17 @@ def build_ranked_items(report: dict[str, Any], limit: int) -> list[dict[str, Any
         ranked = []
         for row in report["ranked_candidates"][:limit]:
             candidate_sources = row_sources(row)
-            ranked.append({
-                "key": stable_item_key(row),
-                "source": ", ".join(candidate_sources),
-                "sources": candidate_sources,
-                "url": str(row.get("url") or ""),
-                "text": str(row.get("title") or ""),
-                "date": row_best_date(row),
-                "score": float(row.get("final_score") or 0.0),
-            })
+            ranked.append(
+                {
+                    "key": stable_item_key(row),
+                    "source": ", ".join(candidate_sources),
+                    "sources": candidate_sources,
+                    "url": str(row.get("url") or ""),
+                    "text": str(row.get("title") or ""),
+                    "date": row_best_date(row),
+                    "score": float(row.get("final_score") or 0.0),
+                }
+            )
         return ranked
 
     # v2 format: per-source lists (reddit, x, youtube, etc.)
@@ -99,17 +101,19 @@ def build_ranked_items(report: dict[str, Any], limit: int) -> list[dict[str, Any
         for item in report.get(source_key) or []:
             if not isinstance(item, dict):
                 continue
-            all_items.append({
-                "key": str(
-                    item.get("url") or item.get("id") or item.get(text_field) or ""
-                ),
-                "source": source_key,
-                "sources": [source_key],
-                "url": str(item.get("url") or ""),
-                "text": str(item.get(text_field) or item.get("title") or ""),
-                "date": item.get("date"),
-                "score": float(item.get("score") or 0.0),
-            })
+            all_items.append(
+                {
+                    "key": str(
+                        item.get("url") or item.get("id") or item.get(text_field) or ""
+                    ),
+                    "source": source_key,
+                    "sources": [source_key],
+                    "url": str(item.get("url") or ""),
+                    "text": str(item.get(text_field) or item.get("title") or ""),
+                    "date": item.get("date"),
+                    "score": float(item.get("score") or 0.0),
+                }
+            )
     all_items.sort(key=lambda x: x["score"], reverse=True)
     return all_items[:limit]
 
@@ -240,13 +244,15 @@ def build_judge_prompt(topic: str, query_type: str, items: list[dict[str, Any]])
     item_lines = []
     for item in items:
         item_lines.append(
-            "\n".join([
-                f"- id: {item['key']}",
-                f"  source: {item['source']}",
-                f"  title: {item['text'][:220]}",
-                f"  url: {item['url']}",
-                f"  date: {item.get('date') or 'unknown'}",
-            ])
+            "\n".join(
+                [
+                    f"- id: {item['key']}",
+                    f"  source: {item['source']}",
+                    f"  title: {item['text'][:220]}",
+                    f"  url: {item['url']}",
+                    f"  date: {item.get('date') or 'unknown'}",
+                ]
+            )
         )
     return f"""
 Judge search-result relevance for a last-30-days research tool.
@@ -518,11 +524,13 @@ def write_failure_summary(
         else ["# Search Quality Evaluation", ""]
     )
     if failures:
-        lines.extend([
-            "",
-            "## Failures",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Failures",
+                "",
+            ]
+        )
         for failure in failures:
             lines.append(f"- `{failure['topic']}`: {failure['error']}")
     summary_path.write_text("\n".join(lines).rstrip() + "\n")
@@ -618,11 +626,13 @@ def main() -> int:
                     )
                 )
             except Exception as exc:
-                failures.append({
-                    "topic": topic,
-                    "query_type": query_type,
-                    "error": str(exc),
-                })
+                failures.append(
+                    {
+                        "topic": topic,
+                        "query_type": query_type,
+                        "error": str(exc),
+                    }
+                )
         write_failure_summary(
             output_dir, args.baseline, args.candidate, summaries, failures
         )

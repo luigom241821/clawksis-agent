@@ -10,52 +10,54 @@ import re
 from typing import List, Optional, Set
 
 # Stopwords for relevance computation (common English words that dilute token overlap)
-STOPWORDS = frozenset({
-    "the",
-    "a",
-    "an",
-    "to",
-    "for",
-    "how",
-    "is",
-    "in",
-    "of",
-    "on",
-    "and",
-    "with",
-    "from",
-    "by",
-    "at",
-    "this",
-    "that",
-    "it",
-    "my",
-    "your",
-    "i",
-    "me",
-    "we",
-    "you",
-    "what",
-    "are",
-    "do",
-    "can",
-    "its",
-    "be",
-    "or",
-    "not",
-    "no",
-    "so",
-    "if",
-    "but",
-    "about",
-    "all",
-    "just",
-    "get",
-    "has",
-    "have",
-    "was",
-    "will",
-})
+STOPWORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "to",
+        "for",
+        "how",
+        "is",
+        "in",
+        "of",
+        "on",
+        "and",
+        "with",
+        "from",
+        "by",
+        "at",
+        "this",
+        "that",
+        "it",
+        "my",
+        "your",
+        "i",
+        "me",
+        "we",
+        "you",
+        "what",
+        "are",
+        "do",
+        "can",
+        "its",
+        "be",
+        "or",
+        "not",
+        "no",
+        "so",
+        "if",
+        "but",
+        "about",
+        "all",
+        "just",
+        "get",
+        "has",
+        "have",
+        "was",
+        "will",
+    }
+)
 
 # Synonym groups for relevance scoring (bidirectional expansion)
 # Superset of all platform-specific synonym dicts
@@ -80,52 +82,54 @@ SYNONYMS = {
 
 # Generic query words that should not carry relevance on their own.
 # They still help when paired with stronger entity/topic matches.
-LOW_SIGNAL_QUERY_TOKENS = frozenset({
-    "advice",
-    "animation",
-    "animations",
-    "best",
-    "chance",
-    "chances",
-    "code",
-    "compare",
-    "comparison",
-    "differences",
-    "explain",
-    "guide",
-    "guides",
-    "how",
-    "latest",
-    "news",
-    "odds",
-    "opinion",
-    "opinions",
-    "prediction",
-    "predictions",
-    "probability",
-    "probabilities",
-    "prompt",
-    "prompting",
-    "prompts",
-    "rate",
-    "review",
-    "reviews",
-    "thoughts",
-    "tip",
-    "tips",
-    "tutorial",
-    "tutorials",
-    "update",
-    "updates",
-    "use",
-    "using",
-    "versus",
-    "vs",
-    "worth",
-})
+LOW_SIGNAL_QUERY_TOKENS = frozenset(
+    {
+        "advice",
+        "animation",
+        "animations",
+        "best",
+        "chance",
+        "chances",
+        "code",
+        "compare",
+        "comparison",
+        "differences",
+        "explain",
+        "guide",
+        "guides",
+        "how",
+        "latest",
+        "news",
+        "odds",
+        "opinion",
+        "opinions",
+        "prediction",
+        "predictions",
+        "probability",
+        "probabilities",
+        "prompt",
+        "prompting",
+        "prompts",
+        "rate",
+        "review",
+        "reviews",
+        "thoughts",
+        "tip",
+        "tips",
+        "tutorial",
+        "tutorials",
+        "update",
+        "updates",
+        "use",
+        "using",
+        "versus",
+        "vs",
+        "worth",
+    }
+)
 
 
-def tokenize(text: str) -> Set[str]:
+def tokenize(text: str) -> set[str]:
     """Lowercase, strip punctuation, remove stopwords, drop single-char tokens.
 
     Expands tokens with synonyms for better cross-domain matching.
@@ -151,7 +155,7 @@ class PreparedQuery:
     per-item normalize/score loops don't re-tokenize the same query N times.
     """
 
-    __slots__ = ("raw", "q_tokens", "informative_q_tokens", "normalized_phrase")
+    __slots__ = ("informative_q_tokens", "normalized_phrase", "q_tokens", "raw")
 
     def __init__(self, query: str) -> None:
         self.raw = query
@@ -168,7 +172,7 @@ def _as_prepared(query: "str | PreparedQuery") -> PreparedQuery:
 def token_overlap_relevance(
     query: "str | PreparedQuery",
     text: str,
-    hashtags: Optional[List[str]] = None,
+    hashtags: Optional[list[str]] = None,
 ) -> float:
     """Compute a query-centric relevance score between 0.0 and 1.0.
 

@@ -21,6 +21,7 @@ review with `vision_analyze`. If no rasterizer (pypdfium2/pdftoppm) is
 available the overlay is skipped with {"rendered": false, "missing": [...]}
 and validation exit status is unchanged.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,7 @@ def _boxes_overlap(a, b) -> bool:
 def _box_gap(a, b) -> float:
     dx = max(b[0] - a[2], a[0] - b[2], 0.0)
     dy = max(b[1] - a[3], a[1] - b[3], 0.0)
-    return (dx ** 2 + dy ** 2) ** 0.5
+    return (dx**2 + dy**2) ** 0.5
 
 
 def _page_size(spec: dict) -> tuple[float, float]:
@@ -84,7 +85,9 @@ def validate(spec: dict) -> dict:
             if entry and label and len(problems) == 0:
                 gap = _box_gap([float(v) for v in label], [float(v) for v in entry])
                 if gap > MAX_LABEL_GAP:
-                    problems.append(f"label is {gap:.0f}pt from its entry box (max {MAX_LABEL_GAP:.0f})")
+                    problems.append(
+                        f"label is {gap:.0f}pt from its entry box (max {MAX_LABEL_GAP:.0f})"
+                    )
                 if _boxes_overlap([float(v) for v in label], [float(v) for v in entry]):
                     problems.append("label_box overlaps its own entry_box")
         if entry and not any("malformed" in p or "missing" in p for p in problems):
@@ -93,19 +96,29 @@ def validate(spec: dict) -> dict:
                 if _boxes_overlap(ebox, other_box):
                     problems.append(f"entry_box overlaps field {other_name!r}")
             entry_boxes.setdefault(page, []).append((name, ebox))
-        report.append({"name": name, "page": page, "ok": not problems, "problems": problems})
+        report.append(
+            {"name": name, "page": page, "ok": not problems, "problems": problems}
+        )
     errors = sum(1 for r in report if not r["ok"])
-    return {"ok": errors == 0, "page_size": [width, height],
-            "field_count": len(report), "errors": errors, "fields": report}
+    return {
+        "ok": errors == 0,
+        "page_size": [width, height],
+        "field_count": len(report),
+        "errors": errors,
+        "fields": report,
+    }
 
 
-def render_overlay(spec: dict, pdf_path: str | None, page: int, out_png: str,
-                   dpi: int = 100) -> dict:
+def render_overlay(
+    spec: dict, pdf_path: str | None, page: int, out_png: str, dpi: int = 100
+) -> dict:
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
     import _raster
+
     if not _raster.available_backends() and pdf_path:
         return {"rendered": False, "missing": _raster.missing_hints()}
     from PIL import Image, ImageDraw
+
     width, height = _page_size(spec)
     if pdf_path:
         img = _raster.rasterize_page(pdf_path, page, dpi=dpi)
@@ -119,7 +132,12 @@ def render_overlay(spec: dict, pdf_path: str | None, page: int, out_png: str,
 
     def to_px(box):
         x0, y0, x1, y1 = (float(v) for v in box)
-        return [x0 * scale, img.height - y1 * scale, x1 * scale, img.height - y0 * scale]
+        return [
+            x0 * scale,
+            img.height - y1 * scale,
+            x1 * scale,
+            img.height - y0 * scale,
+        ]
 
     for f in spec.get("fields", []):
         if int(f.get("page", 1)) != page:
@@ -127,12 +145,18 @@ def render_overlay(spec: dict, pdf_path: str | None, page: int, out_png: str,
         if f.get("entry_box"):
             px = to_px(f["entry_box"])
             draw.rectangle(px, outline=(220, 30, 30), width=2)
-            draw.text((px[0] + 2, px[1] + 2), str(f.get("name", "?")), fill=(220, 30, 30))
+            draw.text(
+                (px[0] + 2, px[1] + 2), str(f.get("name", "?")), fill=(220, 30, 30)
+            )
         if f.get("label_box"):
             draw.rectangle(to_px(f["label_box"]), outline=(30, 60, 220), width=2)
     img.save(out_png)
-    return {"rendered": True, "overlay": out_png, "page": page,
-            "legend": {"entry_box": "red", "label_box": "blue"}}
+    return {
+        "rendered": True,
+        "overlay": out_png,
+        "page": page,
+        "legend": {"entry_box": "red", "label_box": "blue"},
+    }
 
 
 def main() -> int:
@@ -143,22 +167,33 @@ def main() -> int:
             pass
     parser = argparse.ArgumentParser(
         description="Validate form-spec layout (boxes, overlaps, label pairing); "
-                    "optionally render an annotated overlay image.")
+        "optionally render an annotated overlay image."
+    )
     parser.add_argument("spec", help="Form spec JSON (same format as pdf_make_form.py)")
-    parser.add_argument("--pdf", help="Existing PDF to rasterize under the overlay "
-                                      "(blank page if omitted)")
-    parser.add_argument("--render-overlay", metavar="OUT_PNG",
-                        help="Write an annotated PNG for visual review")
-    parser.add_argument("--overlay-page", type=int, default=1, help="1-based page (default 1)")
-    parser.add_argument("--dpi", type=int, default=100, help="Overlay render DPI (default 100)")
+    parser.add_argument(
+        "--pdf",
+        help="Existing PDF to rasterize under the overlay (blank page if omitted)",
+    )
+    parser.add_argument(
+        "--render-overlay",
+        metavar="OUT_PNG",
+        help="Write an annotated PNG for visual review",
+    )
+    parser.add_argument(
+        "--overlay-page", type=int, default=1, help="1-based page (default 1)"
+    )
+    parser.add_argument(
+        "--dpi", type=int, default=100, help="Overlay render DPI (default 100)"
+    )
     args = parser.parse_args()
 
     with open(args.spec, encoding="utf-8") as fh:
         spec = json.load(fh)
     result = validate(spec)
     if args.render_overlay:
-        result["overlay"] = render_overlay(spec, args.pdf, args.overlay_page,
-                                           args.render_overlay, args.dpi)
+        result["overlay"] = render_overlay(
+            spec, args.pdf, args.overlay_page, args.render_overlay, args.dpi
+        )
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
     print()
     return 0 if result["ok"] else 1

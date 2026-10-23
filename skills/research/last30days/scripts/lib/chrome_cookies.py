@@ -57,6 +57,7 @@ def _get_chromium_encryption_key(service_name: str) -> Optional[bytes]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode != 0:
             logger.info(
@@ -129,6 +130,7 @@ def _decrypt_v10_value(
             input=ciphertext,
             capture_output=True,
             timeout=5,
+            check=False,
         )
         if result.returncode != 0:
             logger.debug(

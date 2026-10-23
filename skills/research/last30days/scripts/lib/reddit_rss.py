@@ -17,7 +17,7 @@ downstream code (pipeline, renderer) is unaffected.
 import sys
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote_plus
 
@@ -66,7 +66,7 @@ def _iso_to_epoch(value: Optional[str]) -> Optional[float]:
     try:
         dt = datetime.fromisoformat(value.strip())
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.timestamp()
     except (ValueError, TypeError):
         return None
@@ -83,7 +83,7 @@ def _subreddit_from(category: str, url: str) -> str:
     return ""
 
 
-def _parse_feed(xml_text: str, query: str = "") -> List[Dict[str, Any]]:
+def _parse_feed(xml_text: str, query: str = "") -> list[dict[str, Any]]:
     """Parse an Atom feed string into normalized post dicts. Never raises."""
     if not xml_text:
         return []
@@ -93,7 +93,7 @@ def _parse_feed(xml_text: str, query: str = "") -> List[Dict[str, Any]]:
         _log(f"feed parse error: {e}")
         return []
 
-    posts: List[Dict[str, Any]] = []
+    posts: list[dict[str, Any]] = []
     for entry in root.iter(f"{ATOM}entry"):
         link_el = entry.find(f"{ATOM}link")
         url = link_el.get("href", "").strip() if link_el is not None else ""
@@ -128,34 +128,36 @@ def _parse_feed(xml_text: str, query: str = "") -> List[Dict[str, Any]]:
 
         relevance = round(token_overlap_relevance(query, title), 3) if query else 0.0
 
-        posts.append({
-            "id": "",  # assigned after dedup
-            "title": title,
-            "url": url,
-            "score": 0,  # backfilled by shreddit enrichment
-            "num_comments": 0,  # backfilled by shreddit enrichment
-            "subreddit": subreddit,
-            "created_utc": _iso_to_epoch(updated),
-            "author": author,
-            "selftext": selftext,
-            "date": _iso_to_date(updated),
-            "engagement": {
-                "score": 0,
-                "num_comments": 0,
-                "upvote_ratio": None,
-            },
-            "relevance": relevance,
-            "why_relevant": "Reddit RSS",
-            "metadata": {},
-        })
+        posts.append(
+            {
+                "id": "",  # assigned after dedup
+                "title": title,
+                "url": url,
+                "score": 0,  # backfilled by shreddit enrichment
+                "num_comments": 0,  # backfilled by shreddit enrichment
+                "subreddit": subreddit,
+                "created_utc": _iso_to_epoch(updated),
+                "author": author,
+                "selftext": selftext,
+                "date": _iso_to_date(updated),
+                "engagement": {
+                    "score": 0,
+                    "num_comments": 0,
+                    "upvote_ratio": None,
+                },
+                "relevance": relevance,
+                "why_relevant": "Reddit RSS",
+                "metadata": {},
+            }
+        )
 
     return posts
 
 
-def _build_urls(query: str, depth: str, subreddits: Optional[List[str]]) -> List[str]:
+def _build_urls(query: str, depth: str, subreddits: Optional[list[str]]) -> list[str]:
     """Build the keyless RSS feed URLs to fan out across."""
     q = quote_plus(query)
-    urls: List[str] = [
+    urls: list[str] = [
         f"https://www.reddit.com/search.rss?q={q}&sort=relevance&t=month"
     ]
     for raw_sub in subreddits or []:
@@ -171,7 +173,7 @@ def _build_urls(query: str, depth: str, subreddits: Optional[List[str]]) -> List
     return urls
 
 
-def _fetch_feed(url: str, query: str) -> List[Dict[str, Any]]:
+def _fetch_feed(url: str, query: str) -> list[dict[str, Any]]:
     """Fetch and parse one feed. Never raises."""
     try:
         text = http.get_text(url, timeout=FEED_TIMEOUT, accept="application/atom+xml")
@@ -184,8 +186,8 @@ def _fetch_feed(url: str, query: str) -> List[Dict[str, Any]]:
 def search_rss(
     query: str,
     depth: str = "default",
-    subreddits: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    subreddits: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """Discover Reddit posts for a query via keyless RSS feeds.
 
     Args:
@@ -201,7 +203,7 @@ def search_rss(
     limit = DEPTH_LIMITS.get(depth, DEPTH_LIMITS["default"])
     urls = _build_urls(query, depth, subreddits)
 
-    all_posts: List[Dict[str, Any]] = []
+    all_posts: list[dict[str, Any]] = []
     workers = min(MAX_WORKERS, len(urls)) or 1
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(_fetch_feed, url, query): url for url in urls}
@@ -213,7 +215,7 @@ def search_rss(
 
     # Dedupe by URL (first occurrence wins).
     seen: set = set()
-    unique: List[Dict[str, Any]] = []
+    unique: list[dict[str, Any]] = []
     for post in all_posts:
         if post["url"] not in seen:
             seen.add(post["url"])

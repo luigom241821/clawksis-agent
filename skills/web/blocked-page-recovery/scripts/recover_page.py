@@ -15,6 +15,7 @@ Stdlib only. Usage:
 
 Exit codes: 0 recovered, 1 nothing worked, 2 bad invocation.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -60,7 +61,9 @@ def _fetch(
     headers: dict | None = None,
     retries_on_429: int = 2,
 ) -> tuple[int, bytes]:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": USER_AGENT, **(headers or {})}
+    )
     for attempt in range(retries_on_429 + 1):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -113,7 +116,9 @@ def validate(body: bytes, route: str, target_url: str) -> str | None:
 def try_wayback(url: str, timeout: int) -> dict | None:
     snap_url = None
     snap_ts = None
-    discovery = "https://archive.org/wayback/available?url=" + urllib.parse.quote(url, safe="")
+    discovery = "https://archive.org/wayback/available?url=" + urllib.parse.quote(
+        url, safe=""
+    )
     status, raw = _fetch(discovery, timeout)
     if status == 200:
         try:
@@ -208,8 +213,11 @@ def main() -> int:
 
     result = recover(args.url, args.timeout)
     if not result:
-        msg = {"recovered": False, "url": args.url,
-               "hint": "No archive copy found. Try the API-first pivot or the browser tool."}
+        msg = {
+            "recovered": False,
+            "url": args.url,
+            "hint": "No archive copy found. Try the API-first pivot or the browser tool.",
+        }
         print(json.dumps(msg, indent=2) if args.json else msg["hint"], file=sys.stderr)
         return 1
 

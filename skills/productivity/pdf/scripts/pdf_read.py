@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Read a PDF: per-page text, tables, metadata, or form fields. JSON to stdout."""
+
 from __future__ import annotations
 
 import argparse
@@ -21,7 +22,10 @@ def _need(module: str, package: str):
     try:
         return __import__(module)
     except ImportError:
-        print(f"Missing dependency: install with 'python3 -m pip install {package}'", file=sys.stderr)
+        print(
+            f"Missing dependency: install with 'python3 -m pip install {package}'",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
 
 
@@ -46,7 +50,9 @@ def read_tables(path: str, password: str | None, csv_dir: str | None) -> dict:
                     os.makedirs(csv_dir, exist_ok=True)
                     csv_path = os.path.join(csv_dir, f"page{pageno}_table{tidx}.csv")
                     with open(csv_path, "w", encoding="utf-8", newline="") as fh:
-                        csv.writer(fh).writerows([[c if c is not None else "" for c in row] for row in table])
+                        csv.writer(fh).writerows(
+                            [[c if c is not None else "" for c in row] for row in table]
+                        )
                     written.append(csv_path)
     out = {"table_count": len(result), "tables": result}
     if csv_dir:
@@ -60,7 +66,10 @@ def read_meta(path: str, password: str | None) -> dict:
     encrypted = reader.is_encrypted
     if encrypted:
         if password is None or not reader.decrypt(password):
-            return {"encrypted": True, "note": "Provide --password to read metadata of an encrypted file."}
+            return {
+                "encrypted": True,
+                "note": "Provide --password to read metadata of an encrypted file.",
+            }
     meta = {}
     if reader.metadata:
         for key, value in reader.metadata.items():
@@ -68,12 +77,14 @@ def read_meta(path: str, password: str | None) -> dict:
     pages = []
     for idx, page in enumerate(reader.pages, start=1):
         box = page.mediabox
-        pages.append({
-            "page": idx,
-            "width": float(box.width),
-            "height": float(box.height),
-            "rotation": int(page.get("/Rotate", 0)),
-        })
+        pages.append(
+            {
+                "page": idx,
+                "width": float(box.width),
+                "height": float(box.height),
+                "rotation": int(page.get("/Rotate", 0)),
+            }
+        )
     # scanned-page heuristic: no extractable text but page has images
     likely_scanned = []
     try:
@@ -95,8 +106,10 @@ def read_meta(path: str, password: str | None) -> dict:
         "likely_scanned_pages": likely_scanned,
     }
     if likely_scanned:
-        out["note"] = ("Image-only pages detected: no text layer to extract. "
-                       "Use the references/ocr-extraction.md in this skill for OCR.")
+        out["note"] = (
+            "Image-only pages detected: no text layer to extract. "
+            "Use the references/ocr-extraction.md in this skill for OCR."
+        )
     return out
 
 
@@ -125,14 +138,28 @@ def read_fields(path: str, password: str | None) -> dict:
 
 def main() -> int:
     _reconfigure_stdio()
-    parser = argparse.ArgumentParser(description="Extract text, tables, metadata, or form fields from a PDF.")
+    parser = argparse.ArgumentParser(
+        description="Extract text, tables, metadata, or form fields from a PDF."
+    )
     parser.add_argument("pdf", help="Input PDF path")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--text", action="store_true", help="Per-page text as JSON")
-    mode.add_argument("--tables", action="store_true", help="Tables as JSON (optionally CSV via --csv-dir)")
-    mode.add_argument("--meta", action="store_true", help="Metadata, page sizes, encrypted/scanned flags")
-    mode.add_argument("--fields", action="store_true", help="AcroForm fields with types and values")
-    parser.add_argument("--csv-dir", help="Also write each table as a CSV file into this directory")
+    mode.add_argument(
+        "--tables",
+        action="store_true",
+        help="Tables as JSON (optionally CSV via --csv-dir)",
+    )
+    mode.add_argument(
+        "--meta",
+        action="store_true",
+        help="Metadata, page sizes, encrypted/scanned flags",
+    )
+    mode.add_argument(
+        "--fields", action="store_true", help="AcroForm fields with types and values"
+    )
+    parser.add_argument(
+        "--csv-dir", help="Also write each table as a CSV file into this directory"
+    )
     parser.add_argument("--password", help="Password for encrypted PDFs")
     args = parser.parse_args()
 

@@ -46,13 +46,13 @@ def _date_to_unix(date_str: str) -> int:
     """Convert YYYY-MM-DD to Unix timestamp (start of day UTC)."""
     parts = date_str.split("-")
     year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
-    dt = datetime.datetime(year, month, day, tzinfo=datetime.timezone.utc)
+    dt = datetime.datetime(year, month, day, tzinfo=datetime.UTC)
     return int(dt.timestamp())
 
 
 def _unix_to_date(ts: int) -> str:
     """Convert Unix timestamp to YYYY-MM-DD."""
-    dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+    dt = datetime.datetime.fromtimestamp(ts, tz=datetime.UTC)
     return dt.strftime("%Y-%m-%d")
 
 
@@ -71,7 +71,7 @@ def search_hackernews(
     from_date: str,
     to_date: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search Hacker News via Algolia API.
 
     Args:
@@ -130,7 +130,7 @@ def search_hackernews(
     return response
 
 
-_WORD_BOUNDARY_RE_CACHE: Dict[str, "re.Pattern[str]"] = {}
+_WORD_BOUNDARY_RE_CACHE: dict[str, "re.Pattern[str]"] = {}
 
 
 def _flatten_query_for_algolia(text: str) -> str:
@@ -183,8 +183,8 @@ def _title_matches_query(title: str, query: str, author: str = "") -> bool:
 
 
 def parse_hackernews_response(
-    response: Dict[str, Any], query: str = ""
-) -> List[Dict[str, Any]]:
+    response: dict[str, Any], query: str = ""
+) -> list[dict[str, Any]]:
     """Parse Algolia response into normalized item dicts.
 
     Args:
@@ -235,25 +235,27 @@ def parse_hackernews_response(
         else:
             relevance = min(1.0, rank_score * 0.7 + engagement_boost + 0.1)
 
-        items.append({
-            "id": object_id,
-            "title": hit.get("title", ""),
-            "url": article_url,
-            "hn_url": hn_url,
-            "author": hit.get("author", ""),
-            "date": date_str,
-            "engagement": {
-                "points": points,
-                "comments": num_comments,
-            },
-            "relevance": round(relevance, 2),
-            "why_relevant": f"HN story about {hit.get('title', 'topic')[:60]}",
-        })
+        items.append(
+            {
+                "id": object_id,
+                "title": hit.get("title", ""),
+                "url": article_url,
+                "hn_url": hn_url,
+                "author": hit.get("author", ""),
+                "date": date_str,
+                "engagement": {
+                    "points": points,
+                    "comments": num_comments,
+                },
+                "relevance": round(relevance, 2),
+                "why_relevant": f"HN story about {hit.get('title', 'topic')[:60]}",
+            }
+        )
 
     return items
 
 
-def _fetch_item_comments(object_id: str, max_comments: int = 5) -> Dict[str, Any]:
+def _fetch_item_comments(object_id: str, max_comments: int = 5) -> dict[str, Any]:
     """Fetch top-level comments for a story from Algolia items endpoint.
 
     Args:
@@ -282,11 +284,13 @@ def _fetch_item_comments(object_id: str, max_comments: int = 5) -> Dict[str, Any
     for c in real_comments[:max_comments]:
         text = _strip_html(c.get("text", ""))
         excerpt = text[:300] + "..." if len(text) > 300 else text
-        comments.append({
-            "author": c.get("author", ""),
-            "text": excerpt,
-            "points": c.get("points") or 0,
-        })
+        comments.append(
+            {
+                "author": c.get("author", ""),
+                "text": excerpt,
+                "points": c.get("points") or 0,
+            }
+        )
         # First sentence as insight
         first_sentence = text.split(". ")[0].split("\n")[0][:200]
         if first_sentence:
@@ -296,9 +300,9 @@ def _fetch_item_comments(object_id: str, max_comments: int = 5) -> Dict[str, Any
 
 
 def enrich_top_stories(
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     depth: str = "default",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch comments for top N stories by points.
 
     Args:

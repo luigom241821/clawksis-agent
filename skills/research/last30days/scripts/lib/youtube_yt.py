@@ -155,7 +155,7 @@ def _ytdlp_ssh_host() -> Optional[str]:
     return host
 
 
-def _wrap_ytdlp_cmd(cmd: List[str]) -> List[str]:
+def _wrap_ytdlp_cmd(cmd: list[str]) -> list[str]:
     """Wrap a yt-dlp command list with `ssh <host>` when SSH routing is set.
 
     Args are shell-quoted to survive the remote shell. Uses BatchMode=yes so
@@ -179,62 +179,64 @@ def _extract_core_subject(topic: str) -> str:
     from .query import extract_core_subject
 
     # YouTube-specific noise set: smaller than default, keeps content-type words
-    _YT_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "killer",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-        "prompt",
-        "prompts",
-        "prompting",
-        "methods",
-        "strategies",
-        "approaches",
-        # Temporal/meta words — planner generates these but they don't
-        # appear in YouTube titles, so strip them for better search.
-        "last",
-        "days",
-        "recent",
-        "recently",
-        "month",
-        "week",
-        "january",
-        "february",
-        "march",
-        "april",
-        "may",
-        "june",
-        "july",
-        "august",
-        "september",
-        "october",
-        "november",
-        "december",
-        "2025",
-        "2026",
-        "2027",
-        "music",
-        "public",
-        "appearances",
-        "developments",
-        "discussions",
-        "coverage",
-    })
+    _YT_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "killer",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+            "prompt",
+            "prompts",
+            "prompting",
+            "methods",
+            "strategies",
+            "approaches",
+            # Temporal/meta words — planner generates these but they don't
+            # appear in YouTube titles, so strip them for better search.
+            "last",
+            "days",
+            "recent",
+            "recently",
+            "month",
+            "week",
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december",
+            "2025",
+            "2026",
+            "2027",
+            "music",
+            "public",
+            "appearances",
+            "developments",
+            "discussions",
+            "coverage",
+        }
+    )
     return extract_core_subject(topic, noise=_YT_NOISE)
 
 
@@ -255,7 +257,7 @@ def _infer_query_intent(topic: str) -> str:
     return "breaking_news"
 
 
-def expand_youtube_queries(topic: str, depth: str) -> List[str]:
+def expand_youtube_queries(topic: str, depth: str) -> list[str]:
     """Generate multiple YouTube search queries from a topic.
 
     Mirrors reddit.py's expand_reddit_queries() pattern:
@@ -304,7 +306,7 @@ def search_youtube(
     from_date: str,
     to_date: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search YouTube via yt-dlp. No API key needed.
 
     Args:
@@ -381,24 +383,26 @@ def search_youtube(
             date_str = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}"
 
         description = str(video.get("description", ""))[:500]
-        items.append({
-            "video_id": video_id,
-            "title": video.get("title", ""),
-            "url": f"https://www.youtube.com/watch?v={video_id}",
-            "channel_name": video.get("channel", video.get("uploader", "")),
-            "date": date_str,
-            "engagement": {
-                "views": view_count,
-                "likes": like_count,
-                "comments": comment_count,
-            },
-            "duration": video.get("duration"),
-            "relevance": _compute_relevance(
-                core_topic, f"{video.get('title', '')} {description}"
-            ),
-            "why_relevant": f"YouTube: {video.get('title', core_topic)[:60]}",
-            "description": description,
-        })
+        items.append(
+            {
+                "video_id": video_id,
+                "title": video.get("title", ""),
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "channel_name": video.get("channel", video.get("uploader", "")),
+                "date": date_str,
+                "engagement": {
+                    "views": view_count,
+                    "likes": like_count,
+                    "comments": comment_count,
+                },
+                "duration": video.get("duration"),
+                "relevance": _compute_relevance(
+                    core_topic, f"{video.get('title', '')} {description}"
+                ),
+                "why_relevant": f"YouTube: {video.get('title', core_topic)[:60]}",
+                "description": description,
+            }
+        )
 
     # Soft date filter: prefer recent items but fall back to all if too few
     recent = [i for i in items if i["date"] and i["date"] >= from_date]
@@ -446,7 +450,7 @@ _YT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 def _fetch_transcript_direct(
     video_id: str,
     timeout: int = 30,
-    status: Optional[Dict[str, Any]] = None,
+    status: Optional[dict[str, Any]] = None,
 ) -> Optional[str]:
     """Fetch YouTube transcript via direct HTTP without yt-dlp.
 
@@ -612,7 +616,7 @@ def _fetch_transcript_ytdlp(video_id: str, temp_dir: str) -> Optional[str]:
 def fetch_transcript(
     video_id: str,
     temp_dir: str,
-    status: Optional[Dict[str, Any]] = None,
+    status: Optional[dict[str, Any]] = None,
 ) -> Optional[str]:
     """Fetch auto-generated transcript for a YouTube video.
 
@@ -666,10 +670,10 @@ def fetch_transcript(
 
 
 def fetch_transcripts_parallel(
-    video_ids: List[str],
+    video_ids: list[str],
     max_workers: int = 5,
-    out_captions_disabled: Optional[Set[str]] = None,
-) -> Dict[str, Optional[str]]:
+    out_captions_disabled: Optional[set[str]] = None,
+) -> dict[str, Optional[str]]:
     """Fetch transcripts for multiple videos in parallel.
 
     Args:
@@ -688,7 +692,7 @@ def fetch_transcripts_parallel(
     _log(f"Fetching transcripts for {len(video_ids)} videos")
 
     results = {}
-    statuses: Dict[str, Dict[str, Any]] = {vid: {} for vid in video_ids}
+    statuses: dict[str, dict[str, Any]] = {vid: {} for vid in video_ids}
     with tempfile.TemporaryDirectory() as temp_dir:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -724,7 +728,7 @@ def search_and_transcribe(
     from_date: str,
     to_date: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Full YouTube search: find videos, then fetch transcripts for top results.
 
     Uses expand_youtube_queries() to generate multiple search queries,
@@ -741,8 +745,8 @@ def search_and_transcribe(
     """
     # Step 1: Multi-query search — run yt-dlp for each expanded query
     queries = expand_youtube_queries(topic, depth)
-    seen_ids: Set[str] = set()
-    items: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    items: list[dict[str, Any]] = []
     for q in queries:
         search_result = search_youtube(q, from_date, to_date, depth)
         for item in search_result.get("items", []):
@@ -762,8 +766,8 @@ def search_and_transcribe(
     # short clips) lack captions. Attempt up to 3x the limit so we have a
     # good chance of reaching the target number of successful transcripts.
     transcript_limit = TRANSCRIPT_LIMITS.get(depth, TRANSCRIPT_LIMITS["default"])
-    transcripts: Dict[str, Optional[str]] = {}
-    captions_disabled_ids: Set[str] = set()
+    transcripts: dict[str, Optional[str]] = {}
+    captions_disabled_ids: set[str] = set()
     if transcript_limit > 0:
         attempt_count = min(len(items), transcript_limit * 3)
         candidate_ids = [item["video_id"] for item in items[:attempt_count]]
@@ -795,7 +799,7 @@ def search_and_transcribe(
     return {"items": items}
 
 
-def parse_youtube_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_youtube_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse YouTube search response to normalized format.
 
     Returns:
@@ -811,7 +815,7 @@ def parse_youtube_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
 SCRAPECREATORS_YT_BASE = "https://api.scrapecreators.com/v1/youtube"
 
 
-def _total_engagement(item: Dict[str, Any]) -> int:
+def _total_engagement(item: dict[str, Any]) -> int:
     """Combined engagement score for ranking which videos to enrich."""
     eng = item.get("engagement", {})
     views = eng.get("views", 0) or 0
@@ -821,11 +825,11 @@ def _total_engagement(item: Dict[str, Any]) -> int:
 
 
 def enrich_with_comments(
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     token: str,
     max_videos: int = 3,
     max_comments: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Enrich top YouTube videos with comment data from ScrapeCreators.
 
     For the top N videos by engagement, fetches comments via the SC API
@@ -877,7 +881,7 @@ def _fetch_video_comments(
     video_id: str,
     token: str,
     max_comments: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch comments for a single YouTube video via ScrapeCreators.
 
     Args:
@@ -928,12 +932,14 @@ def _fetch_video_comments(
             or c.get("publishedTimeText", "")
         )
 
-        comments.append({
-            "author": author,
-            "text": text[:400],
-            "likes": likes,
-            "date": date,
-        })
+        comments.append(
+            {
+                "author": author,
+                "text": text[:400],
+                "likes": likes,
+                "date": date,
+            }
+        )
 
     return comments
 
@@ -943,8 +949,8 @@ def search_youtube_sc(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+) -> dict[str, Any]:
     """Search YouTube via ScrapeCreators API (fallback when yt-dlp is unavailable).
 
     Uses SC keyword search to find videos and SC transcript endpoint to
@@ -999,24 +1005,26 @@ def search_youtube_sc(
         if not url and video_id:
             url = f"https://www.youtube.com/watch?v={video_id}"
 
-        items.append({
-            "video_id": video_id,
-            "title": title,
-            "url": url,
-            "channel_name": channel,
-            "date": date_str if date_str else None,
-            "engagement": {
-                "views": view_count or 0,
-                "likes": like_count or 0,
-                "comments": comment_count or 0,
-            },
-            "duration": raw.get("duration"),
-            "relevance": _compute_relevance(core_topic, f"{title} {description}"),
-            "why_relevant": f"YouTube: {title[:60]}"
-            if title
-            else f"YouTube: {core_topic}",
-            "description": description,
-        })
+        items.append(
+            {
+                "video_id": video_id,
+                "title": title,
+                "url": url,
+                "channel_name": channel,
+                "date": date_str if date_str else None,
+                "engagement": {
+                    "views": view_count or 0,
+                    "likes": like_count or 0,
+                    "comments": comment_count or 0,
+                },
+                "duration": raw.get("duration"),
+                "relevance": _compute_relevance(core_topic, f"{title} {description}"),
+                "why_relevant": f"YouTube: {title[:60]}"
+                if title
+                else f"YouTube: {core_topic}",
+                "description": description,
+            }
+        )
 
     # Soft date filter
     recent = [i for i in items if i["date"] and i["date"] >= from_date]
@@ -1057,7 +1065,7 @@ def search_youtube_sc(
     return {"items": items}
 
 
-def _sc_youtube_search(keyword: str, token: str) -> List[Dict[str, Any]]:
+def _sc_youtube_search(keyword: str, token: str) -> list[dict[str, Any]]:
     """Call ScrapeCreators YouTube search endpoint.
 
     Args:

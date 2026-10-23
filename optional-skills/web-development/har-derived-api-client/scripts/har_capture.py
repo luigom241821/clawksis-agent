@@ -12,6 +12,7 @@ Actions run in order after page load. The HAR embeds request/response bodies
 NOTE: a failing action raises before the HAR is flushed -- you get no file.
 Fix the selector (try --headed to watch) and rerun.
 """
+
 import argparse
 import sys
 import time
@@ -40,10 +41,18 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("url")
     ap.add_argument("har_path")
-    ap.add_argument("--wait", type=float, default=3.0,
-                    help="seconds to idle at the end so late XHRs land in the HAR")
-    ap.add_argument("--action", action="append", default=[],
-                    help="fill:SEL:TEXT | press:SEL:KEY | click:SEL | goto:URL | sleep:SECS")
+    ap.add_argument(
+        "--wait",
+        type=float,
+        default=3.0,
+        help="seconds to idle at the end so late XHRs land in the HAR",
+    )
+    ap.add_argument(
+        "--action",
+        action="append",
+        default=[],
+        help="fill:SEL:TEXT | press:SEL:KEY | click:SEL | goto:URL | sleep:SECS",
+    )
     ap.add_argument("--headed", action="store_true")
     args = ap.parse_args()
 

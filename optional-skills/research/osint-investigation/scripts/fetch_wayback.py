@@ -5,6 +5,7 @@ The CDX API indexes ~900B+ archived web pages. Anonymous read access,
 no auth required. Useful for finding deleted / changed pages by URL,
 domain, or substring match.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -77,7 +78,9 @@ def fetch(
                 {
                     "url": orig,
                     "timestamp": ts,
-                    "wayback_url": f"https://web.archive.org/web/{ts}/{orig}" if ts and orig else "",
+                    "wayback_url": f"https://web.archive.org/web/{ts}/{orig}"
+                    if ts and orig
+                    else "",
                     "mimetype": entry[idx["mimetype"]] if "mimetype" in idx else "",
                     "status": entry[idx["statuscode"]] if "statuscode" in idx else "",
                     "digest": entry[idx["digest"]] if "digest" in idx else "",
@@ -99,7 +102,9 @@ def fetch(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--url", required=True, help="URL or host to look up in the archive")
     p.add_argument(
         "--match",

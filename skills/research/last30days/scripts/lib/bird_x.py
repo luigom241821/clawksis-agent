@@ -43,7 +43,7 @@ DEPTH_CONFIG = {
 }
 
 # Module-level credentials injected from .env config
-_credentials: Dict[str, str] = {}
+_credentials: dict[str, str] = {}
 
 
 def set_credentials(auth_token: Optional[str], ct0: Optional[str]):
@@ -64,7 +64,7 @@ def _has_process_credentials() -> bool:
     return bool(os.environ.get("AUTH_TOKEN") and os.environ.get("CT0"))
 
 
-def _subprocess_env() -> Dict[str, str]:
+def _subprocess_env() -> dict[str, str]:
     """Build env dict for Node subprocesses, merging injected credentials."""
     env = os.environ.copy()
     env.update(_credentials)
@@ -126,7 +126,7 @@ def check_npm_available() -> bool:
     return shutil.which("npm") is not None
 
 
-def install_bird() -> Tuple[bool, str]:
+def install_bird() -> tuple[bool, str]:
     """No-op. Bird search is vendored in v3.0.0, no installation needed.
 
     Returns:
@@ -142,7 +142,7 @@ def install_bird() -> Tuple[bool, str]:
     return False, f"Vendored bird-search.mjs not found at {_BIRD_SEARCH_MJS}"
 
 
-def get_bird_status() -> Dict[str, Any]:
+def get_bird_status() -> dict[str, Any]:
     """Get comprehensive Bird search status.
 
     Returns:
@@ -211,7 +211,7 @@ def _invoke_bird_subprocess(query: str, count: int, timeout: int):
     return result, None
 
 
-def _run_bird_search(query: str, count: int, timeout: int) -> Dict[str, Any]:
+def _run_bird_search(query: str, count: int, timeout: int) -> dict[str, Any]:
     """Run a search using the vendored bird-search.mjs module.
 
     Retries the subprocess on JSON-decode failure (typically a Twitter
@@ -289,7 +289,7 @@ def search_x(
     from_date: str,
     to_date: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search X using Bird CLI with automatic retry on 0 results.
 
     Args:
@@ -369,11 +369,11 @@ def search_x(
 
 
 def search_handles(
-    handles: List[str],
+    handles: list[str],
     topic: Optional[str],
     from_date: str,
     count_per: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search specific X handles for topic-related content.
 
     Runs targeted Bird searches using `from:handle topic` syntax.
@@ -390,7 +390,7 @@ def search_handles(
     """
     core_topic = _extract_core_subject(topic) if topic else None
 
-    def _search_one_handle(handle: str) -> List[Dict[str, Any]]:
+    def _search_one_handle(handle: str) -> list[dict[str, Any]]:
         handle = handle.lstrip("@")
         if core_topic:
             query = f"from:{handle} {core_topic} since:{from_date}"
@@ -432,7 +432,7 @@ def search_handles(
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    all_items: List[Dict[str, Any]] = []
+    all_items: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=min(5, len(handles))) as executor:
         futures = {executor.submit(_search_one_handle, h): h for h in handles}
         for future in as_completed(futures):
@@ -442,8 +442,8 @@ def search_handles(
 
 
 def parse_bird_response(
-    response: Dict[str, Any], query: str = ""
-) -> List[Dict[str, Any]]:
+    response: dict[str, Any], query: str = ""
+) -> list[dict[str, Any]]:
     """Parse Bird response to match xai_x output format.
 
     Args:
@@ -456,7 +456,7 @@ def parse_bird_response(
     items = []
 
     # Check for errors
-    if "error" in response and response["error"]:
+    if response.get("error"):
         _log(f"Bird error: {response['error']}")
         return items
 
@@ -494,7 +494,7 @@ def parse_bird_response(
                 # Try ISO format first (e.g., "2026-02-03T22:33:32Z")
                 # Check for ISO date separator, not just "T" (which appears in "Tue")
                 if len(created_at) > 10 and created_at[10] == "T":
-                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(created_at)
                 else:
                     # Twitter format: "Wed Jan 15 14:30:00 +0000 2026"
                     dt = datetime.strptime(created_at, "%a %b %d %H:%M:%S %z %Y")
@@ -522,7 +522,7 @@ def parse_bird_response(
             "quotes": _first_of(tweet.get("quoteCount"), tweet.get("quote_count")),
         }
         # Convert to int where possible
-        for key in engagement:
+        for key in engagement:  # noqa: PLC0206
             if engagement[key] is not None:
                 try:
                     engagement[key] = int(engagement[key])

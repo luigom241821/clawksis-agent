@@ -12,6 +12,7 @@ Metadata note: values are stored in the classic DocInfo dictionary
 (Title/Author/Subject/Keywords). XMP metadata, if present, is not
 rewritten and may disagree in sophisticated viewers.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,14 +28,22 @@ def main() -> int:
             stream.reconfigure(encoding="utf-8")
         except Exception:
             pass
-    parser = argparse.ArgumentParser(description="Set/clear PDF metadata; manage attachments.")
+    parser = argparse.ArgumentParser(
+        description="Set/clear PDF metadata; manage attachments."
+    )
     parser.add_argument("pdf", help="Input PDF path")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--set-meta", action="store_true", help="Set metadata fields")
-    mode.add_argument("--clear-meta", action="store_true", help="Remove all DocInfo metadata")
+    mode.add_argument(
+        "--clear-meta", action="store_true", help="Remove all DocInfo metadata"
+    )
     mode.add_argument("--attach", metavar="FILE", help="Embed FILE as an attachment")
-    mode.add_argument("--list-attachments", action="store_true", help="List attachment names")
-    mode.add_argument("--extract-attachments", metavar="DIR", help="Extract attachments into DIR")
+    mode.add_argument(
+        "--list-attachments", action="store_true", help="List attachment names"
+    )
+    mode.add_argument(
+        "--extract-attachments", metavar="DIR", help="Extract attachments into DIR"
+    )
     parser.add_argument("-o", "--output", help="Output PDF (required for write modes)")
     parser.add_argument("--title")
     parser.add_argument("--author")
@@ -46,7 +55,10 @@ def main() -> int:
     try:
         from pypdf import PdfReader, PdfWriter
     except ImportError:
-        print("Missing dependency: install with 'python3 -m pip install pypdf'", file=sys.stderr)
+        print(
+            "Missing dependency: install with 'python3 -m pip install pypdf'",
+            file=sys.stderr,
+        )
         return 2
 
     reader = PdfReader(args.pdf)
@@ -57,8 +69,12 @@ def main() -> int:
 
     if args.list_attachments:
         names = list(reader.attachments.keys())
-        json.dump({"attachment_count": len(names), "attachments": names}, sys.stdout,
-                  ensure_ascii=False, indent=2)
+        json.dump(
+            {"attachment_count": len(names), "attachments": names},
+            sys.stdout,
+            ensure_ascii=False,
+            indent=2,
+        )
         print()
         return 0
 
@@ -86,16 +102,23 @@ def main() -> int:
 
     if args.set_meta:
         meta = {}
-        for key, value in ((f"/{k.capitalize()}", getattr(args, k))
-                           for k in ("title", "author", "subject", "keywords")):
+        for key, value in (
+            (f"/{k.capitalize()}", getattr(args, k))
+            for k in ("title", "author", "subject", "keywords")
+        ):
             if value is not None:
                 meta[key] = value
         if not meta:
-            print("Error: --set-meta needs at least one of --title/--author/--subject/--keywords",
-                  file=sys.stderr)
+            print(
+                "Error: --set-meta needs at least one of --title/--author/--subject/--keywords",
+                file=sys.stderr,
+            )
             return 4
         writer.add_metadata(meta)
-        result = {"output": args.output, "set": {k.lstrip("/"): v for k, v in meta.items()}}
+        result = {
+            "output": args.output,
+            "set": {k.lstrip("/"): v for k, v in meta.items()},
+        }
     elif args.clear_meta:
         writer.metadata = None
         result = {"output": args.output, "cleared": True}

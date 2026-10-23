@@ -27,7 +27,7 @@ HF_API = "https://huggingface.co/api"
 _HEADERS = {"User-Agent": "clawksis-cookbook/1.0"}
 
 # TTL caches (mismo patrón que el scrape de ollama.com en cookbook.py).
-_cache: Dict[str, tuple] = {}
+_cache: dict[str, tuple] = {}
 
 _SEARCH_TTL = 300.0
 
@@ -48,7 +48,7 @@ def _get_json(url: str, timeout: float = 15.0) -> Optional[Any]:
         return None
 
 
-def _license_from_tags(tags: List[str]) -> str:
+def _license_from_tags(tags: list[str]) -> str:
     for tag in tags:
         if tag.startswith("license:"):
             return tag.split(":", 1)[1]
@@ -56,7 +56,7 @@ def _license_from_tags(tags: List[str]) -> str:
     return ""
 
 
-def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
+def search_gguf(query: str, limit: int = 25) -> list[dict[str, Any]]:
     """Repos GGUF de Hugging Face que matchean *query*, por descargas.
 
     Con ``expand[]=gguf`` HF devuelve la metadata extraída del GGUF: ventana
@@ -94,7 +94,7 @@ def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
 
     data = _get_json(url)
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     if isinstance(data, list):
         for item in data:
@@ -121,22 +121,24 @@ def search_gguf(query: str, limit: int = 25) -> List[Dict[str, Any]]:
 
             tool_use = "tool" in template.lower() if template else False
 
-            rows.append({
-                "repo": repo,
-                "author": repo.split("/", 1)[0] if "/" in repo else "",
-                "name": repo.split("/", 1)[-1],
-                "downloads": int(item.get("downloads") or 0),
-                "likes": int(item.get("likes") or 0),
-                "updated_at": str(item.get("lastModified") or ""),
-                "license": _license_from_tags(tags),
-                "gated": bool(item.get("gated")),
-                "tags": [t for t in tags if not t.startswith("license:")][:8],
-                "context": context,
-                "architecture": str(gguf.get("architecture") or ""),
-                "params_b": params_b,
-                "size_q4_gb": size_q4_gb,
-                "tool_use": tool_use,
-            })
+            rows.append(
+                {
+                    "repo": repo,
+                    "author": repo.split("/", 1)[0] if "/" in repo else "",
+                    "name": repo.split("/", 1)[-1],
+                    "downloads": int(item.get("downloads") or 0),
+                    "likes": int(item.get("likes") or 0),
+                    "updated_at": str(item.get("lastModified") or ""),
+                    "license": _license_from_tags(tags),
+                    "gated": bool(item.get("gated")),
+                    "tags": [t for t in tags if not t.startswith("license:")][:8],
+                    "context": context,
+                    "architecture": str(gguf.get("architecture") or ""),
+                    "params_b": params_b,
+                    "size_q4_gb": size_q4_gb,
+                    "tool_use": tool_use,
+                }
+            )
 
     _cache[key] = (time.monotonic(), rows)
 
@@ -159,7 +161,7 @@ def _quant_of(filename: str) -> str:
     return m.group(1).upper() if m else ""
 
 
-def repo_gguf_files(repo: str) -> List[Dict[str, Any]]:
+def repo_gguf_files(repo: str) -> list[dict[str, Any]]:
     """Archivos .gguf de un repo HF, con tamaño y quant.
 
     Shape: {file, size_bytes, quant, multipart}. Los multipart (00001-of-000N)
@@ -180,7 +182,7 @@ def repo_gguf_files(repo: str) -> List[Dict[str, Any]]:
 
     data = _get_json(f"{HF_API}/models/{urllib.parse.quote(r, safe='/')}?blobs=true")
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     if isinstance(data, dict):
         for sib in data.get("siblings") or []:
@@ -189,12 +191,14 @@ def repo_gguf_files(repo: str) -> List[Dict[str, Any]]:
             if not name.lower().endswith(".gguf"):
                 continue
 
-            rows.append({
-                "file": name,
-                "size_bytes": int(sib.get("size") or 0),
-                "quant": _quant_of(name),
-                "multipart": bool(_MULTIPART_RE.search(name)),
-            })
+            rows.append(
+                {
+                    "file": name,
+                    "size_bytes": int(sib.get("size") or 0),
+                    "quant": _quant_of(name),
+                    "multipart": bool(_MULTIPART_RE.search(name)),
+                }
+            )
 
     rows.sort(key=lambda f: (f["multipart"], f["size_bytes"]))
 

@@ -35,30 +35,32 @@ def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Truth Social search."""
     from .query import extract_core_subject
 
-    _TS_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-    })
+    _TS_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+        }
+    )
     return extract_core_subject(topic, noise=_TS_NOISE)
 
 
-def _parse_date(status: Dict[str, Any]) -> Optional[str]:
+def _parse_date(status: dict[str, Any]) -> Optional[str]:
     """Parse date from Mastodon status to YYYY-MM-DD.
 
     Mastodon uses ISO 8601 format in created_at field.
@@ -74,8 +76,8 @@ def search_truthsocial(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    config: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    config: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """Search Truth Social via Mastodon-compatible API.
 
     Args:
@@ -140,7 +142,7 @@ def search_truthsocial(
     return response
 
 
-def parse_truthsocial_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_truthsocial_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse Mastodon API response into normalized item dicts.
 
     Returns:
@@ -170,21 +172,23 @@ def parse_truthsocial_response(response: Dict[str, Any]) -> List[Dict[str, Any]]
         engagement_boost = min(0.2, math.log1p(likes + reposts) / 40)
         relevance = min(1.0, rank_score * 0.7 + engagement_boost + 0.1)
 
-        items.append({
-            "handle": handle,
-            "display_name": display_name,
-            "text": text,
-            "url": url,
-            "date": date_str,
-            "engagement": {
-                "likes": likes,
-                "reposts": reposts,
-                "replies": replies,
-            },
-            "relevance": round(relevance, 2),
-            "why_relevant": f"Truth Social: @{handle}: {text[:60]}"
-            if text
-            else f"Truth Social: {handle}",
-        })
+        items.append(
+            {
+                "handle": handle,
+                "display_name": display_name,
+                "text": text,
+                "url": url,
+                "date": date_str,
+                "engagement": {
+                    "likes": likes,
+                    "reposts": reposts,
+                    "replies": replies,
+                },
+                "relevance": round(relevance, 2),
+                "why_relevant": f"Truth Social: @{handle}: {text[:60]}"
+                if text
+                else f"Truth Social: {handle}",
+            }
+        )
 
     return items

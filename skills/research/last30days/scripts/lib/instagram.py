@@ -36,7 +36,7 @@ DEFAULT_TRANSCRIPT_TIMEOUT = 30
 
 def _resolve_transcript_timeout(
     timeout: Optional[float] = None,
-    config: Optional[Dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
 ) -> float:
     """Resolve the IG transcript-fetch timeout.
 
@@ -70,33 +70,35 @@ def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Instagram search."""
     from .query import extract_core_subject
 
-    _INSTAGRAM_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "killer",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-        "prompt",
-        "prompts",
-        "prompting",
-        "methods",
-        "strategies",
-        "approaches",
-    })
+    _INSTAGRAM_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "killer",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+            "prompt",
+            "prompts",
+            "prompting",
+            "methods",
+            "strategies",
+            "approaches",
+        }
+    )
     return extract_core_subject(topic, noise=_INSTAGRAM_NOISE)
 
 
@@ -127,7 +129,7 @@ def _infer_query_intent(topic: str) -> str:
     return "breaking_news"
 
 
-def expand_instagram_queries(topic: str, depth: str) -> List[str]:
+def expand_instagram_queries(topic: str, depth: str) -> list[str]:
     """Generate multiple Instagram search queries from a topic.
 
     Mirrors reddit.py's expand_reddit_queries() pattern:
@@ -149,9 +151,7 @@ def expand_instagram_queries(topic: str, depth: str) -> List[str]:
     qtype = _infer_query_intent(topic)
 
     # Intent-specific Instagram content-type variants
-    if qtype == "breaking_news":
-        queries.append(f"{core} reaction OR edit")
-    elif qtype == "opinion":
+    if qtype == "breaking_news" or qtype == "opinion":
         queries.append(f"{core} reaction OR edit")
     elif qtype == "product":
         queries.append(f"{core} review OR haul")
@@ -176,7 +176,7 @@ def _log(msg: str):
     log.source_log("Instagram", msg)
 
 
-def _parse_date(item: Dict[str, Any]) -> Optional[str]:
+def _parse_date(item: dict[str, Any]) -> Optional[str]:
     """Parse date from ScrapeCreators Instagram item to YYYY-MM-DD.
 
     Handles taken_at as ISO string (e.g. "2026-02-26T16:00:00.000Z")
@@ -190,7 +190,7 @@ def _parse_date(item: Dict[str, Any]) -> Optional[str]:
     if isinstance(ts, str):
         try:
             # Handle "2026-02-26T16:00:00.000Z" format
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(ts)
             return dt.strftime("%Y-%m-%d")
         except (ValueError, TypeError):
             pass
@@ -207,7 +207,7 @@ def _parse_date(item: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _extract_hashtags(caption_text: str) -> List[str]:
+def _extract_hashtags(caption_text: str) -> list[str]:
     """Extract hashtags from Instagram caption text."""
     if not caption_text:
         return []
@@ -215,8 +215,8 @@ def _extract_hashtags(caption_text: str) -> List[str]:
 
 
 def _parse_items(
-    raw_items: List[Dict[str, Any]], core_topic: str
-) -> List[Dict[str, Any]]:
+    raw_items: list[dict[str, Any]], core_topic: str
+) -> list[dict[str, Any]]:
     """Parse raw Instagram items into normalized dicts."""
     items = []
     for raw in raw_items:
@@ -272,32 +272,34 @@ def _parse_items(
         if not url and shortcode:
             url = f"https://www.instagram.com/reel/{shortcode}"
 
-        items.append({
-            "video_id": reel_pk,
-            "text": text,
-            "url": url,
-            "author_name": author_name,
-            "date": date_str,
-            "engagement": {
-                "views": play_count,
-                "likes": like_count,
-                "comments": comment_count,
-            },
-            "hashtags": hashtags,
-            "duration": duration,
-            "relevance": relevance,
-            "why_relevant": f"Instagram: {text[:60]}"
-            if text
-            else f"Instagram: {core_topic}",
-            "caption_snippet": "",  # populated by fetch_captions
-        })
+        items.append(
+            {
+                "video_id": reel_pk,
+                "text": text,
+                "url": url,
+                "author_name": author_name,
+                "date": date_str,
+                "engagement": {
+                    "views": play_count,
+                    "likes": like_count,
+                    "comments": comment_count,
+                },
+                "hashtags": hashtags,
+                "duration": duration,
+                "relevance": relevance,
+                "why_relevant": f"Instagram: {text[:60]}"
+                if text
+                else f"Instagram: {core_topic}",
+                "caption_snippet": "",  # populated by fetch_captions
+            }
+        )
     return items
 
 
 def _user_reels(
     handle: str,
     token: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch an Instagram user's recent reels via ScrapeCreators.
 
     Args:
@@ -331,8 +333,8 @@ def search_instagram(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+) -> dict[str, Any]:
     """Search Instagram Reels via ScrapeCreators API.
 
     Args:
@@ -414,12 +416,12 @@ def search_instagram(
 
 
 def fetch_captions(
-    video_items: List[Dict[str, Any]],
+    video_items: list[dict[str, Any]],
     token: str,
     depth: str = "default",
     timeout: Optional[float] = None,
-    config: Optional[Dict[str, Any]] = None,
-) -> Dict[str, str]:
+    config: Optional[dict[str, Any]] = None,
+) -> dict[str, str]:
     """Fetch transcripts for top N Instagram reels via ScrapeCreators.
 
     Strategy:
@@ -501,9 +503,9 @@ def search_and_enrich(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-    ig_creators: List[str] | None = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+    ig_creators: list[str] | None = None,
+) -> dict[str, Any]:
     """Full Instagram search: find reels, then fetch captions for top results.
 
     Uses expand_instagram_queries() to generate multiple search queries,
@@ -521,8 +523,8 @@ def search_and_enrich(
         Dict with 'items' list. Each item has a 'caption_snippet' field.
     """
     core_topic = _extract_core_subject(topic)
-    seen_ids: Set[str] = set()
-    items: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    items: list[dict[str, Any]] = []
     last_error = None
 
     # Step 0: Creator reels (high-signal, runs first)
@@ -567,7 +569,7 @@ def search_and_enrich(
     return {"items": items, "error": last_error}
 
 
-def parse_instagram_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_instagram_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse Instagram search response to normalized format.
 
     Returns:

@@ -23,7 +23,8 @@ def probe(path: Path) -> dict[str, Any]:
             "json",
             str(path),
         ],
-        stdin=subprocess.DEVNULL, check=True,
+        stdin=subprocess.DEVNULL,
+        check=True,
         capture_output=True,
         text=True,
     )
@@ -49,7 +50,9 @@ def write_atomic(path: Path, text: str) -> None:
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("Usage: preflight.py ~/Videos/my-presenter-video/job.json", file=sys.stderr)
+        print(
+            "Usage: preflight.py ~/Videos/my-presenter-video/job.json", file=sys.stderr
+        )
         return 64
     if not shutil.which("ffprobe"):
         print("ERROR: ffprobe is required", file=sys.stderr)
@@ -74,7 +77,9 @@ def main() -> int:
     if script_text:
         require_file(script_text, "script", errors)
 
-    image = require_file(str(input_data.get("presenter_image", "")), "presenter image", errors)
+    image = require_file(
+        str(input_data.get("presenter_image", "")), "presenter image", errors
+    )
     if image:
         try:
             media["presenter_image"] = probe(image)
@@ -89,7 +94,9 @@ def main() -> int:
                 width = int(streams[0].get("width") or 0)
                 height = int(streams[0].get("height") or 0)
                 if min(width, height) < 512:
-                    warnings.append(f"presenter image is low resolution: {width}x{height}")
+                    warnings.append(
+                        f"presenter image is low resolution: {width}x{height}"
+                    )
         except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
             errors.append(f"could not decode presenter image: {exc}")
 
@@ -106,15 +113,23 @@ def main() -> int:
                 ]
                 if not streams:
                     errors.append("voice sample has no audio stream")
-                duration = float(media["voice_sample"].get("format", {}).get("duration") or 0)
+                duration = float(
+                    media["voice_sample"].get("format", {}).get("duration") or 0
+                )
                 if duration < 4:
                     warnings.append(f"voice sample is short: {duration:.3f}s")
                 if duration > 60:
                     warnings.append(f"voice sample is unusually long: {duration:.3f}s")
-            except (subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as exc:
+            except (
+                subprocess.CalledProcessError,
+                json.JSONDecodeError,
+                ValueError,
+            ) as exc:
                 errors.append(f"could not decode voice sample: {exc}")
         if not input_data.get("voice_clone_approved"):
-            remote_blockers.append("voice_clone_approved must be true before voice cloning")
+            remote_blockers.append(
+                "voice_clone_approved must be true before voice cloning"
+            )
     else:
         warnings.append("no voice sample supplied; use and record a stock voice")
 
@@ -129,11 +144,17 @@ def main() -> int:
     media["supporting_media"] = supporting_reports
 
     if not input_data.get("rights_confirmed"):
-        remote_blockers.append("rights_confirmed must be true before presenter synthesis")
+        remote_blockers.append(
+            "rights_confirmed must be true before presenter synthesis"
+        )
     if not input_data.get("adult_presenter_confirmed"):
-        remote_blockers.append("adult_presenter_confirmed must be true before presenter synthesis")
+        remote_blockers.append(
+            "adult_presenter_confirmed must be true before presenter synthesis"
+        )
     if not input_data.get("remote_upload_approved"):
-        remote_blockers.append("remote_upload_approved must be true before remote generation")
+        remote_blockers.append(
+            "remote_upload_approved must be true before remote generation"
+        )
 
     manual = job.get("manual_input_review", {})
     for key in ("image_viewed", "single_clear_face", "image_has_no_unwanted_text"):

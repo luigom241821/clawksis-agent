@@ -4,6 +4,7 @@
 Note: permission flags set at encryption time are advisory — viewers may honor
 them, but any PDF library can strip them. Only the user password gates content.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,21 +18,31 @@ def main() -> int:
             stream.reconfigure(encoding="utf-8")
         except Exception:
             pass
-    parser = argparse.ArgumentParser(description="Encrypt/decrypt PDFs (pypdf, AES-256).")
+    parser = argparse.ArgumentParser(
+        description="Encrypt/decrypt PDFs (pypdf, AES-256)."
+    )
     parser.add_argument("pdf", help="Input PDF path")
     parser.add_argument("-o", "--output", required=True, help="Output PDF path")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--encrypt", action="store_true", help="Encrypt the PDF")
-    mode.add_argument("--decrypt", action="store_true", help="Remove encryption (password required)")
+    mode.add_argument(
+        "--decrypt", action="store_true", help="Remove encryption (password required)"
+    )
     parser.add_argument("--user-password", help="User (open) password for --encrypt")
-    parser.add_argument("--owner-password", help="Owner password for --encrypt (defaults to user password)")
+    parser.add_argument(
+        "--owner-password",
+        help="Owner password for --encrypt (defaults to user password)",
+    )
     parser.add_argument("--password", help="Known password for --decrypt")
     args = parser.parse_args()
 
     try:
         from pypdf import PdfReader, PdfWriter
     except ImportError:
-        print("Missing dependency: install with 'python3 -m pip install pypdf'", file=sys.stderr)
+        print(
+            "Missing dependency: install with 'python3 -m pip install pypdf'",
+            file=sys.stderr,
+        )
         return 2
 
     reader = PdfReader(args.pdf)
@@ -63,7 +74,11 @@ def main() -> int:
 
     with open(args.output, "wb") as fh:
         writer.write(fh)
-    print(json.dumps({"output": args.output, "action": action, "page_count": len(reader.pages)}))
+    print(
+        json.dumps(
+            {"output": args.output, "action": action, "page_count": len(reader.pages)}
+        )
+    )
     return 0
 
 

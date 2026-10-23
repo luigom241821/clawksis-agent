@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 logger = logging.getLogger(__name__)
 
 
-def is_first_run(config: Dict[str, Any]) -> bool:
+def is_first_run(config: dict[str, Any]) -> bool:
     """Return True if the setup wizard has not been completed.
 
     Checks for SETUP_COMPLETE in the config dict. If it's not set
@@ -27,7 +27,7 @@ def is_first_run(config: Dict[str, Any]) -> bool:
     return not config.get("SETUP_COMPLETE")
 
 
-def run_auto_setup(config: Dict[str, Any]) -> Dict[str, Any]:
+def run_auto_setup(config: dict[str, Any]) -> dict[str, Any]:
     """Perform the auto-setup actions.
 
     - Runs cookie extraction in auto mode for all registered domains
@@ -42,7 +42,7 @@ def run_auto_setup(config: Dict[str, Any]) -> Dict[str, Any]:
     from . import cookie_extract
     from .env import COOKIE_DOMAINS
 
-    cookies_found: Dict[str, str] = {}
+    cookies_found: dict[str, str] = {}
 
     for source_name, spec in COOKIE_DOMAINS.items():
         domain = spec["domain"]
@@ -73,6 +73,7 @@ def run_auto_setup(config: Dict[str, Any]) -> Dict[str, Any]:
                 capture_output=True,
                 text=True,
                 timeout=120,
+                check=False,
             )
             if proc.returncode == 0:
                 ytdlp_installed = True
@@ -91,7 +92,7 @@ def run_auto_setup(config: Dict[str, Any]) -> Dict[str, Any]:
         ytdlp_installed = False
         ytdlp_action = "no_homebrew"
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "cookies_found": cookies_found,
         "ytdlp_installed": ytdlp_installed,
         "ytdlp_action": ytdlp_action,
@@ -152,7 +153,7 @@ def write_setup_config(env_path: Path, from_browser: str = "auto") -> bool:
         return False
 
 
-def get_setup_status_text(results: Dict[str, Any]) -> str:
+def get_setup_status_text(results: dict[str, Any]) -> str:
     """Return a human-readable summary of auto-setup results.
 
     Args:
@@ -213,7 +214,7 @@ _OPENCLAW_KEY_NAMES = [
 ]
 
 
-def run_openclaw_setup(config: Dict[str, Any]) -> Dict[str, Any]:
+def run_openclaw_setup(config: dict[str, Any]) -> dict[str, Any]:
     """Server-side setup probe: no cookies, just tool + key availability.
 
     Returns a dict suitable for JSON output to stdout so that SKILL.md
@@ -223,11 +224,10 @@ def run_openclaw_setup(config: Dict[str, Any]) -> Dict[str, Any]:
     node = shutil.which("node") is not None
     python3 = shutil.which("python3") is not None
 
-    keys: Dict[str, bool] = {}
+    keys: dict[str, bool] = {}
     for key_name in _OPENCLAW_KEY_NAMES:
         short = (
-            key_name
-            .lower()
+            key_name.lower()
             .replace("_api_key", "")
             .replace("_key", "")
             .replace("_token", "")
@@ -259,7 +259,7 @@ def run_openclaw_setup(config: Dict[str, Any]) -> Dict[str, Any]:
 _PAT_BASE = "https://api.scrapecreators.com/v1/github/pat"
 
 
-def auth_with_pat(github_token: str) -> Optional[Dict[str, Any]]:
+def auth_with_pat(github_token: str) -> Optional[dict[str, Any]]:
     """Authenticate with ScrapeCreators using a GitHub PAT.
 
     POSTs the token to the PAT auth endpoint. ScrapeCreators verifies it
@@ -297,7 +297,7 @@ def auth_with_pat(github_token: str) -> Optional[Dict[str, Any]]:
 _DEVICE_BASE = "https://api.scrapecreators.com/v1/github/device"
 
 
-def run_device_auth() -> Optional[Tuple[str, str, str, int]]:
+def run_device_auth() -> Optional[tuple[str, str, str, int]]:
     """Start the device authorization flow.
 
     POSTs to the ScrapeCreators device/code endpoint.
@@ -424,7 +424,7 @@ def fetch_api_key(access_token: str) -> Optional[str]:
     return data.get("api_key")
 
 
-def run_full_device_auth(timeout: int = 300) -> Dict[str, Any]:
+def run_full_device_auth(timeout: int = 300) -> dict[str, Any]:
     """Run the complete GitHub device auth flow and return JSON-serializable result.
 
     Chains: start device flow -> open browser -> poll -> fetch API key.
@@ -519,7 +519,7 @@ def run_full_device_auth(timeout: int = 300) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def run_github_auth(timeout: int = 300) -> Dict[str, Any]:
+def run_github_auth(timeout: int = 300) -> dict[str, Any]:
     """Try PAT auth via gh CLI, fall back to device flow.
 
     1. Check for `gh` CLI
@@ -540,6 +540,7 @@ def run_github_auth(timeout: int = 300) -> Dict[str, Any]:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
                 token = result.stdout.strip()

@@ -18,6 +18,7 @@ Usage:
 <cdp_url> is the ws:// or http:// CDP endpoint. For Clawksis: run
 `/browser connect` to see the active endpoint, or read BROWSER_CDP_URL.
 """
+
 import argparse
 import base64
 import json
@@ -65,12 +66,16 @@ def _har_entry(req, resp):
             "url": req.url,
             "headers": [{"name": k, "value": v} for k, v in req.headers.items()],
             "queryString": [],  # har_to_client.py re-parses the URL, so leave empty
-            "postData": {"mimeType": req.headers.get("content-type", ""),
-                         "text": post} if post else {},
+            "postData": {"mimeType": req.headers.get("content-type", ""), "text": post}
+            if post
+            else {},
         },
         "response": {
             "status": resp.status if resp else 0,
-            "headers": [{"name": k, "value": v} for k, v in (resp.headers.items() if resp else [])],
+            "headers": [
+                {"name": k, "value": v}
+                for k, v in (resp.headers.items() if resp else [])
+            ],
             "content": {
                 "mimeType": (resp.headers.get("content-type", "") if resp else ""),
                 "text": body_text,
@@ -122,9 +127,13 @@ def main() -> int:
         page.remove_listener("response", on_response)
         # Do NOT close: we connected to someone else's browser.
 
-    har = {"log": {"version": "1.2",
-                   "creator": {"name": "har_capture_cdp", "version": "0.1"},
-                   "entries": entries}}
+    har = {
+        "log": {
+            "version": "1.2",
+            "creator": {"name": "har_capture_cdp", "version": "0.1"},
+            "entries": entries,
+        }
+    }
     with open(args.har_path, "w", encoding="utf-8") as f:
         json.dump(har, f)
     print(f"HAR written: {args.har_path} ({len(entries)} entries)")

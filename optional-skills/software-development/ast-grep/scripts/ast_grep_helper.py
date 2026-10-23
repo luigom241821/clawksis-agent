@@ -94,16 +94,21 @@ LANGUAGES: dict[str, list[str]] = {
 
 # Aliases that ast-grep CLI accepts; we normalize to the canonical name.
 LANG_ALIASES: dict[str, str] = {
-    "js": "javascript", "jsx": "javascript",
+    "js": "javascript",
+    "jsx": "javascript",
     "ts": "typescript",
-    "py": "python", "py3": "python",
+    "py": "python",
+    "py3": "python",
     "rb": "ruby",
     "rs": "rust",
     "kt": "kotlin",
     "ex": "elixir",
     "hs": "haskell",
-    "sh": "bash", "zsh": "bash",
-    "cc": "cpp", "c++": "cpp", "cxx": "cpp",
+    "sh": "bash",
+    "zsh": "bash",
+    "cc": "cpp",
+    "c++": "cpp",
+    "cxx": "cpp",
     "cs": "csharp",
     "yml": "yaml",
     "sol": "solidity",
@@ -115,6 +120,7 @@ DEFAULT_TIMEOUT_S = 300
 
 
 # ---------- logging ----------
+
 
 def trace(msg: str) -> None:
     """Print a trace line to stderr (suppressible via --quiet, default off)."""
@@ -131,6 +137,7 @@ _QUIET = False
 
 
 # ---------- binary resolution ----------
+
 
 def script_dir() -> Path:
     return Path(__file__).resolve().parent
@@ -176,12 +183,16 @@ def which_binary() -> Optional[Path]:
                 try:
                     out = subprocess.run(
                         [str(p), "--version"],
-                        stdin=subprocess.DEVNULL, capture_output=True,
+                        stdin=subprocess.DEVNULL,
+                        capture_output=True,
                         text=True,
                         timeout=5,
                         check=False,
                     )
-                    if out.returncode != 0 or "ast-grep" not in (out.stdout + out.stderr).lower():
+                    if (
+                        out.returncode != 0
+                        or "ast-grep" not in (out.stdout + out.stderr).lower()
+                    ):
                         continue
                 except Exception:
                     continue
@@ -204,6 +215,7 @@ def homebrew_binary() -> Optional[Path]:
 
 
 # --- OMO runtime resolution (vendored patch) ---
+
 
 def omo_env_binary() -> Optional[Path]:
     raw_path = os.environ.get("OMO_AST_GREP_SG_PATH")
@@ -235,8 +247,12 @@ def omo_runtime_binary() -> Optional[Path]:
 
     codex_home = os.environ.get("CODEX_HOME")
     if codex_home:
-        candidates.append(Path(codex_home) / "runtime" / "ast-grep" / slug / binary_name)
-    candidates.append(Path.home() / ".omo" / "runtime" / "ast-grep" / slug / binary_name)
+        candidates.append(
+            Path(codex_home) / "runtime" / "ast-grep" / slug / binary_name
+        )
+    candidates.append(
+        Path.home() / ".omo" / "runtime" / "ast-grep" / slug / binary_name
+    )
 
     for path in candidates:
         if path.is_file() and os.access(path, os.X_OK):
@@ -253,7 +269,13 @@ def resolve_binary() -> Optional[Path]:
     4. PATH (via shutil.which)
     5. Homebrew default paths
     """
-    for fn in (omo_env_binary, omo_runtime_binary, cached_binary, which_binary, homebrew_binary):
+    for fn in (
+        omo_env_binary,
+        omo_runtime_binary,
+        cached_binary,
+        which_binary,
+        homebrew_binary,
+    ):
         result = fn()
         if result:
             return result
@@ -268,7 +290,9 @@ def require_binary() -> Path:
     err("ast-grep binary not found.")
     err("")
     err("Install via one of:")
-    err(f"  bash {skill_root()}/install.sh           # POSIX (auto-detects best method)")
+    err(
+        f"  bash {skill_root()}/install.sh           # POSIX (auto-detects best method)"
+    )
     err(f"  pwsh {skill_root()}/install.ps1          # Windows")
     err("")
     err("Or manually:")
@@ -287,15 +311,21 @@ def require_binary() -> Path:
 # Regex anti-patterns that ast-grep does NOT support but LLMs frequently emit.
 # Each tuple: (regex_to_detect, hint_message)
 REGEX_ANTIPATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\\w|\\d|\\s|\\b"),
-     "Backslash escapes (\\w, \\d, \\s, \\b) are regex syntax, not ast-grep. "
-     "Use $VAR to capture any identifier, or switch to grep for text patterns."),
-    (re.compile(r"(?<!\$)\.\*|(?<!\$)\.\+"),
-     "'.*' and '.+' are regex wildcards, not ast-grep. "
-     "Use $$$ between AST fragments to match many nodes, or $VAR for one node."),
-    (re.compile(r"\[[a-zA-Z0-9-]+\]"),
-     "Character classes like '[a-z]' are regex syntax. "
-     "ast-grep has no AST equivalent - use grep for character-level patterns."),
+    (
+        re.compile(r"\\w|\\d|\\s|\\b"),
+        "Backslash escapes (\\w, \\d, \\s, \\b) are regex syntax, not ast-grep. "
+        "Use $VAR to capture any identifier, or switch to grep for text patterns.",
+    ),
+    (
+        re.compile(r"(?<!\$)\.\*|(?<!\$)\.\+"),
+        "'.*' and '.+' are regex wildcards, not ast-grep. "
+        "Use $$$ between AST fragments to match many nodes, or $VAR for one node.",
+    ),
+    (
+        re.compile(r"\[[a-zA-Z0-9-]+\]"),
+        "Character classes like '[a-z]' are regex syntax. "
+        "ast-grep has no AST equivalent - use grep for character-level patterns.",
+    ),
 ]
 
 
@@ -374,12 +404,15 @@ def normalize_lang(lang: Optional[str]) -> Optional[str]:
         return None
     canonical = LANG_ALIASES.get(lang.lower(), lang.lower())
     if canonical not in LANGUAGES:
-        err(f"unknown language '{lang}'. Run 'ast_grep_helper.py langs' for the full list.")
+        err(
+            f"unknown language '{lang}'. Run 'ast_grep_helper.py langs' for the full list."
+        )
         sys.exit(1)
     return canonical
 
 
 # ---------- subprocess helpers ----------
+
 
 def run_sg(
     binary: Path,
@@ -394,7 +427,8 @@ def run_sg(
     try:
         return subprocess.run(
             cmd,
-            stdin=subprocess.DEVNULL, capture_output=capture,
+            stdin=subprocess.DEVNULL,
+            capture_output=capture,
             text=True,
             timeout=timeout,
             check=False,
@@ -405,6 +439,7 @@ def run_sg(
 
 
 # ---------- subcommands ----------
+
 
 def cmd_search(args: argparse.Namespace) -> int:
     pattern: str = args.pattern
@@ -443,7 +478,9 @@ def cmd_search(args: argparse.Namespace) -> int:
     if not matches:
         # Re-run pattern hints in case empty result was caused by something subtle.
         # Already done above; here we just give a generic suggestion.
-        trace("no matches. If you expected matches, double-check --lang and the pattern shape.")
+        trace(
+            "no matches. If you expected matches, double-check --lang and the pattern shape."
+        )
     return 0
 
 
@@ -491,8 +528,10 @@ def cmd_replace(args: argparse.Namespace) -> int:
 
     if not args.apply:
         # Show the dry-run preview and exit.
-        print(f"DRY-RUN: would rewrite {len(matches)} match(es) across "
-              f"{len({m['file'] for m in matches})} file(s):")
+        print(
+            f"DRY-RUN: would rewrite {len(matches)} match(es) across "
+            f"{len({m['file'] for m in matches})} file(s):"
+        )
         format_matches(matches, show_replacement=True)
         print()
         print("Re-run with --apply to mutate files.")
@@ -512,8 +551,10 @@ def cmd_replace(args: argparse.Namespace) -> int:
         sys.stderr.write(proc2.stderr or "")
         return 4
 
-    print(f"APPLIED: rewrote {len(matches)} match(es) across "
-          f"{len({m['file'] for m in matches})} file(s).")
+    print(
+        f"APPLIED: rewrote {len(matches)} match(es) across "
+        f"{len({m['file'] for m in matches})} file(s)."
+    )
     return 0
 
 
@@ -625,6 +666,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 # ---------- output formatting ----------
 
+
 def parse_compact_json(text: str) -> list[dict]:
     """Parse `sg --json=compact` output. Salvages partial output when truncated."""
     if not text.strip():
@@ -675,6 +717,7 @@ def format_matches(matches: list[dict], *, show_replacement: bool = False) -> No
 
 # ---------- argparse ----------
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="ast-grep-helper",
@@ -682,26 +725,42 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--version", action="version", version=f"ast-grep-helper {VERSION}")
-    p.add_argument("--quiet", "-q", action="store_true", help="Suppress trace lines on stderr.")
+    p.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress trace lines on stderr."
+    )
     sub = p.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
 
     s = sub.add_parser("search", help="Search code by AST pattern.")
     s.add_argument("pattern", help="AST pattern, e.g. 'console.log($MSG)'")
     s.add_argument("paths", nargs="*", help="Paths to search (default: '.')")
-    s.add_argument("--lang", "-l", help="Language (e.g. ts, py, go, rust). See: langs subcommand.")
-    s.add_argument("--globs", action="append", help="Include/exclude glob (repeat; prefix '!' to exclude).")
-    s.add_argument("--context", "-C", type=int, help="Lines of context around each match.")
-    s.add_argument("--json-out", action="store_true", help="Emit raw JSON instead of human format.")
+    s.add_argument(
+        "--lang", "-l", help="Language (e.g. ts, py, go, rust). See: langs subcommand."
+    )
+    s.add_argument(
+        "--globs",
+        action="append",
+        help="Include/exclude glob (repeat; prefix '!' to exclude).",
+    )
+    s.add_argument(
+        "--context", "-C", type=int, help="Lines of context around each match."
+    )
+    s.add_argument(
+        "--json-out", action="store_true", help="Emit raw JSON instead of human format."
+    )
     s.add_argument("--force", action="store_true", help="Skip pattern hint validation.")
     s.set_defaults(func=cmd_search)
 
-    r = sub.add_parser("replace", help="Rewrite code by AST pattern (dry-run by default).")
+    r = sub.add_parser(
+        "replace", help="Rewrite code by AST pattern (dry-run by default)."
+    )
     r.add_argument("pattern", help="AST pattern.")
     r.add_argument("rewrite", help="Replacement pattern (can reuse $VAR from pattern).")
     r.add_argument("paths", nargs="*", help="Paths (default: '.')")
     r.add_argument("--lang", "-l", help="Language.")
     r.add_argument("--globs", action="append", help="Include/exclude glob.")
-    r.add_argument("--apply", action="store_true", help="Mutate files (default: dry-run preview).")
+    r.add_argument(
+        "--apply", action="store_true", help="Mutate files (default: dry-run preview)."
+    )
     r.add_argument("--force", action="store_true", help="Skip pattern hint validation.")
     r.set_defaults(func=cmd_replace)
 
@@ -710,8 +769,12 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--config", "-c", help="Path to sgconfig.yml.")
     sc.add_argument("--rule", "-r", help="Single rule file.")
     sc.add_argument("--inline-rules", help="Inline YAML rule string.")
-    sc.add_argument("--report-style", choices=["rich", "medium", "short"], help="Report style.")
-    sc.add_argument("--apply", "-U", action="store_true", help="Apply fixes (default: report only).")
+    sc.add_argument(
+        "--report-style", choices=["rich", "medium", "short"], help="Report style."
+    )
+    sc.add_argument(
+        "--apply", "-U", action="store_true", help="Apply fixes (default: report only)."
+    )
     sc.set_defaults(func=cmd_scan)
 
     t = sub.add_parser("test", help="Run ast-grep snapshot tests.")
@@ -721,17 +784,27 @@ def build_parser() -> argparse.ArgumentParser:
     t.set_defaults(func=cmd_test)
 
     n = sub.add_parser("new", help="Scaffold a new project / rule / test / util.")
-    n.add_argument("what", choices=["project", "rule", "test", "util"], help="What to create.")
+    n.add_argument(
+        "what", choices=["project", "rule", "test", "util"], help="What to create."
+    )
     n.add_argument("name", nargs="?", help="Name of the artifact.")
     n.add_argument("--lang", "-l", help="Language.")
     n.add_argument("--yes", "-y", action="store_true", help="Accept defaults.")
     n.set_defaults(func=cmd_new)
 
-    sub.add_parser("langs", help="List supported languages.").set_defaults(func=cmd_langs)
-    sub.add_parser("doctor", help="Check ast-grep binary availability.").set_defaults(func=cmd_doctor)
-    sub.add_parser("install", help="Run the install script for this OS.").set_defaults(func=cmd_install)
+    sub.add_parser("langs", help="List supported languages.").set_defaults(
+        func=cmd_langs
+    )
+    sub.add_parser("doctor", help="Check ast-grep binary availability.").set_defaults(
+        func=cmd_doctor
+    )
+    sub.add_parser("install", help="Run the install script for this OS.").set_defaults(
+        func=cmd_install
+    )
 
-    v = sub.add_parser("validate", help="Validate a pattern offline (pattern hint check only).")
+    v = sub.add_parser(
+        "validate", help="Validate a pattern offline (pattern hint check only)."
+    )
     v.add_argument("pattern", help="AST pattern.")
     v.add_argument("--lang", "-l", help="Language for language-specific hints.")
     v.set_defaults(func=cmd_validate)

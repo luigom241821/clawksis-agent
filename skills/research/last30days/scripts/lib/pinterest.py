@@ -29,33 +29,35 @@ def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Pinterest search."""
     from .query import extract_core_subject
 
-    _PINTEREST_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "killer",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-        "prompt",
-        "prompts",
-        "prompting",
-        "methods",
-        "strategies",
-        "approaches",
-    })
+    _PINTEREST_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "killer",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+            "prompt",
+            "prompts",
+            "prompting",
+            "methods",
+            "strategies",
+            "approaches",
+        }
+    )
     return extract_core_subject(topic, noise=_PINTEREST_NOISE)
 
 
@@ -64,8 +66,8 @@ def _log(msg: str):
 
 
 def _parse_items(
-    raw_items: List[Dict[str, Any]], core_topic: str
-) -> List[Dict[str, Any]]:
+    raw_items: list[dict[str, Any]], core_topic: str
+) -> list[dict[str, Any]]:
     """Parse raw Pinterest items into normalized dicts.
 
     Pinterest pins are visual content with descriptions. Saves are the
@@ -106,25 +108,27 @@ def _parse_items(
         # Compute relevance
         relevance = _compute_relevance(core_topic, description, [])
 
-        items.append({
-            "pin_id": pin_id,
-            "description": description,
-            "url": url,
-            "author": author_name,
-            "board": board_name,
-            "engagement": {
-                "saves": save_count,
-                "comments": comment_count,
-            },
-            "relevance": relevance,
-            "why_relevant": f"Pinterest: {description[:60]}"
-            if description
-            else f"Pinterest: {core_topic}",
-        })
+        items.append(
+            {
+                "pin_id": pin_id,
+                "description": description,
+                "url": url,
+                "author": author_name,
+                "board": board_name,
+                "engagement": {
+                    "saves": save_count,
+                    "comments": comment_count,
+                },
+                "relevance": relevance,
+                "why_relevant": f"Pinterest: {description[:60]}"
+                if description
+                else f"Pinterest: {core_topic}",
+            }
+        )
     return items
 
 
-def parse_pinterest_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_pinterest_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse Pinterest search response to normalized format.
 
     Returns:
@@ -138,8 +142,8 @@ def search_pinterest(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+) -> dict[str, Any]:
     """Search Pinterest via ScrapeCreators API.
 
     Args:

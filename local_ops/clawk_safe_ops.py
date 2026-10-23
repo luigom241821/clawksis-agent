@@ -81,6 +81,7 @@ def run_hermes_lite(
         text=True,
         timeout=timeout,
         cwd=str(repo_root()),
+        check=False,
     )
 
     return result.returncode, result.stdout.strip(), result.stderr.strip()

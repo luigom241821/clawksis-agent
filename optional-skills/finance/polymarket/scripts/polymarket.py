@@ -100,10 +100,12 @@ def cmd_search(query: str):
     data = _get(f"{GAMMA}/public-search?q={q}")
     events = data.get("events", [])
     total = data.get("pagination", {}).get("totalResults", len(events))
-    print(f"Found {total} results for \"{query}\":\n")
+    print(f'Found {total} results for "{query}":\n')
     for evt in events[:10]:
         print(f"=== {evt['title']} ===")
-        print(f"  Volume: {_fmt_volume(evt.get('volume', 0))}  |  slug: {evt.get('slug', '')}")
+        print(
+            f"  Volume: {_fmt_volume(evt.get('volume', 0))}  |  slug: {evt.get('slug', '')}"
+        )
         markets = evt.get("markets", [])
         for m in markets[:5]:
             _print_market(m, indent="  ")
@@ -114,11 +116,15 @@ def cmd_search(query: str):
 
 def cmd_trending(limit: int = 10):
     """Show trending events by volume."""
-    events = _get(f"{GAMMA}/events?limit={limit}&active=true&closed=false&order=volume&ascending=false")
+    events = _get(
+        f"{GAMMA}/events?limit={limit}&active=true&closed=false&order=volume&ascending=false"
+    )
     print(f"Top {len(events)} trending events:\n")
     for i, evt in enumerate(events, 1):
         print(f"{i}. {evt['title']}")
-        print(f"   Volume: {_fmt_volume(evt.get('volume', 0))}  |  Markets: {len(evt.get('markets', []))}")
+        print(
+            f"   Volume: {_fmt_volume(evt.get('volume', 0))}  |  Markets: {len(evt.get('markets', []))}"
+        )
         print(f"   slug: {evt.get('slug', '')}")
         markets = evt.get("markets", [])
         for m in markets[:3]:
@@ -143,7 +149,11 @@ def cmd_market(slug: str):
     if isinstance(tokens, list):
         outcomes = _parse_json_field(m.get("outcomes", "[]"))
         for i, t in enumerate(tokens):
-            label = outcomes[i] if isinstance(outcomes, list) and i < len(outcomes) else f"Outcome {i}"
+            label = (
+                outcomes[i]
+                if isinstance(outcomes, list) and i < len(outcomes)
+                else f"Outcome {i}"
+            )
             print(f"  token ({label}): {t}")
     desc = m.get("description", "")
     if desc:
@@ -198,13 +208,16 @@ def cmd_book(token_id: str):
 
 def cmd_history(condition_id: str, interval: str = "all", fidelity: int = 50):
     """Get price history for a market."""
-    data = _get(f"{CLOB}/prices-history?market={condition_id}&interval={interval}&fidelity={fidelity}")
+    data = _get(
+        f"{CLOB}/prices-history?market={condition_id}&interval={interval}&fidelity={fidelity}"
+    )
     history = data.get("history", [])
     if not history:
         print("No price history available for this market.")
         return
     print(f"Price history ({len(history)} points, interval={interval}):\n")
     from datetime import datetime, timezone
+
     for pt in history:
         ts = datetime.fromtimestamp(pt["t"], tz=UTC).strftime("%Y-%m-%d %H:%M")
         price = _fmt_pct(pt["p"])

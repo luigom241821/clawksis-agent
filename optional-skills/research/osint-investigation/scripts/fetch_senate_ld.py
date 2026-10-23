@@ -3,6 +3,7 @@
 
 Anonymous: 120 req/hour. Token (SENATE_LDA_TOKEN): 1200 req/hour.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,7 +57,9 @@ def fetch(
     page = 0
     while page < max_pages:
         try:
-            payload = get_json(url, params=params if page == 0 else None, headers=headers)
+            payload = get_json(
+                url, params=params if page == 0 else None, headers=headers
+            )
         except Exception as e:
             print(f"Senate LDA error on page {page + 1}: {e}", file=sys.stderr)
             break
@@ -74,7 +77,12 @@ def fetch(
                 for lob in la.get("lobbyists") or []:
                     lob_obj = lob.get("lobbyist") or {}
                     name = " ".join(
-                        x for x in (lob_obj.get("first_name", ""), lob_obj.get("last_name", "")) if x
+                        x
+                        for x in (
+                            lob_obj.get("first_name", ""),
+                            lob_obj.get("last_name", ""),
+                        )
+                        if x
                     )
                     if name:
                         lobbyists.append(name)
@@ -95,7 +103,10 @@ def fetch(
                     "registrant_id": str(registrant_obj.get("id", "") or ""),
                     "client_name": client_obj.get("name", "") or "",
                     "client_id": str(client_obj.get("id", "") or ""),
-                    "client_general_description": client_obj.get("general_description", "") or "",
+                    "client_general_description": client_obj.get(
+                        "general_description", ""
+                    )
+                    or "",
                     "income": str(r.get("income", "") or ""),
                     "expenses": str(r.get("expenses", "") or ""),
                     "lobbyists": "; ".join(sorted(set(lobbyists))),

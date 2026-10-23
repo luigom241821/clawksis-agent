@@ -48,7 +48,7 @@ def _m(
     size_gb: Optional[float] = None,
     vram: Optional[float] = None,
     ram: Optional[float] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a catalog entry, deriving rough Q4 memory needs from param count."""
     sz = size_gb if size_gb is not None else round(params_b * 0.6, 1)
     return {
@@ -72,7 +72,7 @@ def _m(
 # sizes/families; memory figures are rough Q4 estimates for guidance, not a
 # guarantee. `tool_use` flags models that reliably do function-calling (the
 # agent needs that for most tools).
-CATALOG: List[Dict[str, Any]] = [
+CATALOG: list[dict[str, Any]] = [
     # ── tiny (CPU / low VRAM) ───────────────────────────────────────────────
     _m(
         "Qwen2.5 0.5B",
@@ -488,7 +488,7 @@ CATALOG: List[Dict[str, Any]] = [
 # ── hardware detection ────────────────────────────────────────────────────────
 
 
-def _detect_gpu() -> Dict[str, Any]:
+def _detect_gpu() -> dict[str, Any]:
     """Best-effort discrete-GPU + VRAM detection. Returns {name, vram_gb}."""
     # NVIDIA (Linux/Windows) — nvidia-smi.
     smi = shutil.which("nvidia-smi")
@@ -499,6 +499,7 @@ def _detect_gpu() -> Dict[str, Any]:
                 capture_output=True,
                 text=True,
                 timeout=6,
+                check=False,
             )
             if out.returncode == 0 and out.stdout.strip():
                 # Sum VRAM across identical GPUs; report the first name.
@@ -529,6 +530,7 @@ def _detect_gpu() -> Dict[str, Any]:
                 capture_output=True,
                 text=True,
                 timeout=4,
+                check=False,
             )
             total = int(mem.stdout.strip()) if mem.returncode == 0 else 0
             if total > 0:
@@ -543,7 +545,7 @@ def _detect_gpu() -> Dict[str, Any]:
     return {"name": "", "vram_gb": 0.0}
 
 
-def detect_hardware() -> Dict[str, Any]:
+def detect_hardware() -> dict[str, Any]:
     """Detect RAM / CPU / GPU + estado vivo del sistema.
 
     Además del total de RAM, expone lo que le sirve al Cookbook para decidir
@@ -604,7 +606,7 @@ def detect_hardware() -> Dict[str, Any]:
 # ── fit / recommender ─────────────────────────────────────────────────────────
 
 
-def fit_model(model: Dict[str, Any], hw: Dict[str, Any]) -> Dict[str, Any]:
+def fit_model(model: dict[str, Any], hw: dict[str, Any]) -> dict[str, Any]:
     """Decide whether *model* fits *hw*: run mode + tier.
 
     mode: "gpu" | "cpu" | "none"; tier: "perfect" | "good" | "marginal" | "no_fit".
@@ -666,7 +668,7 @@ def _guess_tool_use(tag: str) -> bool:
     return any(fam in t for fam in _TOOL_FAMILIES)
 
 
-def _extra_installed_row(tag: str) -> Dict[str, Any]:
+def _extra_installed_row(tag: str) -> dict[str, Any]:
     """A synthetic catalog row for a pulled model that isn't in the catalog.
 
     It's already on disk, so it always "fits"; we just can't know its exact
@@ -692,8 +694,8 @@ def _extra_installed_row(tag: str) -> Dict[str, Any]:
 
 
 def catalog_with_fit(
-    hw: Optional[Dict[str, Any]] = None, installed: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+    hw: Optional[dict[str, Any]] = None, installed: Optional[list[str]] = None
+) -> list[dict[str, Any]]:
     """Return the catalog enriched with a per-model fit verdict + installed flag.
 
     Sorted by: best fit → tool-capable first → larger first. Tool-capable wins
@@ -707,16 +709,18 @@ def catalog_with_fit(
     hw = hw or detect_hardware()
     installed_list = list(installed or [])
     installed_set = set(installed_list)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     catalog_tags = set()
     for model in CATALOG:
         catalog_tags.add(model["ollama"])
         fit = fit_model(model, hw)
-        rows.append({
-            **model,
-            "fit": fit,
-            "installed": model["ollama"] in installed_set,
-        })
+        rows.append(
+            {
+                **model,
+                "fit": fit,
+                "installed": model["ollama"] in installed_set,
+            }
+        )
     rows.sort(
         key=lambda r: (
             _TIER_RANK.get(r["fit"]["tier"], 9),
@@ -732,10 +736,10 @@ def catalog_with_fit(
 
 
 def rows_with_fit(
-    rows: List[Dict[str, Any]],
-    hw: Optional[Dict[str, Any]] = None,
-    installed: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    rows: list[dict[str, Any]],
+    hw: Optional[dict[str, Any]] = None,
+    installed: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """Attach fit verdict + installed flag to arbitrary catalog-shaped rows.
 
     Used for the live Ollama-library search/browse results (which are already
@@ -744,7 +748,7 @@ def rows_with_fit(
     """
     hw = hw or detect_hardware()
     installed_set = set(installed or [])
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for model in rows:
         if model.get("size_gb"):
             fit = fit_model(model, hw)
@@ -754,11 +758,13 @@ def rows_with_fit(
                 "tier": "unknown",
                 "reason": "size unknown until pulled",
             }
-        out.append({
-            **model,
-            "fit": fit,
-            "installed": model["ollama"] in installed_set,
-        })
+        out.append(
+            {
+                **model,
+                "fit": fit,
+                "installed": model["ollama"] in installed_set,
+            }
+        )
     out.sort(
         key=lambda r: (
             _TIER_RANK.get(r["fit"]["tier"], 9),
@@ -784,7 +790,7 @@ def ollama_running() -> bool:
         return False
 
 
-def ollama_models() -> List[str]:
+def ollama_models() -> list[str]:
     """Tags currently pulled into the local Ollama (e.g. ['qwen2.5:7b'])."""
     try:
         with urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=3) as resp:
@@ -794,7 +800,7 @@ def ollama_models() -> List[str]:
         return []
 
 
-def ollama_models_detailed() -> Dict[str, Dict[str, Any]]:
+def ollama_models_detailed() -> dict[str, dict[str, Any]]:
     """tag -> {size} de los modelos pulleados (bytes reales en disco)."""
     try:
         with urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=3) as resp:
@@ -808,7 +814,7 @@ def ollama_models_detailed() -> Dict[str, Dict[str, Any]]:
         return {}
 
 
-def delete_ollama_model(tag: str) -> Dict[str, Any]:
+def delete_ollama_model(tag: str) -> dict[str, Any]:
     """Borra un modelo pulleado (DELETE /api/delete). Best-effort."""
     if not tag:
         return {"ok": False, "error": "tag is required"}
@@ -827,7 +833,7 @@ def delete_ollama_model(tag: str) -> Dict[str, Any]:
         return {"ok": False, "error": str(exc)[:200]}
 
 
-def ollama_status() -> Dict[str, Any]:
+def ollama_status() -> dict[str, Any]:
     return {
         "installed": ollama_installed(),
         "running": ollama_running(),
@@ -850,7 +856,10 @@ def start_ollama_serve(wait_seconds: float = 12.0) -> bool:
         return True
     try:
         subprocess.run(
-            ["systemctl", "start", "ollama"], capture_output=True, timeout=15
+            ["systemctl", "start", "ollama"],
+            capture_output=True,
+            timeout=15,
+            check=False,
         )
     except Exception:
         pass
@@ -893,6 +902,7 @@ def _do_install_ollama() -> None:
                 capture_output=True,
                 text=True,
                 timeout=1800,
+                check=False,
             )
             ok = proc.returncode == 0
             err = (proc.stderr or "install failed").strip()[:200]
@@ -902,6 +912,7 @@ def _do_install_ollama() -> None:
                 capture_output=True,
                 text=True,
                 timeout=1800,
+                check=False,
             )
             ok = proc.returncode == 0
             err = (proc.stderr or "install failed").strip()[:200]
@@ -918,7 +929,7 @@ def _do_install_ollama() -> None:
             _ollama_install_status = f"error: {exc}"
 
 
-def start_ollama_install() -> Dict[str, Any]:
+def start_ollama_install() -> dict[str, Any]:
     """Install Ollama on the clawk host in the background. Poll install-status."""
     if ollama_installed():
         start_ollama_serve()
@@ -935,10 +946,10 @@ def start_ollama_install() -> Dict[str, Any]:
 
 
 # Background pull tracking: tag -> "pulling" | "done" | "error: ...".
-_pull_status: Dict[str, str] = {}
+_pull_status: dict[str, str] = {}
 # tag -> {completed, total, speed_bps, phase} (progreso real del streaming pull).
-_pull_progress: Dict[str, Dict[str, Any]] = {}
-_pull_cancel: Dict[str, threading.Event] = {}
+_pull_progress: dict[str, dict[str, Any]] = {}
+_pull_cancel: dict[str, threading.Event] = {}
 _pull_lock = threading.Lock()
 
 
@@ -947,7 +958,7 @@ def pull_status(tag: str) -> str:
         return _pull_status.get(tag, "")
 
 
-def pull_progress(tag: str) -> Dict[str, Any]:
+def pull_progress(tag: str) -> dict[str, Any]:
     """Progreso numérico del pull: bytes, %, velocidad y ETA (si se conocen)."""
     with _pull_lock:
         status = _pull_status.get(tag, "")
@@ -968,14 +979,14 @@ def pull_progress(tag: str) -> Dict[str, Any]:
     }
 
 
-def active_pulls() -> List[Dict[str, Any]]:
+def active_pulls() -> list[dict[str, Any]]:
     """Pulls de Ollama en curso (para re-engancharse a la UI tras navegar)."""
     with _pull_lock:
         tags = [t for t, s in _pull_status.items() if s in ("pulling", "validating")]
     return [{"tag": t, **pull_progress(t)} for t in tags]
 
 
-def cancel_pull(tag: str) -> Dict[str, Any]:
+def cancel_pull(tag: str) -> dict[str, Any]:
     """Cancela un pull en curso (Ollama conserva los blobs parciales → resume)."""
     with _pull_lock:
         ev = _pull_cancel.get(tag)
@@ -1053,7 +1064,7 @@ def _do_pull(tag: str) -> None:
             _pull_status[tag] = f"error: {exc}"
 
 
-def start_pull(tag: str) -> Dict[str, Any]:
+def start_pull(tag: str) -> dict[str, Any]:
     """Kick off `ollama pull <tag>` in the background. Returns immediately."""
     if not ollama_installed():
         return {
@@ -1071,7 +1082,7 @@ def start_pull(tag: str) -> Dict[str, Any]:
     return {"ok": True, "status": "pulling", "tag": tag}
 
 
-def pull_blocking(tag: str) -> Dict[str, Any]:
+def pull_blocking(tag: str) -> dict[str, Any]:
     """Pull synchronously (for the CLI), then validate it runs. Returns {ok, ...}."""
     if not ollama_installed():
         return {
@@ -1081,7 +1092,7 @@ def pull_blocking(tag: str) -> Dict[str, Any]:
         }
     start_ollama_serve()  # model installs on this host; ensure the daemon is up
     try:
-        proc = subprocess.run(["ollama", "pull", tag], timeout=3600)
+        proc = subprocess.run(["ollama", "pull", tag], timeout=3600, check=False)
         if proc.returncode != 0:
             return {"ok": False, "error": "pull failed"}
     except Exception as exc:
@@ -1096,7 +1107,7 @@ def pull_blocking(tag: str) -> Dict[str, Any]:
     }
 
 
-def use_model(tag: str) -> Dict[str, Any]:
+def use_model(tag: str) -> dict[str, Any]:
     """Point the agent's model config at a local Ollama model (OpenAI-compatible).
 
     Reuses Clawksis's custom-provider support: provider=custom + base_url at the
@@ -1109,12 +1120,14 @@ def use_model(tag: str) -> Dict[str, Any]:
         model_cfg = config.get("model")
         if not isinstance(model_cfg, dict):
             model_cfg = {}
-        model_cfg.update({
-            "provider": "custom",
-            "default": tag,
-            "base_url": OLLAMA_OPENAI_URL,
-            "api_key": "ollama",  # ollama ignores it; a non-empty value avoids prompts
-        })
+        model_cfg.update(
+            {
+                "provider": "custom",
+                "default": tag,
+                "base_url": OLLAMA_OPENAI_URL,
+                "api_key": "ollama",  # ollama ignores it; a non-empty value avoids prompts
+            }
+        )
         config["model"] = model_cfg
         save_config(config)
         return {
@@ -1141,7 +1154,7 @@ _OLLAMA_WEB = "https://ollama.com"
 _WEB_HEADERS = {"User-Agent": "Mozilla/5.0 (clawksis-cookbook)"}
 
 # TTL caches so repeated browse/search calls don't hammer ollama.com.
-_lib_cache: Dict[str, tuple] = {}  # key -> (monotonic_ts, rows)
+_lib_cache: dict[str, tuple] = {}  # key -> (monotonic_ts, rows)
 _LIB_TTL_SECONDS = 1800.0  # full library: 30 min
 _SEARCH_TTL_SECONDS = 300.0  # per-query search: 5 min
 
@@ -1178,9 +1191,9 @@ def _size_to_params_b(size: str) -> Optional[float]:
     return None
 
 
-def _parse_model_cards(html: str) -> List[Dict[str, Any]]:
+def _parse_model_cards(html: str) -> list[dict[str, Any]]:
     """Parse ollama.com /library or /search HTML into raw model cards."""
-    cards: List[Dict[str, Any]] = []
+    cards: list[dict[str, Any]] = []
     for blk in re.split(r"<li x-test-model", html)[1:]:
         slug_m = re.search(r'href="/library/([a-zA-Z0-9._-]+)"', blk)
         if not slug_m:
@@ -1194,19 +1207,21 @@ def _parse_model_cards(html: str) -> List[Dict[str, Any]]:
         sizes = [
             s.strip().lower() for s in re.findall(r"x-test-size[^>]*>([^<]+)<", blk)
         ]
-        cards.append({
-            "slug": slug,
-            "title": title,
-            "description": desc,
-            "capabilities": caps,
-            "sizes": sizes,
-        })
+        cards.append(
+            {
+                "slug": slug,
+                "title": title,
+                "description": desc,
+                "capabilities": caps,
+                "sizes": sizes,
+            }
+        )
     return cards
 
 
-def _cards_to_rows(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _cards_to_rows(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Expand parsed cards into CATALOG-shaped rows (one per pullable size tag)."""
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     seen: set = set()
     for card in cards:
         slug = card["slug"]
@@ -1219,25 +1234,27 @@ def _cards_to_rows(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             seen.add(tag)
             pb = _size_to_params_b(size)
             sz_gb = round(pb * 0.6, 1) if pb else None
-            rows.append({
-                "id": tag.replace(":", "-"),
-                "name": card["title"] + (f" {size}" if size != "latest" else ""),
-                "family": card["title"],
-                "params_b": pb if pb is not None else 0.0,
-                "ollama": tag,
-                "quant": "Q4_K_M",
-                "size_gb": sz_gb if sz_gb is not None else 0.0,
-                "min_vram_gb": round(sz_gb + 1.5, 1) if sz_gb else 0.0,
-                "min_ram_gb": round(sz_gb + 2.5, 1) if sz_gb else 0.0,
-                "context": 0,  # unknown from the library card
-                "tool_use": tool_use,
-                "use_case": card["description"][:120],
-                "source": "library",
-            })
+            rows.append(
+                {
+                    "id": tag.replace(":", "-"),
+                    "name": card["title"] + (f" {size}" if size != "latest" else ""),
+                    "family": card["title"],
+                    "params_b": pb if pb is not None else 0.0,
+                    "ollama": tag,
+                    "quant": "Q4_K_M",
+                    "size_gb": sz_gb if sz_gb is not None else 0.0,
+                    "min_vram_gb": round(sz_gb + 1.5, 1) if sz_gb else 0.0,
+                    "min_ram_gb": round(sz_gb + 2.5, 1) if sz_gb else 0.0,
+                    "context": 0,  # unknown from the library card
+                    "tool_use": tool_use,
+                    "use_case": card["description"][:120],
+                    "source": "library",
+                }
+            )
     return rows
 
 
-def search_ollama_library(query: str, limit: int = 80) -> List[Dict[str, Any]]:
+def search_ollama_library(query: str, limit: int = 80) -> list[dict[str, Any]]:
     """Live search of the FULL Ollama library for models matching *query*.
 
     Returns CATALOG-shaped rows (one per size tag). Cached per-query; [] if
@@ -1255,7 +1272,7 @@ def search_ollama_library(query: str, limit: int = 80) -> List[Dict[str, Any]]:
     return rows[:limit]
 
 
-def full_ollama_library() -> List[Dict[str, Any]]:
+def full_ollama_library() -> list[dict[str, Any]]:
     """All models in the Ollama library (live, scraped, cached ~30 min)."""
     cached = _lib_cache.get("__all__")
     if cached and time.monotonic() - cached[0] < _LIB_TTL_SECONDS:
@@ -1266,7 +1283,7 @@ def full_ollama_library() -> List[Dict[str, Any]]:
     return rows
 
 
-def validate_model(tag: str, timeout: float = 120.0) -> Dict[str, Any]:
+def validate_model(tag: str, timeout: float = 120.0) -> dict[str, Any]:
     """Smoke-test that a pulled model actually RUNS: a tiny generation via Ollama.
 
     "Installed" isn't "works" — a corrupt pull or unsupported build only fails
@@ -1276,12 +1293,14 @@ def validate_model(tag: str, timeout: float = 120.0) -> Dict[str, Any]:
     if not tag:
         return {"ok": False, "error": "no tag"}
     try:
-        body = json.dumps({
-            "model": tag,
-            "prompt": "Reply with exactly: OK",
-            "stream": False,
-            "options": {"num_predict": 8, "temperature": 0},
-        }).encode()
+        body = json.dumps(
+            {
+                "model": tag,
+                "prompt": "Reply with exactly: OK",
+                "stream": False,
+                "options": {"num_predict": 8, "temperature": 0},
+            }
+        ).encode()
         req = urllib.request.Request(
             f"{OLLAMA_BASE_URL}/api/generate",
             data=body,

@@ -9,6 +9,7 @@ The JSON is a flat object: {"FieldName": "value", "Agree": true, ...}
 Sets NeedAppearances so conforming viewers regenerate field appearances.
 Flattening uses pypdf appearance merging; verify visually for exotic widgets.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,12 +23,19 @@ def main() -> int:
             stream.reconfigure(encoding="utf-8")
         except Exception:
             pass
-    parser = argparse.ArgumentParser(description="Fill PDF AcroForm fields from JSON (pypdf).")
+    parser = argparse.ArgumentParser(
+        description="Fill PDF AcroForm fields from JSON (pypdf)."
+    )
     parser.add_argument("pdf", help="Input form PDF")
-    parser.add_argument("--fields-json", required=True, help="UTF-8 JSON file of field values")
+    parser.add_argument(
+        "--fields-json", required=True, help="UTF-8 JSON file of field values"
+    )
     parser.add_argument("-o", "--output", required=True, help="Output PDF path")
-    parser.add_argument("--flatten", action="store_true",
-                        help="Make fields read-only and burn appearances into the page")
+    parser.add_argument(
+        "--flatten",
+        action="store_true",
+        help="Make fields read-only and burn appearances into the page",
+    )
     parser.add_argument("--password", help="Password if the input is encrypted")
     args = parser.parse_args()
 
@@ -35,7 +43,10 @@ def main() -> int:
         from pypdf import PdfReader, PdfWriter
         from pypdf.generic import BooleanObject, NameObject
     except ImportError:
-        print("Missing dependency: install with 'python3 -m pip install pypdf'", file=sys.stderr)
+        print(
+            "Missing dependency: install with 'python3 -m pip install pypdf'",
+            file=sys.stderr,
+        )
         return 2
 
     with open(args.fields_json, encoding="utf-8") as fh:
@@ -80,16 +91,29 @@ def main() -> int:
             # pypdf >= 5: flatten via update with flags making fields read-only,
             # then remove interactivity by merging appearances.
             for page in writer.pages:
-                writer.update_page_form_field_values(page, fill, flags=1)  # 1 = ReadOnly
+                writer.update_page_form_field_values(
+                    page, fill, flags=1
+                )  # 1 = ReadOnly
             flattened = True
         except Exception as exc:
-            print(f"Warning: flatten step failed ({exc}); output keeps interactive fields",
-                  file=sys.stderr)
+            print(
+                f"Warning: flatten step failed ({exc}); output keeps interactive fields",
+                file=sys.stderr,
+            )
 
     with open(args.output, "wb") as fh:
         writer.write(fh)
-    print(json.dumps({"output": args.output, "filled": sorted(fill), "skipped": missing,
-                      "flattened": flattened}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "output": args.output,
+                "filled": sorted(fill),
+                "skipped": missing,
+                "flattened": flattened,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

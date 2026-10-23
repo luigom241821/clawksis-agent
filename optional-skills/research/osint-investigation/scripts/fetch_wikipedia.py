@@ -8,6 +8,7 @@ Two free APIs:
 Both are anonymous-access. Useful for resolving who-is-this-entity questions
 and surfacing cross-references that other sources can join against.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -86,8 +87,8 @@ def _wd_lookup_by_qid(qid: str) -> dict:
     # typed literals, so the slot mapping is local-only.
     interesting = {
         "P31": "instance_of",
-        "P17": "country",          # for orgs / places
-        "P27": "country",          # for individuals (country of citizenship)
+        "P17": "country",  # for orgs / places
+        "P27": "country",  # for individuals (country of citizenship)
         "P106": "occupation",
         "P108": "employer",
         "P569": "date_of_birth",
@@ -216,7 +217,9 @@ def fetch(query: str, limit: int, no_wikidata: bool, out_path: str) -> int:
             {
                 "source": "wikipedia+wikidata" if qid else "wikipedia",
                 "label": title,
-                "description": (summary.get("description") or hit.get("description") or "").strip(),
+                "description": (
+                    summary.get("description") or hit.get("description") or ""
+                ).strip(),
                 "qid": qid,
                 "wikipedia_title": title,
                 "wikipedia_url": hit.get("url", ""),
@@ -225,7 +228,9 @@ def fetch(query: str, limit: int, no_wikidata: bool, out_path: str) -> int:
                 "country": "; ".join(facts.get("country", [])),
                 "occupation": "; ".join(facts.get("occupation", [])),
                 "employer": "; ".join(facts.get("employer", [])),
-                "date_of_birth": "; ".join(facts.get("date_of_birth", []))[:10] if facts.get("date_of_birth") else "",
+                "date_of_birth": "; ".join(facts.get("date_of_birth", []))[:10]
+                if facts.get("date_of_birth")
+                else "",
                 "place_of_birth": "; ".join(facts.get("place_of_birth", [])),
                 "summary": (summary.get("extract") or "").replace("\n", " ")[:1000],
             }
@@ -247,8 +252,12 @@ def fetch(query: str, limit: int, no_wikidata: bool, out_path: str) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--query", required=True, help="Entity name (person, company, place, concept)")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--query", required=True, help="Entity name (person, company, place, concept)"
+    )
     p.add_argument("--limit", type=int, default=5)
     p.add_argument(
         "--no-wikidata",

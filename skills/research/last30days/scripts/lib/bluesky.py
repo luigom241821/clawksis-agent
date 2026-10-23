@@ -26,7 +26,7 @@ BSKY_SESSION_URL = "https://bsky.social/xrpc/com.atproto.server.createSession"
 _DEFAULT_BSKY_SEARCH_HOST = "api.bsky.app"
 
 
-def _resolve_search_url(config: Optional[Dict[str, Any]] = None) -> str:
+def _resolve_search_url(config: Optional[dict[str, Any]] = None) -> str:
     """Resolve the Bluesky search URL with BSKY_SEARCH_HOST override.
 
     Default is api.bsky.app. Override via BSKY_SEARCH_HOST in shell env or
@@ -162,30 +162,32 @@ def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Bluesky search."""
     from .query import extract_core_subject
 
-    _BSKY_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-    })
+    _BSKY_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+        }
+    )
     return extract_core_subject(topic, noise=_BSKY_NOISE)
 
 
-def _parse_date(item: Dict[str, Any]) -> Optional[str]:
+def _parse_date(item: dict[str, Any]) -> Optional[str]:
     """Parse date from Bluesky post to YYYY-MM-DD.
 
     AT Protocol uses ISO 8601 format in indexedAt and createdAt fields.
@@ -194,7 +196,7 @@ def _parse_date(item: Dict[str, Any]) -> Optional[str]:
         val = item.get(key)
         if val and isinstance(val, str):
             try:
-                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(val)
                 return dt.strftime("%Y-%m-%d")
             except (ValueError, TypeError):
                 pass
@@ -206,8 +208,8 @@ def search_bluesky(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    config: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    config: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """Search Bluesky via AT Protocol API.
 
     Args:
@@ -255,7 +257,7 @@ def search_bluesky(
     }
     url = f"{_resolve_search_url(config)}?{urlencode(params)}"
 
-    def _auth_and_search() -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def _auth_and_search() -> tuple[Optional[dict[str, Any]], Optional[str]]:
         token = _create_session(handle, app_password)
         if not token:
             error_msg = (
@@ -299,7 +301,7 @@ def search_bluesky(
     return response
 
 
-def parse_bluesky_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_bluesky_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse AT Protocol response into normalized item dicts.
 
     Returns:
@@ -336,22 +338,24 @@ def parse_bluesky_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         engagement_boost = min(0.2, math.log1p(likes + reposts) / 40)
         relevance = min(1.0, rank_score * 0.7 + engagement_boost + 0.1)
 
-        items.append({
-            "handle": handle,
-            "display_name": display_name,
-            "text": text,
-            "url": url,
-            "date": date_str,
-            "engagement": {
-                "likes": likes,
-                "reposts": reposts,
-                "replies": replies,
-                "quotes": quotes,
-            },
-            "relevance": round(relevance, 2),
-            "why_relevant": f"Bluesky: @{handle}: {text[:60]}"
-            if text
-            else f"Bluesky: {handle}",
-        })
+        items.append(
+            {
+                "handle": handle,
+                "display_name": display_name,
+                "text": text,
+                "url": url,
+                "date": date_str,
+                "engagement": {
+                    "likes": likes,
+                    "reposts": reposts,
+                    "replies": replies,
+                    "quotes": quotes,
+                },
+                "relevance": round(relevance, 2),
+                "why_relevant": f"Bluesky: @{handle}: {text[:60]}"
+                if text
+                else f"Bluesky: {handle}",
+            }
+        )
 
     return items

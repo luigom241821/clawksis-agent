@@ -25,11 +25,11 @@ class LocalModelProvider(Protocol):
 
     display_name: str
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Estado: installed / running / modelos / base_url / extras."""
         ...
 
-    def start_install(self) -> Dict[str, Any]:
+    def start_install(self) -> dict[str, Any]:
         """Instala el backend en este host, en background."""
         ...
 
@@ -37,13 +37,13 @@ class LocalModelProvider(Protocol):
         """ "installing" | "done" | "error: ..." | ""."""
         ...
 
-    def installed_models(self) -> List[Dict[str, Any]]:
+    def installed_models(self) -> list[dict[str, Any]]:
         """Modelos instalados, shape {id, name, size_bytes?, provider, ...}."""
         ...
 
-    def delete_model(self, model_id: str) -> Dict[str, Any]: ...
+    def delete_model(self, model_id: str) -> dict[str, Any]: ...
 
-    def use_model(self, model_id: str) -> Dict[str, Any]:
+    def use_model(self, model_id: str) -> dict[str, Any]:
         """Deja *model_id* como modelo del agente (config custom-provider)."""
         ...
 
@@ -56,12 +56,12 @@ class OllamaProvider:
 
     display_name = "Ollama"
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         from clawk_cli import cookbook
 
         return cookbook.ollama_status()
 
-    def start_install(self) -> Dict[str, Any]:
+    def start_install(self) -> dict[str, Any]:
         from clawk_cli import cookbook
 
         return cookbook.start_ollama_install()
@@ -71,7 +71,7 @@ class OllamaProvider:
 
         return cookbook.ollama_install_status()
 
-    def installed_models(self) -> List[Dict[str, Any]]:
+    def installed_models(self) -> list[dict[str, Any]]:
         from clawk_cli import cookbook
 
         return [
@@ -86,12 +86,12 @@ class OllamaProvider:
             for tag, info in cookbook.ollama_models_detailed().items()
         ]
 
-    def delete_model(self, model_id: str) -> Dict[str, Any]:
+    def delete_model(self, model_id: str) -> dict[str, Any]:
         from clawk_cli import cookbook
 
         return cookbook.delete_ollama_model(self._tag(model_id))
 
-    def use_model(self, model_id: str) -> Dict[str, Any]:
+    def use_model(self, model_id: str) -> dict[str, Any]:
         from clawk_cli import cookbook
 
         return cookbook.use_model(self._tag(model_id))
@@ -109,12 +109,12 @@ class LlamaCppProvider:
 
     display_name = "llama.cpp"
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         from clawk_cli import cookbook_llamacpp
 
         return cookbook_llamacpp.status()
 
-    def start_install(self) -> Dict[str, Any]:
+    def start_install(self) -> dict[str, Any]:
         from clawk_cli import cookbook_llamacpp
 
         return cookbook_llamacpp.start_install()
@@ -124,23 +124,23 @@ class LlamaCppProvider:
 
         return cookbook_llamacpp.install_status()
 
-    def installed_models(self) -> List[Dict[str, Any]]:
+    def installed_models(self) -> list[dict[str, Any]]:
         from clawk_cli import cookbook_llamacpp
 
         return [{**e, "provider": self.name} for e in cookbook_llamacpp.list_models()]
 
-    def delete_model(self, model_id: str) -> Dict[str, Any]:
+    def delete_model(self, model_id: str) -> dict[str, Any]:
         from clawk_cli import cookbook_llamacpp
 
         return cookbook_llamacpp.delete_model(model_id)
 
-    def use_model(self, model_id: str) -> Dict[str, Any]:
+    def use_model(self, model_id: str) -> dict[str, Any]:
         from clawk_cli import cookbook_llamacpp
 
         return cookbook_llamacpp.use_model(model_id)
 
 
-_PROVIDERS: Dict[str, Any] = {
+_PROVIDERS: dict[str, Any] = {
     "ollama": OllamaProvider(),
     "llamacpp": LlamaCppProvider(),
 }
@@ -150,27 +150,27 @@ def get_provider(name: str) -> Optional[Any]:
     return _PROVIDERS.get((name or "").strip().lower())
 
 
-def all_providers() -> List[Any]:
+def all_providers() -> list[Any]:
     return list(_PROVIDERS.values())
 
 
-def providers_status() -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
+def providers_status() -> dict[str, Any]:
+    out: dict[str, Any] = {}
 
     for p in all_providers():
         try:
             out[p.name] = p.status()
 
-        except Exception as exc:  # noqa: BLE001 — un backend roto no tira el resto
+        except Exception as exc:
             out[p.name] = {"installed": False, "error": str(exc)[:200]}
 
     return out
 
 
-def all_installed_models() -> List[Dict[str, Any]]:
+def all_installed_models() -> list[dict[str, Any]]:
     """Listado unificado de modelos instalados de TODOS los providers."""
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
 
     for p in all_providers():
         try:

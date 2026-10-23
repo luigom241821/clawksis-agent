@@ -186,12 +186,14 @@ def sheets_rows(subject_id: str) -> list[list[str]]:
     """
     rows = [["broker_id", "state", "found", "tier", "removed_at", "next_recheck"]]
     for bid, c in sorted(ledger_mod.load(subject_id).items()):
-        rows.append([
-            bid,
-            c.get("state", ""),
-            str(c.get("found", "")),
-            (c.get("automation") or {}).get("tier_used", ""),
-            c.get("removal_confirmed_at") or "",
-            c.get("next_recheck_at") or "",
-        ])
+        rows.append(
+            [
+                bid,
+                c.get("state", ""),
+                str(c.get("found", "")),
+                (c.get("automation") or {}).get("tier_used", ""),
+                c.get("removal_confirmed_at") or "",
+                c.get("next_recheck_at") or "",
+            ]
+        )
     return rows

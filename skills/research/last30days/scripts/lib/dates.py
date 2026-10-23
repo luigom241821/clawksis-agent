@@ -1,16 +1,16 @@
 """Date utilities for last30days skill."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Optional, Tuple
 
 
-def get_date_range(days: int = 30) -> Tuple[str, str]:
+def get_date_range(days: int = 30) -> tuple[str, str]:
     """Get the date range for the last N days.
 
     Returns:
         Tuple of (from_date, to_date) as YYYY-MM-DD strings
     """
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     from_date = today - timedelta(days=days)
     return from_date.isoformat(), today.isoformat()
 
@@ -26,7 +26,7 @@ def parse_date(date_str: Optional[str]) -> Optional[datetime]:
     # Try Unix timestamp (from Reddit)
     try:
         ts = float(date_str)
-        return datetime.fromtimestamp(ts, tz=timezone.utc)
+        return datetime.fromtimestamp(ts, tz=UTC)
     except (ValueError, TypeError):
         pass
 
@@ -43,8 +43,8 @@ def parse_date(date_str: Optional[str]) -> Optional[datetime]:
         try:
             dt = datetime.strptime(date_str, fmt)
             if dt.tzinfo is not None:
-                return dt.astimezone(timezone.utc)
-            return dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(UTC)
+            return dt.replace(tzinfo=UTC)
         except ValueError:
             continue
 
@@ -56,7 +56,7 @@ def timestamp_to_date(ts: Optional[float]) -> Optional[str]:
     if ts is None:
         return None
     try:
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        dt = datetime.fromtimestamp(ts, tz=UTC)
         return dt.date().isoformat()
     except (ValueError, TypeError, OSError):
         return None
@@ -96,7 +96,7 @@ def days_ago(date_str: Optional[str]) -> Optional[int]:
 
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%d").date()
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         delta = today - dt
         return delta.days
     except ValueError:

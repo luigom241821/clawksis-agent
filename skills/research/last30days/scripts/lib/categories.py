@@ -27,8 +27,8 @@ from typing import List, Optional, TypedDict
 
 
 class _CategoryEntry(TypedDict):
-    patterns: List[str]
-    peer_subs: List[str]
+    patterns: list[str]
+    peer_subs: list[str]
 
 
 CATEGORY_PEERS: dict[str, _CategoryEntry] = {
@@ -269,7 +269,7 @@ def detect_category(topic: Optional[str]) -> Optional[str]:
     return None
 
 
-def peer_subs_for(category_id: Optional[str]) -> List[str]:
+def peer_subs_for(category_id: Optional[str]) -> list[str]:
     """Return the priority-ordered peer subreddit list for a category.
 
     Returns an empty list for None or unknown category ids. The returned

@@ -25,7 +25,7 @@ def _windows(words: list[str], size: int, overlap: int) -> list[str]:
 
 def extract_best_snippet(
     item: schema.SourceItem,
-    ranking_query: "str | relevance.PreparedQuery",
+    ranking_query: str | relevance.PreparedQuery,
     max_words: int = 120,
 ) -> str:
     """Prefer existing snippets, else extract the best matching evidence window."""

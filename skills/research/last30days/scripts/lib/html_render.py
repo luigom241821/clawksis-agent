@@ -689,8 +689,7 @@ def _generated_date(report: schema.Report) -> str:
 
 def _wrap_in_template(body: str, colophon: str, title: str) -> str:
     return (
-        HTML_TEMPLATE
-        .replace("__TITLE__", html.escape(title))
+        HTML_TEMPLATE.replace("__TITLE__", html.escape(title))
         .replace("__CSS__", CSS)
         .replace("__BODY__", body)
         .replace("__COLOPHON__", colophon)

@@ -118,7 +118,7 @@ _ASSET_VARIANT_TOKENS = (
 )
 
 
-def _pick_release_asset(assets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _pick_release_asset(assets: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
     """Elige el archivo del release para esta plataforma (build CPU plano).
 
     Los releases de ggml-org publican .zip para Windows y .tar.gz para
@@ -164,8 +164,7 @@ def _do_install() -> None:
 
     try:
         data = json.loads(
-            urllib.request
-            .urlopen(
+            urllib.request.urlopen(
                 urllib.request.Request(
                     _GITHUB_RELEASES, headers={"User-Agent": "clawksis-cookbook"}
                 ),
@@ -235,7 +234,7 @@ def _do_install() -> None:
             # libllama-common.so.0.0.XXXX); sin recrearlos, llama-server no
             # arranca ("cannot open shared object file").
 
-            symlinks: List[tuple] = []
+            symlinks: list[tuple] = []
 
             with tarfile.open(tmp_archive, "r:gz") as tf:
                 for member in tf.getmembers():
@@ -288,12 +287,12 @@ def _do_install() -> None:
                 else "error: extracted but no llama-server binary found"
             )
 
-    except Exception as exc:  # noqa: BLE001 — estado consultable, nunca raise
+    except Exception as exc:
         with _install_lock:
             _install_status = f"error: {str(exc)[:200]}"
 
 
-def start_install() -> Dict[str, Any]:
+def start_install() -> dict[str, Any]:
     """Instala llama.cpp (release CPU precompilado) en background."""
 
     global _install_status
@@ -317,7 +316,7 @@ def start_install() -> Dict[str, Any]:
 _registry_lock = threading.Lock()
 
 
-def _load_registry() -> List[Dict[str, Any]]:
+def _load_registry() -> list[dict[str, Any]]:
     try:
         data = json.loads(_registry_path().read_text(encoding="utf-8"))
 
@@ -327,7 +326,7 @@ def _load_registry() -> List[Dict[str, Any]]:
         return []
 
 
-def _save_registry(entries: List[Dict[str, Any]]) -> None:
+def _save_registry(entries: list[dict[str, Any]]) -> None:
     models_dir().mkdir(parents=True, exist_ok=True)
 
     tmp = _registry_path().with_suffix(".json.tmp")
@@ -341,7 +340,7 @@ def _sanitize_filename(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", name)
 
 
-def list_models() -> List[Dict[str, Any]]:
+def list_models() -> list[dict[str, Any]]:
     """Modelos GGUF registrados + huérfanos encontrados en la carpeta.
 
     Un .gguf copiado a mano a la carpeta también aparece (se auto-registra
@@ -362,15 +361,17 @@ def list_models() -> List[Dict[str, Any]]:
                 if f.name in known:
                     continue
 
-                entries.append({
-                    "id": f"gguf:{f.name}",
-                    "name": f.stem,
-                    "file": f.name,
-                    "repo": "",
-                    "quant": cookbook_hf._quant_of(f.name),
-                    "size_bytes": f.stat().st_size,
-                    "added_at": int(f.stat().st_mtime),
-                })
+                entries.append(
+                    {
+                        "id": f"gguf:{f.name}",
+                        "name": f.stem,
+                        "file": f.name,
+                        "repo": "",
+                        "quant": cookbook_hf._quant_of(f.name),
+                        "size_bytes": f.stat().st_size,
+                        "added_at": int(f.stat().st_mtime),
+                    }
+                )
 
                 changed = True
 
@@ -387,7 +388,7 @@ def list_models() -> List[Dict[str, Any]]:
         return alive
 
 
-def delete_model(model_id: str) -> Dict[str, Any]:
+def delete_model(model_id: str) -> dict[str, Any]:
     with _registry_lock:
         entries = _load_registry()
 
@@ -408,7 +409,7 @@ def delete_model(model_id: str) -> Dict[str, Any]:
         try:
             path.unlink(missing_ok=True)
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"ok": False, "error": f"could not delete file: {exc}"}
 
         _save_registry(keep)
@@ -421,7 +422,7 @@ def delete_model(model_id: str) -> Dict[str, Any]:
     return {"ok": True}
 
 
-def rename_model(model_id: str, new_name: str) -> Dict[str, Any]:
+def rename_model(model_id: str, new_name: str) -> dict[str, Any]:
     new_name = (new_name or "").strip()
 
     if not new_name:
@@ -441,7 +442,7 @@ def rename_model(model_id: str, new_name: str) -> Dict[str, Any]:
     return {"ok": False, "error": "model not found"}
 
 
-def verify_model(model_id: str) -> Dict[str, Any]:
+def verify_model(model_id: str) -> dict[str, Any]:
     """Integridad básica: existe, tamaño esperado y magic bytes GGUF."""
 
     for e in list_models():
@@ -467,7 +468,7 @@ def verify_model(model_id: str) -> Dict[str, Any]:
             with open(path, "rb") as fh:
                 magic = fh.read(4)
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"ok": False, "error": f"unreadable: {exc}"}
 
         if magic != b"GGUF":
@@ -480,12 +481,12 @@ def verify_model(model_id: str) -> Dict[str, Any]:
 
 # ── descargas con progreso / cancel / resume ─────────────────────────────────
 
-_downloads: Dict[str, Dict[str, Any]] = {}
+_downloads: dict[str, dict[str, Any]] = {}
 
 _downloads_lock = threading.Lock()
 
 
-def download_progress(download_id: str) -> Dict[str, Any]:
+def download_progress(download_id: str) -> dict[str, Any]:
     with _downloads_lock:
         d = _downloads.get(download_id)
 
@@ -512,7 +513,7 @@ def download_progress(download_id: str) -> Dict[str, Any]:
         }
 
 
-def active_downloads() -> List[Dict[str, Any]]:
+def active_downloads() -> list[dict[str, Any]]:
     with _downloads_lock:
         ids = list(_downloads.keys())
 
@@ -528,7 +529,7 @@ def active_downloads() -> List[Dict[str, Any]]:
     return out
 
 
-def interrupted_downloads() -> List[Dict[str, Any]]:
+def interrupted_downloads() -> list[dict[str, Any]]:
     """Descargas huérfanas: .part en disco SIN download activo en este proceso.
 
     Pasa cuando el dashboard se reinicia a mitad de una descarga. Con el
@@ -545,7 +546,7 @@ def interrupted_downloads() -> List[Dict[str, Any]]:
 
         live_files = {f for (_r, f) in live}
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
 
     mdir = models_dir()
 
@@ -570,17 +571,19 @@ def interrupted_downloads() -> List[Dict[str, Any]]:
         except Exception:
             pass
 
-        out.append({
-            "file": fname,
-            "repo": repo,
-            "downloaded": part.stat().st_size,
-            "resumable": bool(repo),
-        })
+        out.append(
+            {
+                "file": fname,
+                "repo": repo,
+                "downloaded": part.stat().st_size,
+                "resumable": bool(repo),
+            }
+        )
 
     return out
 
 
-def cancel_download(download_id: str) -> Dict[str, Any]:
+def cancel_download(download_id: str) -> dict[str, Any]:
     with _downloads_lock:
         d = _downloads.get(download_id)
 
@@ -602,15 +605,17 @@ def _register_downloaded(repo: str, filename: str, size_bytes: int) -> str:
     with _registry_lock:
         entries = [e for e in _load_registry() if e.get("id") != model_id]
 
-        entries.append({
-            "id": model_id,
-            "name": display,
-            "file": filename,
-            "repo": repo,
-            "quant": cookbook_hf._quant_of(filename),
-            "size_bytes": size_bytes,
-            "added_at": int(time.time()),
-        })
+        entries.append(
+            {
+                "id": model_id,
+                "name": display,
+                "file": filename,
+                "repo": repo,
+                "quant": cookbook_hf._quant_of(filename),
+                "size_bytes": size_bytes,
+                "added_at": int(time.time()),
+            }
+        )
 
         _save_registry(entries)
 
@@ -726,14 +731,14 @@ def _do_download(download_id: str) -> None:
 
             d["model_id"] = model_id
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         with _downloads_lock:
             d["status"] = "error"
 
             d["error"] = str(exc)[:300]
 
 
-def start_download(repo: str, filename: str) -> Dict[str, Any]:
+def start_download(repo: str, filename: str) -> dict[str, Any]:
     """Baja ``repo/filename`` de HF a la carpeta de modelos, en background.
 
     Devuelve {ok, download_id}; el progreso se consulta con
@@ -784,7 +789,7 @@ def start_download(repo: str, filename: str) -> Dict[str, Any]:
 
 # ── servidor llama-server ────────────────────────────────────────────────────
 
-_server: Dict[str, Any] = {"proc": None, "model_file": "", "started_at": 0.0}
+_server: dict[str, Any] = {"proc": None, "model_file": "", "started_at": 0.0}
 
 _server_lock = threading.Lock()
 
@@ -798,7 +803,7 @@ def server_running() -> bool:
         return False
 
 
-def server_status() -> Dict[str, Any]:
+def server_status() -> dict[str, Any]:
     proc = _server.get("proc")
 
     alive = proc is not None and proc.poll() is None
@@ -811,7 +816,7 @@ def server_status() -> Dict[str, Any]:
     }
 
 
-def stop_server() -> Dict[str, Any]:
+def stop_server() -> dict[str, Any]:
     with _server_lock:
         proc = _server.get("proc")
 
@@ -835,7 +840,7 @@ def stop_server() -> Dict[str, Any]:
 
 def start_server(
     model_file: str, ctx: int = 8192, wait_seconds: float = 90.0
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Arranca (o reusa) llama-server sirviendo *model_file*.
 
     ``--jinja`` habilita el chat-template nativo → tool-calling OpenAI-style.
@@ -901,15 +906,17 @@ def start_server(
             env=env,
         )
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"ok": False, "error": f"failed to spawn llama-server: {exc}"}
 
     with _server_lock:
-        _server.update({
-            "proc": proc,
-            "model_file": model_file,
-            "started_at": time.time(),
-        })
+        _server.update(
+            {
+                "proc": proc,
+                "model_file": model_file,
+                "started_at": time.time(),
+            }
+        )
 
     deadline = time.monotonic() + wait_seconds
 
@@ -928,7 +935,7 @@ def start_server(
     return {"ok": False, "error": "llama-server didn't become healthy in time"}
 
 
-def use_model(model_id: str) -> Dict[str, Any]:
+def use_model(model_id: str) -> dict[str, Any]:
     """Sirve el GGUF con llama-server y lo deja como modelo del agente.
 
     Mismo mecanismo custom-provider que Ollama (base_url OpenAI-compatible),
@@ -956,18 +963,20 @@ def use_model(model_id: str) -> Dict[str, Any]:
         if not isinstance(model_cfg, dict):
             model_cfg = {}
 
-        model_cfg.update({
-            "provider": "custom",
-            "default": str(entry["name"]),
-            "base_url": LLAMACPP_OPENAI_URL,
-            "api_key": "llamacpp",  # llama-server lo ignora; no-vacío evita prompts
-        })
+        model_cfg.update(
+            {
+                "provider": "custom",
+                "default": str(entry["name"]),
+                "base_url": LLAMACPP_OPENAI_URL,
+                "api_key": "llamacpp",  # llama-server lo ignora; no-vacío evita prompts
+            }
+        )
 
         config["model"] = model_cfg
 
         save_config(config)
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"ok": False, "error": f"failed to set model: {exc}"}
 
     return {
@@ -978,7 +987,7 @@ def use_model(model_id: str) -> Dict[str, Any]:
     }
 
 
-def status() -> Dict[str, Any]:
+def status() -> dict[str, Any]:
     return {
         "installed": llamacpp_installed(),
         "install_status": install_status(),

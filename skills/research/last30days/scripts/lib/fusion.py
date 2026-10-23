@@ -25,8 +25,7 @@ def _normalize_url(url: str) -> str:
     parsed = urlparse(url.strip().lower())
     netloc = parsed.netloc
     for prefix in ("www.", "old.", "m."):
-        if netloc.startswith(prefix):
-            netloc = netloc[len(prefix) :]
+        netloc = netloc.removeprefix(prefix)
     # Strip tracking params
     params = parse_qs(parsed.query)
     clean_params = {k: v for k, v in params.items() if not k.startswith("utm_")}
@@ -218,12 +217,14 @@ def weighted_rrf(
             if source_item_key not in seen_source_items[key]:
                 seen_source_items[key].add(source_item_key)
                 candidate.source_items.append(item)
-            candidate.metadata.setdefault("provenance", []).append({
-                "source": source,
-                "subquery_label": label,
-                "native_rank": rank,
-                "item_id": item.item_id,
-            })
+            candidate.metadata.setdefault("provenance", []).append(
+                {
+                    "source": source,
+                    "subquery_label": label,
+                    "native_rank": rank,
+                    "item_id": item.item_id,
+                }
+            )
             if incoming_primary_score > previous_primary_score:
                 candidate.item_id = item.item_id
                 candidate.source = item.source

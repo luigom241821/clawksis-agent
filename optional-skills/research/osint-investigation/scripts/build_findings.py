@@ -25,6 +25,7 @@ Output structure:
 
 Every finding traces to specific source rows. No naked claims.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,13 +57,17 @@ def build_findings(
     grouped: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
     for i, row in enumerate(matches):
         row["__row__"] = str(i)
-        grouped[(row.get("left_normalized", ""), row.get("right_normalized", ""))].append(row)
+        grouped[
+            (row.get("left_normalized", ""), row.get("right_normalized", ""))
+        ].append(row)
 
     for (left_norm, right_norm), rows in grouped.items():
         if not left_norm or not right_norm:
             continue
         # Use the highest-confidence match for the finding's overall confidence.
-        best = min(rows, key=lambda r: CONFIDENCE_ORDER.get(r.get("confidence", "low"), 2))
+        best = min(
+            rows, key=lambda r: CONFIDENCE_ORDER.get(r.get("confidence", "low"), 2)
+        )
         finding_id = f"F{next_id:04d}"
         next_id += 1
         evidence = [
@@ -195,7 +200,9 @@ def build_findings(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--cross-links", required=True)
     p.add_argument("--timing", help="Optional timing.json from timing_analysis.py")
     p.add_argument("--out", default="findings.json")

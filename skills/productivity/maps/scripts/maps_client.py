@@ -701,12 +701,14 @@ def cmd_search(args):
     raw = nominatim_search(query, limit=5)
 
     if not raw:
-        print_json({
-            "query": query,
-            "results": [],
-            "count": 0,
-            "data_source": DATA_SOURCE,
-        })
+        print_json(
+            {
+                "query": query,
+                "results": [],
+                "count": 0,
+                "data_source": DATA_SOURCE,
+            }
+        )
 
         return
 
@@ -715,30 +717,34 @@ def cmd_search(args):
     for item in raw:
         bb = item.get("boundingbox", [])
 
-        results.append({
-            "name": item.get("name") or item.get("display_name", ""),
-            "display_name": item.get("display_name", ""),
-            "lat": float(item["lat"]),
-            "lon": float(item["lon"]),
-            "type": item.get("type", ""),
-            "category": item.get("category", ""),
-            "osm_type": item.get("osm_type", ""),
-            "osm_id": item.get("osm_id", ""),
-            "bounding_box": {
-                "min_lat": float(bb[0]) if len(bb) > 0 else None,
-                "max_lat": float(bb[1]) if len(bb) > 1 else None,
-                "min_lon": float(bb[2]) if len(bb) > 2 else None,
-                "max_lon": float(bb[3]) if len(bb) > 3 else None,
-            },
-            "importance": item.get("importance"),
-        })
+        results.append(
+            {
+                "name": item.get("name") or item.get("display_name", ""),
+                "display_name": item.get("display_name", ""),
+                "lat": float(item["lat"]),
+                "lon": float(item["lon"]),
+                "type": item.get("type", ""),
+                "category": item.get("category", ""),
+                "osm_type": item.get("osm_type", ""),
+                "osm_id": item.get("osm_id", ""),
+                "bounding_box": {
+                    "min_lat": float(bb[0]) if len(bb) > 0 else None,
+                    "max_lat": float(bb[1]) if len(bb) > 1 else None,
+                    "min_lon": float(bb[2]) if len(bb) > 2 else None,
+                    "max_lon": float(bb[3]) if len(bb) > 3 else None,
+                },
+                "importance": item.get("importance"),
+            }
+        )
 
-    print_json({
-        "query": query,
-        "results": results,
-        "count": len(results),
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "query": query,
+            "results": results,
+            "count": len(results),
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -772,28 +778,32 @@ def cmd_reverse(args):
 
     address = data.get("address", {})
 
-    print_json({
-        "lat": lat,
-        "lon": lon,
-        "display_name": data.get("display_name", ""),
-        "address": {
-            "house_number": address.get("house_number", ""),
-            "road": address.get("road", ""),
-            "neighbourhood": address.get("neighbourhood", ""),
-            "suburb": address.get("suburb", ""),
-            "city": (
-                address.get("city") or address.get("town") or address.get("village", "")
-            ),
-            "county": address.get("county", ""),
-            "state": address.get("state", ""),
-            "postcode": address.get("postcode", ""),
-            "country": address.get("country", ""),
-            "country_code": address.get("country_code", ""),
-        },
-        "osm_type": data.get("osm_type", ""),
-        "osm_id": data.get("osm_id", ""),
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "lat": lat,
+            "lon": lon,
+            "display_name": data.get("display_name", ""),
+            "address": {
+                "house_number": address.get("house_number", ""),
+                "road": address.get("road", ""),
+                "neighbourhood": address.get("neighbourhood", ""),
+                "suburb": address.get("suburb", ""),
+                "city": (
+                    address.get("city")
+                    or address.get("town")
+                    or address.get("village", "")
+                ),
+                "county": address.get("county", ""),
+                "state": address.get("state", ""),
+                "postcode": address.get("postcode", ""),
+                "country": address.get("country", ""),
+                "country_code": address.get("country_code", ""),
+            },
+            "osm_type": data.get("osm_type", ""),
+            "osm_id": data.get("osm_id", ""),
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -925,15 +935,17 @@ def cmd_nearby(args):
         key=lambda p: p.get("distance_m", float("inf")),
     )[:limit]
 
-    print_json({
-        "center_lat": lat,
-        "center_lon": lon,
-        "categories": categories,
-        "radius_m": radius,
-        "count": len(places),
-        "results": places,
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "center_lat": lat,
+            "center_lon": lon,
+            "categories": categories,
+            "radius_m": radius,
+            "count": len(places),
+            "results": places,
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -996,27 +1008,29 @@ def cmd_distance(args):
 
     straight_m = haversine_m(o_lat, o_lon, d_lat, d_lon)
 
-    print_json({
-        "origin": {
-            "query": origin_query,
-            "display_name": o_name,
-            "lat": o_lat,
-            "lon": o_lon,
-        },
-        "destination": {
-            "query": destination_query,
-            "display_name": d_name,
-            "lat": d_lat,
-            "lon": d_lon,
-        },
-        "mode": mode,
-        "distance_km": distance_km,
-        "distance_m": round(distance_m, 1),
-        "duration_minutes": duration_min,
-        "duration_seconds": round(duration_s, 1),
-        "straight_line_km": round(straight_m / 1000, 3),
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "origin": {
+                "query": origin_query,
+                "display_name": o_name,
+                "lat": o_lat,
+                "lon": o_lon,
+            },
+            "destination": {
+                "query": destination_query,
+                "display_name": d_name,
+                "lat": d_lat,
+                "lon": d_lon,
+            },
+            "mode": mode,
+            "distance_km": distance_km,
+            "distance_m": round(distance_m, 1),
+            "duration_minutes": duration_min,
+            "duration_seconds": round(duration_s, 1),
+            "straight_line_km": round(straight_m / 1000, 3),
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1193,39 +1207,43 @@ def cmd_directions(args):
 
             step_num += 1
 
-            steps.append({
-                "step": step_num,
-                "instruction": instruction,
-                "distance": _format_distance(step_dist),
-                "distance_m": round(step_dist, 1),
-                "duration": _format_duration(step_dur),
-                "duration_s": round(step_dur, 1),
-                "road_name": step_name,
-                "maneuver": m_type,
-            })
+            steps.append(
+                {
+                    "step": step_num,
+                    "instruction": instruction,
+                    "distance": _format_distance(step_dist),
+                    "distance_m": round(step_dist, 1),
+                    "duration": _format_duration(step_dur),
+                    "duration_s": round(step_dur, 1),
+                    "road_name": step_name,
+                    "maneuver": m_type,
+                }
+            )
 
-    print_json({
-        "origin": {
-            "query": origin_query,
-            "display_name": o_name,
-            "lat": o_lat,
-            "lon": o_lon,
-        },
-        "destination": {
-            "query": destination_query,
-            "display_name": d_name,
-            "lat": d_lat,
-            "lon": d_lon,
-        },
-        "mode": mode,
-        "total_distance": _format_distance(distance_m),
-        "total_distance_m": round(distance_m, 1),
-        "total_duration": _format_duration(duration_s),
-        "total_duration_s": round(duration_s, 1),
-        "steps": steps,
-        "step_count": len(steps),
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "origin": {
+                "query": origin_query,
+                "display_name": o_name,
+                "lat": o_lat,
+                "lon": o_lon,
+            },
+            "destination": {
+                "query": destination_query,
+                "display_name": d_name,
+                "lat": d_lat,
+                "lon": d_lon,
+            },
+            "mode": mode,
+            "total_distance": _format_distance(distance_m),
+            "total_distance_m": round(distance_m, 1),
+            "total_duration": _format_duration(duration_s),
+            "total_duration_s": round(duration_s, 1),
+            "steps": steps,
+            "step_count": len(steps),
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1339,15 +1357,17 @@ def cmd_timezone(args):
 
         timezone_src = "longitude approximation (longitude/15)"
 
-    print_json({
-        "lat": lat,
-        "lon": lon,
-        "timezone": timezone_str,
-        "utc_offset": utc_offset,
-        "current_time": current_time,
-        "source": timezone_src,
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "lat": lat,
+            "lon": lon,
+            "timezone": timezone_str,
+            "utc_offset": utc_offset,
+            "current_time": current_time,
+            "source": timezone_src,
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1426,18 +1446,20 @@ def cmd_bbox(args):
     for p in places:
         p["category"] = category
 
-    print_json({
-        "bounding_box": {
-            "south": south,
-            "west": west,
-            "north": north,
-            "east": east,
-        },
-        "category": category,
-        "count": len(places),
-        "results": places,
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "bounding_box": {
+                "south": south,
+                "west": west,
+                "north": north,
+                "east": east,
+            },
+            "category": category,
+            "count": len(places),
+            "results": places,
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1484,28 +1506,30 @@ def cmd_area(args):
 
     approx_area_km2 = round(height_km * width_km, 3)
 
-    print_json({
-        "query": query,
-        "display_name": item.get("display_name", ""),
-        "lat": float(item["lat"]),
-        "lon": float(item["lon"]),
-        "type": item.get("type", ""),
-        "category": item.get("category", ""),
-        "bounding_box": {
-            "south": min_lat,
-            "north": max_lat,
-            "west": min_lon,
-            "east": max_lon,
-        },
-        "dimensions": {
-            "width_km": round(width_km, 3),
-            "height_km": round(height_km, 3),
-        },
-        "approx_area_km2": approx_area_km2,
-        "osm_type": item.get("osm_type", ""),
-        "osm_id": item.get("osm_id", ""),
-        "data_source": DATA_SOURCE,
-    })
+    print_json(
+        {
+            "query": query,
+            "display_name": item.get("display_name", ""),
+            "lat": float(item["lat"]),
+            "lon": float(item["lon"]),
+            "type": item.get("type", ""),
+            "category": item.get("category", ""),
+            "bounding_box": {
+                "south": min_lat,
+                "north": max_lat,
+                "west": min_lon,
+                "east": max_lon,
+            },
+            "dimensions": {
+                "width_km": round(width_km, 3),
+                "height_km": round(height_km, 3),
+            },
+            "approx_area_km2": approx_area_km2,
+            "osm_type": item.get("osm_type", ""),
+            "osm_id": item.get("osm_id", ""),
+            "data_source": DATA_SOURCE,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------

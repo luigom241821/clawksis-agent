@@ -5,9 +5,10 @@ Used by: cron Briefing diario de IA (13:00 UTC)
 Output: titulares con fuentes para que un agente formatee."""
 
 import urllib.request, json, html, xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
+import sys
 
-FECHA = datetime.now(timezone.utc).strftime("%d de %B de %Y")
+FECHA = datetime.now(UTC).strftime("%d de %B de %Y")
 
 
 def fetch(url):
@@ -20,7 +21,7 @@ def fetch(url):
         )
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.read().decode("utf-8", errors="replace")
-    except:
+    except Exception:
         return ""
 
 
@@ -49,7 +50,7 @@ for q in [
             if t and t not in seen and len(t) > 20:
                 seen.add(t)
                 all_news.append((d, t, s))
-    except:
+    except Exception:
         pass
 
 # Hacker News
@@ -63,7 +64,7 @@ if data:
             if t and t not in seen and len(t) > 15:
                 seen.add(t)
                 all_news.append(("", t, f"Hacker News (▲{hit.get('points', 0)})"))
-    except:
+    except Exception:
         pass
 
 recent = [
@@ -72,7 +73,7 @@ recent = [
 combined = (recent + [n for n in all_news if n not in recent])[:10]
 if not combined:
     print(f"## Briefing IA — {FECHA}\n\nNo se encontraron noticias de hoy/ayer.")
-    exit(0)
+    sys.exit(0)
 
 print(f"## Briefing IA — {FECHA}\n")
 for d, t, s in combined:

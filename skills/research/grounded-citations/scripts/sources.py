@@ -49,7 +49,9 @@ SCHEMA_VERSION = 1
 # reference-style labels are excluded by requiring digits only and no
 # following "(" or ":".
 _CITE_RE = re.compile(r"\[(\d{1,4})\](?![(:])")
-_SOURCES_HEADER_RE = re.compile(r"^\s*(?:#{1,6}\s*)?(?:\*\*)?sources:?(?:\*\*)?\s*$", re.IGNORECASE)
+_SOURCES_HEADER_RE = re.compile(
+    r"^\s*(?:#{1,6}\s*)?(?:\*\*)?sources:?(?:\*\*)?\s*$", re.IGNORECASE
+)
 _SOURCE_LINE_RE = re.compile(r"^\s*\[(\d{1,4})\]\s*[-–:]?\s*(\S+)")
 _URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'<>)\]}]+")
 _FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
@@ -91,16 +93,22 @@ def load_ledger(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
-        raise SystemExit(f"error: ledger at {path} is unreadable ({exc}); run `reset` to start over")
+        raise SystemExit(
+            f"error: ledger at {path} is unreadable ({exc}); run `reset` to start over"
+        )
     if not isinstance(data, dict) or not isinstance(data.get("sources"), list):
-        raise SystemExit(f"error: ledger at {path} has an unexpected shape; run `reset`")
+        raise SystemExit(
+            f"error: ledger at {path} has an unexpected shape; run `reset`"
+        )
     return data
 
 
 def save_ledger(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + f".tmp{os.getpid()}")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     os.replace(tmp, path)
 
 
@@ -123,7 +131,9 @@ class _LedgerLock:
         deadline = time.monotonic() + self.timeout
         while True:
             try:
-                self.fd = os.open(str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                self.fd = os.open(
+                    str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY
+                )
                 return self
             except FileExistsError:
                 if time.monotonic() >= deadline:
@@ -263,14 +273,18 @@ def quote_in_evidence(quote: str, evidence: str) -> bool:
     return bool(q) and q in _match_key(evidence)
 
 
-def attach_quote(path: Path, source_id: int, quote: str, evidence: str) -> dict[str, Any]:
+def attach_quote(
+    path: Path, source_id: int, quote: str, evidence: str
+) -> dict[str, Any]:
     """Attach a verbatim quote to a ledger entry after checking it against
     the evidence text.  Raises SystemExit on unknown id or non-verbatim text —
     a quote the page does not contain is exactly the fabrication this guards
     against."""
     quote = (quote or "").strip()
     if len(_normalize_ws(quote).split()) < 3:
-        raise SystemExit("error: quote too short — use at least 3 words of verbatim text")
+        raise SystemExit(
+            "error: quote too short — use at least 3 words of verbatim text"
+        )
     if not quote_in_evidence(quote, evidence):
         raise SystemExit(
             "error: quote not found verbatim in the evidence text — "
@@ -304,7 +318,9 @@ def render_sources(
             key = f"source{s['id']}"
             title = s.get("title") or s["url"]
             lines.append(
-                "@misc{{{},\n  title = {{{}}},\n  howpublished = {{\\url{{{}}}}},\n  note = {{Accessed {}}}\n}}".format(key, title, s["url"], s.get("accessed", ""))
+                "@misc{{{},\n  title = {{{}}},\n  howpublished = {{\\url{{{}}}}},\n  note = {{Accessed {}}}\n}}".format(
+                    key, title, s["url"], s.get("accessed", "")
+                )
             )
         return "\n".join(lines)
     if style == "footnotes":
@@ -346,11 +362,13 @@ def _split_draft(text: str) -> tuple[str, dict[int, str]]:
             header_idx = i
     listed: dict[int, str] = {}
     if header_idx >= 0:
-        for line in lines[header_idx + 1:]:
+        for line in lines[header_idx + 1 :]:
             m = _SOURCE_LINE_RE.match(line)
             if m:
                 url_match = _URL_IN_TEXT_RE.search(line)
-                listed[int(m.group(1))] = url_match.group(0) if url_match else m.group(2)
+                listed[int(m.group(1))] = (
+                    url_match.group(0) if url_match else m.group(2)
+                )
         body_lines = lines[:header_idx]
     else:
         body_lines = lines
@@ -424,7 +442,9 @@ def verify_draft(
         )
 
     if cited_set and not listed:
-        errors.append("draft cites sources but has no `Sources:` block — run `render --cited-in`")
+        errors.append(
+            "draft cites sources but has no `Sources:` block — run `render --cited-in`"
+        )
 
     missing_from_block = sorted(cited_set - set(listed)) if listed else []
     if missing_from_block:
@@ -518,7 +538,8 @@ def _parse_only(spec: str | None) -> set[int] | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="sources.py", description="Citation ledger for grounded answers and documents."
+        prog="sources.py",
+        description="Citation ledger for grounded answers and documents.",
     )
     parser.add_argument("--ledger", help="ledger file path (overrides env / default)")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -534,9 +555,13 @@ def main(argv: list[str] | None = None) -> int:
     p_ing = sub.add_parser("ingest", help="register every url in JSON tool output")
     p_ing.add_argument("file", help="JSON file, or - for stdin")
 
-    p_q = sub.add_parser("quote", help="attach verbatim supporting evidence to a source")
+    p_q = sub.add_parser(
+        "quote", help="attach verbatim supporting evidence to a source"
+    )
     p_q.add_argument("id", type=int, help="ledger id of the source the quote supports")
-    p_q.add_argument("--text", required=True, help="the exact quote, copied from the page")
+    p_q.add_argument(
+        "--text", required=True, help="the exact quote, copied from the page"
+    )
     p_q.add_argument(
         "--from",
         dest="evidence",
@@ -549,19 +574,29 @@ def main(argv: list[str] | None = None) -> int:
 
     p_render = sub.add_parser("render", help="render a Sources block")
     p_render.add_argument(
-        "--style", default="markdown", choices=["markdown", "plain", "footnotes", "bibtex", "evidence"]
+        "--style",
+        default="markdown",
+        choices=["markdown", "plain", "footnotes", "bibtex", "evidence"],
     )
     p_render.add_argument("--only", help="ids to include, e.g. 1,3,5-7")
-    p_render.add_argument("--cited-in", help="include only ids cited in this draft file")
+    p_render.add_argument(
+        "--cited-in", help="include only ids cited in this draft file"
+    )
     p_render.add_argument(
         "--replace-in",
         help="rewrite this draft's Sources block in place (implies --cited-in on it)",
     )
 
-    p_ver = sub.add_parser("verify", help="check a draft's citations against the ledger")
+    p_ver = sub.add_parser(
+        "verify", help="check a draft's citations against the ledger"
+    )
     p_ver.add_argument("draft")
-    p_ver.add_argument("--strict", action="store_true", help="treat warnings as failures")
-    p_ver.add_argument("--min-coverage", type=float, help="required cited-sentence share, e.g. 0.5")
+    p_ver.add_argument(
+        "--strict", action="store_true", help="treat warnings as failures"
+    )
+    p_ver.add_argument(
+        "--min-coverage", type=float, help="required cited-sentence share, e.g. 0.5"
+    )
     p_ver.add_argument(
         "--evidence",
         action="store_true",
@@ -588,7 +623,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "ingest":
-        raw = sys.stdin.read() if args.file == "-" else Path(args.file).read_text(encoding="utf-8")
+        raw = (
+            sys.stdin.read()
+            if args.file == "-"
+            else Path(args.file).read_text(encoding="utf-8")
+        )
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -610,7 +649,9 @@ def main(argv: list[str] | None = None) -> int:
             else Path(args.evidence).read_text(encoding="utf-8")
         )
         entry = attach_quote(path, args.id, args.text, raw)
-        print(f"[{entry['id']}] evidence attached ({len(entry.get('quotes', []))} quote(s))")
+        print(
+            f"[{entry['id']}] evidence attached ({len(entry.get('quotes', []))} quote(s))"
+        )
         return 0
 
     data = load_ledger(path)
@@ -644,7 +685,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.replace_in:
             target = Path(args.replace_in)
             body = _strip_sources_block(target.read_text(encoding="utf-8"))
-            target.write_text(body.rstrip("\n") + "\n\n" + block + "\n", encoding="utf-8")
+            target.write_text(
+                body.rstrip("\n") + "\n\n" + block + "\n", encoding="utf-8"
+            )
             print(f"Sources block rewritten in {target}")
             return 0
         print(block)

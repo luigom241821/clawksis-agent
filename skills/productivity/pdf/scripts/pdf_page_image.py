@@ -8,6 +8,7 @@ so callers can branch instead of crashing.
 Typical uses: visual verification with a vision model, and exporting
 image-only (scanned) pages for hand-off to the references/ocr-extraction.md in this skill.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,10 +45,14 @@ def main() -> int:
             pass
     parser = argparse.ArgumentParser(description="Export PDF pages as PNG images.")
     parser.add_argument("pdf", help="Input PDF path")
-    parser.add_argument("--pages", default="1-", help="1-based ranges, e.g. '1-3,5' (default: all)")
+    parser.add_argument(
+        "--pages", default="1-", help="1-based ranges, e.g. '1-3,5' (default: all)"
+    )
     parser.add_argument("--dpi", type=int, default=150, help="Render DPI (default 150)")
     parser.add_argument("--out-dir", required=True, help="Directory for PNG files")
-    parser.add_argument("--prefix", default="page", help="Output filename prefix (default 'page')")
+    parser.add_argument(
+        "--prefix", default="page", help="Output filename prefix (default 'page')"
+    )
     parser.add_argument("--password", help="Password for encrypted PDFs")
     args = parser.parse_args()
 
@@ -62,7 +67,10 @@ def main() -> int:
     try:
         from pypdf import PdfReader
     except ImportError:
-        print("Missing dependency: install with 'python3 -m pip install pypdf'", file=sys.stderr)
+        print(
+            "Missing dependency: install with 'python3 -m pip install pypdf'",
+            file=sys.stderr,
+        )
         return 2
     reader = PdfReader(args.pdf)
     if reader.is_encrypted:
@@ -81,16 +89,24 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     files = []
     for pageno in pages:
-        img = _raster.rasterize_page(args.pdf, pageno, dpi=args.dpi, password=args.password)
+        img = _raster.rasterize_page(
+            args.pdf, pageno, dpi=args.dpi, password=args.password
+        )
         if img is None:
-            json.dump({"rendered": False, "missing": _raster.missing_hints()}, sys.stdout)
+            json.dump(
+                {"rendered": False, "missing": _raster.missing_hints()}, sys.stdout
+            )
             print()
             return 0
         out_path = out_dir / f"{args.prefix}{pageno:03d}.png"
         img.save(out_path)
         files.append(str(out_path))
-    json.dump({"rendered": True, "dpi": args.dpi, "page_count": page_count,
-               "files": files}, sys.stdout, ensure_ascii=False, indent=2)
+    json.dump(
+        {"rendered": True, "dpi": args.dpi, "page_count": page_count, "files": files},
+        sys.stdout,
+        ensure_ascii=False,
+        indent=2,
+    )
     print()
     return 0
 

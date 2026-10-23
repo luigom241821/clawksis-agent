@@ -103,16 +103,18 @@ def verify_smoke() -> list[dict[str, object]]:
         )
         duration = round(time.time() - start, 2)
         report = json.loads(result.stdout)
-        rows.append({
-            "provider": provider,
-            "duration_seconds": duration,
-            "reasoning_provider": (report.get("provider_runtime") or {}).get(
-                "reasoning_provider"
-            ),
-            "cluster_count": len(report.get("clusters") or []),
-            "candidate_count": len(report.get("ranked_candidates") or []),
-            "error_sources": sorted((report.get("errors_by_source") or {}).keys()),
-        })
+        rows.append(
+            {
+                "provider": provider,
+                "duration_seconds": duration,
+                "reasoning_provider": (report.get("provider_runtime") or {}).get(
+                    "reasoning_provider"
+                ),
+                "cluster_count": len(report.get("clusters") or []),
+                "candidate_count": len(report.get("ranked_candidates") or []),
+                "error_sources": sorted((report.get("errors_by_source") or {}).keys()),
+            }
+        )
     return rows
 
 

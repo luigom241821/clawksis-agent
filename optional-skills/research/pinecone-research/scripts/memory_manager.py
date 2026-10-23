@@ -14,6 +14,7 @@ Usage:
     python memory_manager.py --index-name agent-memory --action cleanup \
         --session-id sess-001
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,7 +29,10 @@ def get_pinecone_client():
     try:
         from pinecone import Pinecone
     except ImportError:
-        print("Error: pinecone-client not installed. Run: pip install pinecone-client", file=sys.stderr)
+        print(
+            "Error: pinecone-client not installed. Run: pip install pinecone-client",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     api_key = os.environ.get("PINECONE_API_KEY")
@@ -44,7 +48,10 @@ def get_embeddings():
     try:
         from langchain_openai import OpenAIEmbeddings
     except ImportError:
-        print("Error: langchain-openai not installed. Run: pip install langchain-openai", file=sys.stderr)
+        print(
+            "Error: langchain-openai not installed. Run: pip install langchain-openai",
+            file=sys.stderr,
+        )
         sys.exit(1)
     return OpenAIEmbeddings()
 
@@ -54,7 +61,9 @@ def store_memory(index, session_id: str, text: str, metadata: dict | None = None
     embeddings = get_embeddings()
     vector = embeddings.embed_query(text)
 
-    doc_id = hashlib.sha256(f"{session_id}:{text}:{time.time()}".encode()).hexdigest()[:16]
+    doc_id = hashlib.sha256(f"{session_id}:{text}:{time.time()}".encode()).hexdigest()[
+        :16
+    ]
     entry_metadata = {
         "text": text[:1000],
         "session_id": session_id,

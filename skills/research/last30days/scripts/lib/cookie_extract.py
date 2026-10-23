@@ -142,8 +142,8 @@ def _fallback_find_profile(profiles_dir: Path) -> Optional[Path]:
 
 
 def _query_cookies_db(
-    db_path: Path, domain: str, cookie_names: List[str]
-) -> Optional[Dict[str, str]]:
+    db_path: Path, domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Copy the cookies database to a temp file and query it.
 
     Firefox locks cookies.sqlite while running, so we copy first.
@@ -199,8 +199,8 @@ def _query_cookies_db(
 
 
 def _try_firefox_dir(
-    profiles_dir: Path, domain: str, cookie_names: List[str]
-) -> Optional[Dict[str, str]]:
+    profiles_dir: Path, domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Try to extract cookies from a Firefox profiles directory."""
     profile_path = _find_default_profile(profiles_dir)
     if profile_path is None:
@@ -210,8 +210,8 @@ def _try_firefox_dir(
 
 
 def extract_firefox_cookies(
-    domain: str, cookie_names: List[str]
-) -> Optional[Dict[str, str]]:
+    domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Extract cookies from Firefox for the given domain and cookie names.
 
     Finds the default Firefox profile, copies cookies.sqlite to a temp file
@@ -246,8 +246,8 @@ def extract_firefox_cookies(
 
 
 def extract_chrome_cookies(
-    domain: str, cookie_names: List[str]
-) -> Optional[Dict[str, str]]:
+    domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Extract cookies from Chrome for the given domain and cookie names.
 
     macOS only — uses Keychain + system openssl for AES-128-CBC decryption.
@@ -269,8 +269,8 @@ def extract_chrome_cookies(
 
 
 def extract_brave_cookies(
-    domain: str, cookie_names: List[str]
-) -> Optional[Dict[str, str]]:
+    domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Extract cookies from Brave for the given domain and cookie names.
 
     macOS only — Brave uses the same v10 AES-128-CBC encryption as Chrome,
@@ -293,8 +293,8 @@ def extract_brave_cookies(
 
 
 def extract_safari_cookies(
-    domain: str, cookie_names: List[str]
-) -> Optional[Dict[str, str]]:
+    domain: str, cookie_names: list[str]
+) -> Optional[dict[str, str]]:
     """Extract cookies from Safari for the given domain and cookie names.
 
     macOS only — parses the unencrypted binary cookie file.
@@ -338,8 +338,8 @@ def extract_cookies(
 
 
 def _extract_firefox_with_source(
-    domain: str, cookie_names: List[str]
-) -> Optional[tuple[Dict[str, str], str]]:
+    domain: str, cookie_names: list[str]
+) -> Optional[tuple[dict[str, str], str]]:
     """Extract Firefox cookies and report whether they came from native or WSL.
 
     Returns (cookies, "firefox") for native Linux/macOS Firefox, or

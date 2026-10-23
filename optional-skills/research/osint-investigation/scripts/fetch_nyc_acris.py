@@ -12,6 +12,7 @@ Datasets:
 The Parties dataset has the names. We search by name and optionally join to
 Master to get the doc type and date.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,9 +64,7 @@ COLUMNS = [
 def _filing_url(document_id: str) -> str:
     if not document_id:
         return ""
-    return (
-        f"https://a836-acris.nyc.gov/DS/DocumentSearch/DocumentImageView?doc_id={document_id}"
-    )
+    return f"https://a836-acris.nyc.gov/DS/DocumentSearch/DocumentImageView?doc_id={document_id}"
 
 
 def fetch(
@@ -99,9 +98,9 @@ def fetch(
         raise SystemExit(f"Unexpected ACRIS response: {parties!r}")
 
     # Enrich with master record (doc_type, dates, borough, amount).
-    doc_ids: list[str] = sorted({
-        d for d in (p.get("document_id") for p in parties) if d
-    })
+    doc_ids: list[str] = sorted(
+        {d for d in (p.get("document_id") for p in parties) if d}
+    )
     masters: dict[str, dict] = {}
     if enrich and doc_ids:
         # Batch up to 100 doc_ids per request (Socrata IN-list is fine for this).
@@ -143,7 +142,9 @@ def fetch(
                 "doc_type": m.get("doc_type", "") or "",
                 "doc_date": (m.get("document_date", "") or "")[:10],
                 "recorded_date": (m.get("recorded_datetime", "") or "")[:10],
-                "borough": BOROUGH.get(m.get("recorded_borough", ""), m.get("recorded_borough", "")),
+                "borough": BOROUGH.get(
+                    m.get("recorded_borough", ""), m.get("recorded_borough", "")
+                ),
                 "amount": m.get("document_amt", "") or "",
                 "filing_url": _filing_url(did),
             }
@@ -171,7 +172,9 @@ def fetch(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--name", help="Party name substring (case-insensitive)")
     p.add_argument("--address", help="Address line 1 substring")
     p.add_argument(

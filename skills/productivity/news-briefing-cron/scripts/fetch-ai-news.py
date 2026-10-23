@@ -4,9 +4,10 @@ Script para cron en modo script+agent (no_agent=false).
 El script recolecta, el agente formatea."""
 
 import urllib.request, json, html, xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
+import sys
 
-FECHA = datetime.now(timezone.utc).strftime("%d de %B de %Y")
+FECHA = datetime.now(UTC).strftime("%d de %B de %Y")
 
 
 def fetch(url):
@@ -20,7 +21,7 @@ def fetch(url):
         )
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.read().decode("utf-8", errors="replace")
-    except:
+    except Exception:
         return ""
 
 
@@ -54,7 +55,7 @@ for q in queries:
             if t and t not in seen and len(t) > 20:
                 seen.add(t)
                 all_news.append((d, t, s))
-    except:
+    except Exception:
         pass
 
 # Source 2: Hacker News (last 48h)
@@ -69,7 +70,7 @@ if data:
                 seen.add(t)
                 p = hit.get("points", 0)
                 all_news.append(("", t, f"Hacker News (▲{p})"))
-    except:
+    except Exception:
         pass
 
 # Output: raw news, newest first
@@ -83,7 +84,7 @@ if not combined:
     print(f"## 🧠 Briefing IA — {FECHA}")
     print()
     print("No se encontraron noticias de hoy/ayer. Intenta más tarde.")
-    exit(0)
+    sys.exit(0)
 
 for d, t, s in combined:
     ts = f" — {d[:16]}" if d else ""

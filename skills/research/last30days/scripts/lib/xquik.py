@@ -34,7 +34,7 @@ def _extract_core_subject(topic: str) -> str:
     return extract_core_subject(topic, max_words=5, strip_suffixes=True)
 
 
-def expand_xquik_queries(topic: str, depth: str) -> List[str]:
+def expand_xquik_queries(topic: str, depth: str) -> list[str]:
     """Generate query variants based on depth.
 
     Args:
@@ -70,7 +70,7 @@ def search_xquik(
     to_date: str,
     depth: str = "default",
     token: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search X via Xquik REST API.
 
     Args:
@@ -88,7 +88,7 @@ def search_xquik(
 
     cfg = DEPTH_CONFIG.get(depth, DEPTH_CONFIG["default"])
     queries = expand_xquik_queries(topic, depth)
-    all_items: List[Dict[str, Any]] = []
+    all_items: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
 
     for query_text in queries:
@@ -140,7 +140,7 @@ def search_and_enrich(
     to_date: str,
     depth: str = "default",
     token: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search X via Xquik and return results.
 
     Xquik API returns full engagement data by default, so no separate
@@ -149,7 +149,7 @@ def search_and_enrich(
     return search_xquik(topic, from_date, to_date, depth=depth, token=token)
 
 
-def parse_xquik_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_xquik_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract items from search response.
 
     Args:
@@ -162,8 +162,8 @@ def parse_xquik_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _parse_tweet(
-    tweet: Dict[str, Any], index: int, query: str
-) -> Dict[str, Any] | None:
+    tweet: dict[str, Any], index: int, query: str
+) -> dict[str, Any] | None:
     """Parse a single tweet from the API response into the standard item format."""
     author = tweet.get("author") or {}
     username = str(author.get("username", "")).lstrip("@")
@@ -182,7 +182,7 @@ def _parse_tweet(
     if created_at:
         try:
             if len(created_at) > 10 and created_at[10] == "T":
-                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(created_at)
             else:
                 dt = datetime.strptime(created_at, "%a %b %d %H:%M:%S %z %Y")
             date = dt.strftime("%Y-%m-%d")

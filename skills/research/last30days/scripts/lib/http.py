@@ -53,14 +53,14 @@ class HTTPError(Exception):
 def request(
     method: str,
     url: str,
-    headers: Optional[Dict[str, str]] = None,
-    json_data: Optional[Dict[str, Any]] = None,
-    params: Optional[Dict[str, Any]] = None,
+    headers: Optional[dict[str, str]] = None,
+    json_data: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
     timeout: int = DEFAULT_TIMEOUT,
     retries: int = MAX_RETRIES,
     max_429_retries: int = MAX_429_RETRIES,
     raw: bool = False,
-) -> Union[Dict[str, Any], str]:
+) -> dict[str, Any] | str:
     """Make an HTTP request and return JSON response.
 
     Args:
@@ -218,25 +218,25 @@ def request(
     raise HTTPError("Request failed with no error details")
 
 
-def get(url: str, headers: Optional[Dict[str, str]] = None, **kwargs) -> Dict[str, Any]:
+def get(url: str, headers: Optional[dict[str, str]] = None, **kwargs) -> dict[str, Any]:
     """Make a GET request."""
     return request("GET", url, headers=headers, **kwargs)
 
 
 def post(
     url: str,
-    json_data: Dict[str, Any],
-    headers: Optional[Dict[str, str]] = None,
+    json_data: dict[str, Any],
+    headers: Optional[dict[str, str]] = None,
     **kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Make a POST request with JSON body."""
     return request("POST", url, headers=headers, json_data=json_data, **kwargs)
 
 
 def post_raw(
     url: str,
-    json_data: Dict[str, Any],
-    headers: Optional[Dict[str, str]] = None,
+    json_data: dict[str, Any],
+    headers: Optional[dict[str, str]] = None,
     **kwargs,
 ) -> str:
     """Make a POST request with JSON body and return raw text."""
@@ -257,7 +257,7 @@ def get_text(
     timeout: int = DEFAULT_TIMEOUT,
     retries: int = 2,
     accept: str = "*/*",
-    headers: Optional[Dict[str, str]] = None,
+    headers: Optional[dict[str, str]] = None,
 ) -> Optional[str]:
     """Fetch a URL and return decoded text, or None on any failure.
 
@@ -292,7 +292,7 @@ def get_text(
         return None
 
 
-def scrapecreators_headers(token: str) -> Dict[str, str]:
+def scrapecreators_headers(token: str) -> dict[str, str]:
     """Build ScrapeCreators request headers (x-api-key + JSON content type)."""
     return {
         "x-api-key": token,
@@ -302,7 +302,7 @@ def scrapecreators_headers(token: str) -> Dict[str, str]:
 
 def get_reddit_json(
     path: str, timeout: int = DEFAULT_TIMEOUT, retries: int = MAX_RETRIES
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch Reddit thread JSON.
 
     Args:

@@ -44,6 +44,7 @@ def is_available() -> bool:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         return result.returncode == 0 and '"username"' in result.stdout
     except (OSError, subprocess.TimeoutExpired):
@@ -56,7 +57,7 @@ def is_available() -> bool:
 def search_x(
     query: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search X via xurl CLI using X API v2 search/recent.
 
     Args:
@@ -77,6 +78,7 @@ def search_x(
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
 
         if result.returncode != 0:
@@ -96,9 +98,9 @@ def search_x(
 
 
 def parse_x_response(
-    response: Dict[str, Any],
+    response: dict[str, Any],
     topic: str = "",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Parse xurl search response into normalized item dicts.
 
     Output format matches the existing XItem schema used by xai_x and bird_x:
@@ -111,7 +113,7 @@ def parse_x_response(
     Returns:
         List of item dicts.  Empty list on error or no results.
     """
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
 
     if "error" in response:
         _log(f"Error in response: {response['error']}")
@@ -122,7 +124,7 @@ def parse_x_response(
         return items
 
     # Build author lookup from includes.users
-    authors: Dict[str, Dict[str, Any]] = {}
+    authors: dict[str, dict[str, Any]] = {}
     for user in (response.get("includes") or {}).get("users") or []:
         authors[user["id"]] = user
 
@@ -135,7 +137,7 @@ def parse_x_response(
         url = f"https://x.com/{username}/status/{tweet_id}" if username else ""
 
         # Parse public_metrics
-        engagement: Optional[Dict[str, Any]] = None
+        engagement: Optional[dict[str, Any]] = None
         metrics = tweet.get("public_metrics") or {}
         if metrics:
             engagement = {
@@ -158,15 +160,17 @@ def parse_x_response(
         # Relevance score via shared token-overlap function
         relevance = _compute_relevance(topic, text) if topic else 0.5
 
-        items.append({
-            "id": f"XURL{i + 1}",
-            "text": text[:500],
-            "url": url,
-            "author_handle": username,
-            "date": date,
-            "engagement": engagement,
-            "why_relevant": "",
-            "relevance": relevance,
-        })
+        items.append(
+            {
+                "id": f"XURL{i + 1}",
+                "text": text[:500],
+                "url": url,
+                "author_handle": username,
+                "date": date,
+                "engagement": engagement,
+                "why_relevant": "",
+                "relevance": relevance,
+            }
+        )
 
     return items

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from . import log, subproc
@@ -62,7 +62,7 @@ def _is_available() -> bool:
 
 
 def _today() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_first_post_age(
@@ -108,7 +108,7 @@ def _parse_first_post_age(
     return point.date().isoformat()
 
 
-def _build_search_args(query: str, limit: int) -> List[str]:
+def _build_search_args(query: str, limit: int) -> list[str]:
     return [
         CLI_BIN,
         "search",
@@ -121,7 +121,7 @@ def _build_search_args(query: str, limit: int) -> List[str]:
     ]
 
 
-def _build_posts_args(cluster_url_id: str, posts_per: int) -> List[str]:
+def _build_posts_args(cluster_url_id: str, posts_per: int) -> list[str]:
     return [
         CLI_BIN,
         "posts",
@@ -134,7 +134,7 @@ def _build_posts_args(cluster_url_id: str, posts_per: int) -> List[str]:
     ]
 
 
-def _run_cli(cmd: List[str], timeout: int) -> Dict[str, Any]:
+def _run_cli(cmd: list[str], timeout: int) -> dict[str, Any]:
     """Invoke digg-pp-cli and parse the JSON envelope.
 
     Returns ``{"results": [...]}`` on success, ``{"results": [], "error": "..."}``
@@ -182,7 +182,7 @@ def search_digg(
     from_date: str,
     to_date: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search Digg AI 1000 clusters via digg-pp-cli.
 
     Args:
@@ -227,9 +227,9 @@ def _rank_score(rank: Optional[int]) -> float:
 
 
 def parse_digg_response(
-    response: Dict[str, Any],
+    response: dict[str, Any],
     query: str = "",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Parse a digg search envelope into normalized item dicts.
 
     Args:
@@ -243,7 +243,7 @@ def parse_digg_response(
     if not isinstance(raw, list):
         return []
 
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     for i, cluster in enumerate(raw):
         if not isinstance(cluster, dict):
             continue
@@ -270,37 +270,39 @@ def parse_digg_response(
         rank_boost = min(0.2, _rank_score(rank) / 250.0)
         relevance = min(1.0, 0.55 * rank_decay + 0.35 * content_score + rank_boost)
 
-        items.append({
-            "id": str(cluster_url_id),
-            "title": title or f"Digg cluster {i + 1}",
-            "url": _build_url(str(cluster_url_id)),
-            "tldr": tldr,
-            "author": "",
-            "date": date_str,
-            "engagement": {
-                "postCount": int(post_count)
-                if isinstance(post_count, (int, float))
-                else 0,
-                "uniqueAuthors": int(unique_authors)
-                if isinstance(unique_authors, (int, float))
-                else 0,
-                "rank": int(rank) if isinstance(rank, (int, float)) else None,
-                "rank_score": _rank_score(rank),
-            },
-            "first_post_age": first_post_age,
-            "posts": [],
-            "relevance": round(relevance, 2),
-            "why_relevant": (
-                f"Digg cluster (rank {rank}, {post_count} posts, {unique_authors} authors)"
-                if rank is not None
-                else f"Digg cluster ({post_count} posts, {unique_authors} authors)"
-            ),
-        })
+        items.append(
+            {
+                "id": str(cluster_url_id),
+                "title": title or f"Digg cluster {i + 1}",
+                "url": _build_url(str(cluster_url_id)),
+                "tldr": tldr,
+                "author": "",
+                "date": date_str,
+                "engagement": {
+                    "postCount": int(post_count)
+                    if isinstance(post_count, (int, float))
+                    else 0,
+                    "uniqueAuthors": int(unique_authors)
+                    if isinstance(unique_authors, (int, float))
+                    else 0,
+                    "rank": int(rank) if isinstance(rank, (int, float)) else None,
+                    "rank_score": _rank_score(rank),
+                },
+                "first_post_age": first_post_age,
+                "posts": [],
+                "relevance": round(relevance, 2),
+                "why_relevant": (
+                    f"Digg cluster (rank {rank}, {post_count} posts, {unique_authors} authors)"
+                    if rank is not None
+                    else f"Digg cluster ({post_count} posts, {unique_authors} authors)"
+                ),
+            }
+        )
 
     return items
 
 
-def _parse_post(raw_post: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _parse_post(raw_post: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Reduce a digg post payload into the small dict render uses.
 
     We deliberately keep this minimal: an inline quote needs the author
@@ -334,7 +336,7 @@ def _parse_post(raw_post: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def fetch_top_posts(
     cluster_url_id: str, posts_per: int = POSTS_PER_CLUSTER
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch top-ranked X posts attached to a cluster.
 
     Returns an empty list on any failure (timeout, missing cluster, JSON
@@ -345,7 +347,7 @@ def fetch_top_posts(
     cmd = _build_posts_args(cluster_url_id, posts_per)
     response = _run_cli(cmd, timeout=POSTS_TIMEOUT)
     raw = response.get("results") or []
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for entry in raw:
         post = _parse_post(entry)
         if post is not None:
@@ -354,10 +356,10 @@ def fetch_top_posts(
 
 
 def enrich_with_top_posts(
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     top_k: int = 3,
     posts_per: int = POSTS_PER_CLUSTER,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Attach top X posts to the first ``top_k`` clusters by Digg rank order.
 
     Mutates and returns the same list. Items that already have posts, or

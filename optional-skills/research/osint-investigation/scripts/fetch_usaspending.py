@@ -3,6 +3,7 @@
 
 No auth required. POST to /api/v2/search/spending_by_award/ with filters.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -59,7 +60,10 @@ def _post(body: dict) -> dict:
     req = urllib.request.Request(
         ENDPOINT,
         data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json", "User-Agent": "clawksis-agent osint-investigation"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "clawksis-agent osint-investigation",
+        },
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=60) as resp:

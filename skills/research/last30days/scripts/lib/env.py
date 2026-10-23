@@ -169,6 +169,7 @@ def _load_keychain(keys: list[str]) -> dict[str, str]:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
         except (subprocess.TimeoutExpired, OSError):
             continue
