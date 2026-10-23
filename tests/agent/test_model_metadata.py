@@ -892,7 +892,313 @@ class TestCodexOAuthContextLength:
             api_key=_codex_jwt("fake-token"),
             provider="openai-codex",
         )
-        assert ctx == 1_000_000, "Non-codex 1M cache entries must be respected"
+        with (
+            patch.object(mm, "_codex_oauth_context_cache", {}),
+            patch.object(mm, "_codex_oauth_max_context_cache", {}),
+            patch("agent.model_metadata.model_metadata_http.get", side_effect=down),
+            patch("agent.model_metadata.get_cached_context_length", return_value=None),
+            patch("agent.model_metadata.save_context_length"),
+        ):
+            assert mm.get_model_context_length(model="gpt-5.6-sol", **route) == 272_000
+            per_probe = len(calls)
+            mm.get_model_context_length(model="gpt-5.6-sol", **route)
+            mm.get_model_context_length(model="gpt-5.6-sol-900k", **route)
+            assert per_probe and len(calls) == per_probe
+            with patch(
+                "agent.model_metadata.time.time",
+                return_value=time.time() + mm._CODEX_OAUTH_CONTEXT_NEGATIVE_TTL + 1,
+            ):
+                mm.get_model_context_length(model="gpt-5.6-sol", **route)
+        assert len(calls) == 2 * per_probe
+
+    def test_catalog_max_is_published_before_the_context_entry(self):
+        """A reader that sees a fresh context entry must already be able to see its cap, or a
+        concurrent -900k resolution between the two writes skips the catalog max."""
+        import agent.model_metadata as mm
+
+        max_cache: dict = {}
+
+        class _ContextCache(dict):
+            def __setitem__(self, key, value):
+                assert key in max_cache, (
+                    "context entry published before its max_context_window cap"
+                )
+                super().__setitem__(key, value)
+
+        ok = MagicMock(status_code=200)
+        ok.json.return_value = {
+            "models": [
+                {
+                    "slug": "gpt-5.6-luna",
+                    "context_window": 272_000,
+                    "max_context_window": 872_000,
+                }
+            ]
+        }
+        with (
+            patch.object(mm, "_codex_oauth_context_cache", _ContextCache()),
+            patch.object(mm, "_codex_oauth_max_context_cache", max_cache),
+            patch("agent.model_metadata.model_metadata_http.get", return_value=ok),
+        ):
+            live, _fresh = mm._fetch_codex_oauth_context_lengths_with_source(
+                _codex_jwt("fake-token")
+            )
+        assert live == {"gpt-5.6-luna": 272_000}
+
+    @pytest.mark.parametrize("slug", ["gpt-5.6-sol-900k"])
+    def test_fallback_table_resolution_also_bumped(self, slug):
+        """When the live probe fails, the 272K fallback-table value for an
+        opted-in ``-900k`` variant is bumped the same way (same enforcement
+        applies — the fallback lookup strips the suffix first)."""
+        from agent.model_metadata import get_model_context_length
+
+        fake_response = MagicMock()
+        fake_response.status_code = 401
+        fake_response.json.return_value = {}
+        with (
+            patch(
+                "agent.model_metadata.model_metadata_http.get",
+                return_value=fake_response,
+            ),
+            patch("agent.model_metadata.get_cached_context_length", return_value=None),
+            patch("agent.model_metadata.save_context_length"),
+        ):
+            ctx = get_model_context_length(
+                model=slug,
+                base_url="https://chatgpt.com/backend-api/codex",
+                api_key=_codex_jwt("expired-token"),
+                provider="openai-codex",
+            )
+        assert ctx == 900_000
+
+    @pytest.mark.parametrize("slug", ["gpt-5.6-sol"])
+    def test_fallback_table_base_slug_stays_272k(self, slug):
+        """Fallback-table resolution for BASE slugs stays at the advertised
+        272K — the opt-in rule applies on the offline path too."""
+        from agent.model_metadata import get_model_context_length
+
+        fake_response = MagicMock()
+        fake_response.status_code = 401
+        fake_response.json.return_value = {}
+        with (
+            patch(
+                "agent.model_metadata.model_metadata_http.get",
+                return_value=fake_response,
+            ),
+            patch("agent.model_metadata.get_cached_context_length", return_value=None),
+            patch("agent.model_metadata.save_context_length"),
+        ):
+            ctx = get_model_context_length(
+                model=slug,
+                base_url="https://chatgpt.com/backend-api/codex",
+                api_key=_codex_jwt("expired-token"),
+                provider="openai-codex",
+            )
+        assert ctx == 272_000
+
+    # Table-driven eligibility contract (#92797 review): one predicate
+    # (is_codex_900k_base) drives picker synthesis, context resolution,
+    # validation, and wire stripping — this table pins all of them.
+    # (model_id, is_valid_variant, expected_ctx, expected_wire_model)
+    _900K_TABLE = [
+        ("gpt-5.6-sol-900k", True, 900_000, "gpt-5.6-sol"),
+        # dated snapshot of a routable 5.6 base
+        ("gpt-5.6-sol-2026-07-09-900k", True, 900_000, "gpt-5.6-sol-2026-07-09"),
+        # vendor-namespaced variant (display/aux callers) resolves too
+        ("openai/gpt-5.6-sol-900k", True, 900_000, "openai/gpt-5.6-sol"),
+        # -pro slugs are not routable on Codex OAuth: never a valid variant,
+        # never stripped (fails honestly at the API instead)
+        ("gpt-5.6-sol-pro-900k", False, 272_000, "gpt-5.6-sol-pro-900k"),
+        # genuine 272K enforcers get no variant
+        ("gpt-5.5-900k", False, 272_000, "gpt-5.5-900k"),
+        # arbitrary future family descendants are not auto-eligible
+        ("gpt-5.6-nova-900k", False, 272_000, "gpt-5.6-nova-900k"),
+    ]
+
+    @pytest.mark.parametrize("model_id,valid,expected_ctx,wire", _900K_TABLE)
+    def test_900k_eligibility_table(self, model_id, valid, expected_ctx, wire):
+        from agent.model_metadata import (
+            get_model_context_length,
+            is_codex_context_variant,
+            strip_codex_context_variant_suffix,
+        )
+
+        assert is_codex_context_variant(model_id) is valid
+        assert strip_codex_context_variant_suffix(model_id) == wire
+
+        bare = model_id.rsplit("/", 1)[-1]
+        catalog_slug = strip_codex_context_variant_suffix(bare)
+        catalog_slug = catalog_slug.removesuffix("-900k")
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.json.return_value = {
+            "models": [{"slug": catalog_slug, "context_window": 272_000}]
+        }
+        import agent.model_metadata as mm
+
+        mm._codex_oauth_context_cache = {}
+        with (
+            patch(
+                "agent.model_metadata.model_metadata_http.get",
+                return_value=fake_response,
+            ),
+            patch("agent.model_metadata.get_cached_context_length", return_value=None),
+            patch("agent.model_metadata.save_context_length"),
+        ):
+            ctx = get_model_context_length(
+                model=model_id,
+                base_url="https://chatgpt.com/backend-api/codex",
+                api_key=_codex_jwt("fake-token"),
+                provider="openai-codex",
+            )
+        assert ctx == expected_ctx
+
+
+# =========================================================================
+# Custom endpoint model metadata
+# =========================================================================
+
+
+def _streamed(response):
+    """A ``model_metadata_http.stream`` result: a context manager yielding *response*."""
+    ctx = MagicMock()
+    ctx.__enter__.return_value = response
+    return ctx
+
+
+class TestFetchEndpointModelMetadata:
+    def setup_method(self):
+        import agent.model_metadata as mm
+
+        mm._endpoint_model_metadata_cache.clear()
+        mm._endpoint_model_metadata_cache_time.clear()
+
+    @pytest.mark.parametrize("status_code", [401, 403])
+    def test_auth_failure_stops_after_first_candidate(self, status_code):
+        import agent.model_metadata as mm
+
+        response = MagicMock()
+        response.status_code = status_code
+        response.raise_for_status.side_effect = RuntimeError(str(status_code))
+        ctx = _streamed(response)
+
+        with patch(
+            "agent.model_metadata.model_metadata_http.stream", return_value=ctx
+        ) as mock_stream:
+            result = mm.fetch_endpoint_model_metadata("https://custom.example/v1")
+
+        assert result == {}
+        mock_stream.assert_called_once()
+        response.raise_for_status.assert_not_called()
+        response.json.assert_not_called()
+        ctx.__exit__.assert_called_once()
+
+    def test_auth_failure_empty_result_is_cached(self):
+        import agent.model_metadata as mm
+
+        response = MagicMock()
+        response.status_code = 401
+        response.raise_for_status.side_effect = RuntimeError("401")
+        ctx = _streamed(response)
+
+        with patch(
+            "agent.model_metadata.model_metadata_http.stream", return_value=ctx
+        ) as mock_stream:
+            first = mm.fetch_endpoint_model_metadata("https://custom.example/v1")
+            second = mm.fetch_endpoint_model_metadata("https://custom.example/v1")
+
+        assert first == second == {}
+        mock_stream.assert_called_once()
+        ctx.__exit__.assert_called_once()
+
+    def test_not_found_still_tries_alternate_candidate(self):
+        import agent.model_metadata as mm
+
+        not_found = MagicMock()
+        not_found.status_code = 404
+        not_found.raise_for_status.side_effect = RuntimeError("404")
+        success = MagicMock()
+        success.status_code = 200
+        success.json.return_value = {
+            "data": [{"id": "test/model", "context_length": 32768}]
+        }
+        not_found_ctx, success_ctx = _streamed(not_found), _streamed(success)
+
+        with patch(
+            "agent.model_metadata.model_metadata_http.stream",
+            side_effect=[not_found_ctx, success_ctx],
+        ) as mock_stream:
+            result = mm.fetch_endpoint_model_metadata("https://custom.example/v1")
+
+        assert result["test/model"]["context_length"] == 32768
+        assert [call.args[0] for call in mock_stream.call_args_list] == [
+            "https://custom.example/v1/models",
+            "https://custom.example/models",
+        ]
+        not_found.json.assert_not_called()
+        not_found_ctx.__exit__.assert_called_once()
+        success_ctx.__exit__.assert_called_once()
+
+    def test_remote_probe_is_memoized_on_disk_across_processes(
+        self, tmp_path, monkeypatch
+    ):
+        """A fresh process (cleared in-memory cache) must answer from the disk
+        memo within the TTL instead of re-probing the endpoint — the cost every
+        one-shot Bot Mode DM hop paid on startup. Expired memos re-probe."""
+        import agent.model_metadata as mm
+
+        monkeypatch.setattr(
+            mm,
+            "_get_endpoint_metadata_cache_path",
+            lambda: tmp_path / "endpoint_model_metadata.json",
+        )
+        success = MagicMock()
+        success.status_code = 200
+        success.json.return_value = {
+            "data": [{"id": "test/model", "context_length": 32768}]
+        }
+
+        with patch(
+            "agent.model_metadata.model_metadata_http.stream",
+            return_value=_streamed(success),
+        ) as mock_stream:
+            assert (
+                mm.fetch_endpoint_model_metadata("https://custom.example/v1")[
+                    "test/model"
+                ]["context_length"]
+                == 32768
+            )
+            # "New process": drop the in-memory cache only.
+            mm._endpoint_model_metadata_cache.clear()
+            mm._endpoint_model_metadata_cache_time.clear()
+            assert (
+                mm.fetch_endpoint_model_metadata("https://custom.example/v1")[
+                    "test/model"
+                ]["context_length"]
+                == 32768
+            )
+        mock_stream.assert_called_once()
+
+        # Past the TTL the memo is stale and the endpoint is probed again.
+        mm._endpoint_model_metadata_cache.clear()
+        mm._endpoint_model_metadata_cache_time.clear()
+        with (
+            patch(
+                "agent.model_metadata.time.time",
+                return_value=time.time() + mm._ENDPOINT_MODEL_CACHE_TTL + 1,
+            ),
+            patch(
+                "agent.model_metadata.model_metadata_http.stream",
+                return_value=_streamed(success),
+            ) as mock_stream,
+        ):
+            mm.fetch_endpoint_model_metadata("https://custom.example/v1")
+        mock_stream.assert_called_once()
+
+
+# =========================================================================
+# Nous Portal context-window resolution (provider="nous")
+# =========================================================================
 
 
 # =========================================================================

@@ -903,7 +903,7 @@ def _get_dashboard_plugins(force_rescan: bool = False) -> list:
 # ---------------------------------------------------------------------------
 
 
-_MEDIA_ALLOWED_EXT_TO_MIME: Dict[str, str] = {
+_MEDIA_ALLOWED_EXT_TO_MIME: dict[str, str] = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -1021,7 +1021,7 @@ async def get_media_file(media_id: str, request: Request):
 # ---------------------------------------------------------------------------
 
 
-_LOCAL_MEDIA_EXT_TO_MIME: Dict[str, str] = {
+_LOCAL_MEDIA_EXT_TO_MIME: dict[str, str] = {
     # audio (TTS briefings, notas de voz)
     ".ogg": "audio/ogg",
     ".oga": "audio/ogg",
@@ -1048,7 +1048,7 @@ _LOCAL_MEDIA_EXT_TO_MIME: Dict[str, str] = {
 }
 
 
-def _local_media_allowed_roots() -> "List[Path]":
+def _local_media_allowed_roots() -> "list[Path]":
     """Roots servibles por /media/local (resueltos para comparar post-symlink)."""
     home = get_clawk_home()
     return [
@@ -1078,8 +1078,7 @@ async def get_local_media(path: str, request: Request):
         )
 
     raw_path = unquote(str(path or "")).strip()
-    if raw_path.startswith("file://"):
-        raw_path = raw_path[len("file://") :]
+    raw_path = raw_path.removeprefix("file://")
     if not raw_path:
         raise HTTPException(status_code=400, detail="Missing media path.")
 
@@ -1600,7 +1599,7 @@ def _ensure_chat_projects_schema(conn) -> None:
     conn.commit()
 
 
-def _project_row_to_dict(row) -> Dict[str, Any]:
+def _project_row_to_dict(row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
@@ -1629,7 +1628,7 @@ def _project_exists(conn, project_id: str, *, include_archived: bool = False) ->
 
 
 def _attach_session_projects(
-    sessions: List[Dict[str, Any]], db_path: Optional[Path] = None
+    sessions: list[dict[str, Any]], db_path: Optional[Path] = None
 ) -> None:
     """Tag session rows with their chat project (``db_path``: the store they were listed from;
     default the active home's state.db). READ-ONLY on purpose: it backs the GET /api/sessions
@@ -1817,7 +1816,7 @@ async def update_chat_project(project_id: str, body: ChatProjectUpdate):
             raise HTTPException(status_code=404, detail="Project not found")
 
         updates = []
-        params: List[Any] = []
+        params: list[Any] = []
 
         if body.name is not None:
             name = _chat_project_clean_text(
@@ -2051,7 +2050,7 @@ async def cleanup_sessions_endpoint(body: SessionCleanup):
         )
         now = _time.time()
         model_q = (body.model or "").strip().lower()
-        matched_ids: List[str] = []
+        matched_ids: list[str] = []
         matched_msgs = 0
         for s in rows:
             if model_q and model_q not in str(s.get("model") or "").lower():
@@ -2114,7 +2113,7 @@ async def cron_occurrences(start: str, end: str, profile: str = "all"):
         )
 
     requested = (profile or "all").strip()
-    jobs: List[Dict[str, Any]] = []
+    jobs: list[dict[str, Any]] = []
     if requested.lower() != "all":
         jobs = _call_cron_for_profile(requested, "list_jobs", True)
     else:
@@ -2127,7 +2126,7 @@ async def cron_occurrences(start: str, end: str, profile: str = "all"):
             except Exception:
                 _log.exception("Failed to list cron jobs for profile %s", name)
 
-    result: List[Dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
     for job in jobs:
         if not job.get("enabled", True) or job.get("state") == "paused":
             continue
@@ -2140,7 +2139,7 @@ async def cron_occurrences(start: str, end: str, profile: str = "all"):
         except Exception:
             _log.exception("occurrences failed for job %s", job.get("id"))
             occ = []
-        days: Dict[str, int] = {}
+        days: dict[str, int] = {}
         for dt in occ:
             key = dt.strftime("%Y-%m-%d")
             days[key] = days.get(key, 0) + 1
@@ -2291,13 +2290,13 @@ async def get_visualization_agent_messages(limit: int = 100, since_id: int = 0):
 
 # Session metadata (title/source/model) cache for the Visualization office.
 # Rebuilt at most every TTL seconds so the per-1.5s events poll stays cheap.
-_VIZ_SESSION_META: Dict[str, Any] = {"ts": 0.0, "data": {}}
+_VIZ_SESSION_META: dict[str, Any] = {"ts": 0.0, "data": {}}
 _VIZ_SESSION_META_TTL = 10.0
 
 
-def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
+def _build_viz_session_meta() -> dict[str, dict[str, str]]:
     """Map session_id -> {title, source, model} from the sessions store (blocking)."""
-    out: Dict[str, Dict[str, str]] = {}
+    out: dict[str, dict[str, str]] = {}
     try:
         from clawk_state import SessionDB
 
@@ -2327,7 +2326,7 @@ def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
     return out
 
 
-async def _viz_session_meta_cached() -> Dict[str, Dict[str, str]]:
+async def _viz_session_meta_cached() -> dict[str, dict[str, str]]:
     now = time.time()
     if (
         now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL
@@ -2361,7 +2360,7 @@ async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
         )
     except Exception:
         events = []
-    sessions: Dict[str, Dict[str, str]] = {}
+    sessions: dict[str, dict[str, str]] = {}
     try:
         sids = {e.get("session_id") for e in events if e.get("session_id")}
         if sids:

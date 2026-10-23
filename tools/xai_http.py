@@ -51,7 +51,7 @@ def has_xai_credentials() -> bool:
             isinstance(e, dict) and str(e.get("access_token", "") or "").strip()
             for e in entries
         )
-    except Exception as exc:  # noqa: BLE001 — a corrupted auth store must not block scans
+    except Exception as exc:
         logger.debug("xai_http: credential probe of auth.json failed: %s", exc)
         return False
 
@@ -125,7 +125,7 @@ def read_xai_imagine_storage_config(section_name: str) -> dict[str, Any]:
         storage = _dict_get(
             _dict_get(_dict_get(load_config(), section_name), "xai"), "storage"
         )
-    except Exception as exc:  # noqa: BLE001 — config optional; never fatal
+    except Exception as exc:
         logger.debug(
             "xai_http: reading %r xAI storage config failed; using defaults: %s",
             section_name,
@@ -195,7 +195,7 @@ def maybe_mark_xai_storage_notice_seen(section_name: str) -> Optional[str]:
             datetime.datetime.now(datetime.UTC).isoformat() + "\n", encoding="utf-8"
         )
         return notice
-    except Exception as exc:  # noqa: BLE001 — marker optional; never fatal
+    except Exception as exc:
         logger.debug(
             "xai_http: storage-notice marker write failed for %r; returning notice anyway: %s",
             section_name,
@@ -295,12 +295,11 @@ def resolve_xai_http_credentials(
                 "api_key": str(access_token).strip(),
                 "base_url": base_url,
             }
-    except Exception as exc:  # noqa: BLE001 — OAuth pool optional; fall back to raw key
+    except Exception as exc:
         logger.debug(
             "xai_http: OAuth credential pool resolution failed; falling back to bare XAI_API_KEY: %s",
             exc,
         )
-        pass
 
     from clawk_cli.config import get_env_value
 

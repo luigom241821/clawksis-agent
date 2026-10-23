@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 
 import tools.scrapegraph_common as sgc
-import tools.scrapegraph_tool  # noqa: F401 — registers the tool on import
+import tools.scrapegraph_tool
 from plugins.web.scrapegraphai.provider import ScrapegraphWebProvider
 
 
@@ -948,8 +948,8 @@ def test_extract_structured_install_runs_in_worker_thread(monkeypatch):
     so the first-use 30-60s pip install never freezes the event loop."""
     import tools.scrapegraph_common as sgc
 
-    install_fn = lambda: None  # noqa: E731 — stands in for ensure_installed
-    run_fn = lambda *a, **k: {"ok": True}  # noqa: E731 — stands in for _run_smart
+    install_fn = lambda: None
+    run_fn = lambda *a, **k: {"ok": True}
     calls: list[object] = []
     real_to_thread = asyncio.to_thread
 
@@ -974,8 +974,8 @@ def test_extract_many_install_runs_in_worker_thread(monkeypatch):
     """Same guarantee for the multi-source path."""
     import tools.scrapegraph_common as sgc
 
-    install_fn = lambda: None  # noqa: E731
-    run_fn = lambda *a, **k: [{"ok": True}]  # noqa: E731
+    install_fn = lambda: None
+    run_fn = lambda *a, **k: [{"ok": True}]
     calls: list[object] = []
     real_to_thread = asyncio.to_thread
 

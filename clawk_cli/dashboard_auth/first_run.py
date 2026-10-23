@@ -40,7 +40,7 @@ def _basic_section() -> dict:
 
         cfg = load_config()
 
-    except Exception:  # noqa: BLE001 — sin config legible = sin credenciales
+    except Exception:
         return {}
 
     section = cfg_get(cfg, "dashboard", "basic_auth", default=None)
@@ -97,7 +97,7 @@ def setup_available() -> bool:
     return not basic_auth_configured()
 
 
-def _validate(username: str, password: str) -> Tuple[str, str]:
+def _validate(username: str, password: str) -> tuple[str, str]:
 
     username = (username or "").strip()
 
@@ -112,7 +112,7 @@ def _validate(username: str, password: str) -> Tuple[str, str]:
     return username, password
 
 
-def save_basic_auth_credentials(username: str, password: str) -> Tuple[str, bytes]:
+def save_basic_auth_credentials(username: str, password: str) -> tuple[str, bytes]:
     """Hashea y persiste las credenciales en config.yaml.
 
     Escribe ``dashboard.basic_auth.{username,password_hash}``, elimina

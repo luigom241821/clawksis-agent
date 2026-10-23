@@ -28,6 +28,14 @@ CURRENT INTENDED MATRIX (as of PR #91447, pinned here):
                                per-job/config toggle — the scheduler always
                                passes False.
 
+CLAWKSIS FORK DELTA (7c08b4f408, re-applied on the v0.22.5 sync): memory IS
+a per-job knob here — ``use_memory`` (default False) drives
+``skip_memory=not use_memory``, so a default cron job runs with
+skip_memory=True and the ON matrix above applies to ``use_memory: true`` jobs
+(pinned by test_scheduler.py::test_run_job_memory_enabled_in_cron and
+``test_default_job_skips_memory_clawksis`` below). The toolset denylist rules
+are unchanged.
+
 ANY future flip of this behavior MUST consciously edit this test and cite
 the issue/PR that decided the flip in the module docstring above, extending
 the flip history. Do not "fix" a failure here by inverting an assertion
@@ -112,3 +120,18 @@ class TestCronMemoryContractOff:
             "config.yaml agent.disabled_toolsets must propagate 'memory' into "
             "the cron agent's denylist — the OFF direction of the contract"
         )
+
+    def test_default_job_skips_memory_clawksis(self, tmp_path):
+        """Clawksis: a job that does not opt in (``use_memory`` unset/False) runs
+        with skip_memory=True; ``use_memory: true`` is the per-job ON switch."""
+        for job_id, toggle, expected_skip in (
+            ("mem-default", None, True),
+            ("mem-off", False, True),
+            ("mem-on", True, False),
+        ):
+            job = {"id": job_id, "name": "t", "prompt": "hi"}
+            if toggle is not None:
+                job["use_memory"] = toggle
+            with _run_job_patches(tmp_path) as (fake_db, agent_cls):
+                _run_owned_job(job, tmp_path, fake_db)
+            assert agent_cls.call_args.kwargs["skip_memory"] is expected_skip, job

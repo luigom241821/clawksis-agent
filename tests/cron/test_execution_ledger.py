@@ -381,10 +381,22 @@ def test_provider_start_recovers_interrupted_records_before_tick(monkeypatch):
 
 
 def test_external_provider_start_recovers_interrupted_records(monkeypatch):
-    from plugins.cron_providers.chronos import ChronosCronScheduler
+    # Clawksis purged the managed Chronos provider (BYOK). The contract is generic: an external
+    # provider that returns from start() (no ticker loop) recovers through the inherited
+    # CronScheduler.recover_interrupted hook BEFORE it reconciles/arms its triggers.
+    from cron.scheduler_provider import CronScheduler
 
-    provider = ChronosCronScheduler()
-    provider._client = type("Client", (), {"arm": lambda self, **kwargs: None})()
+    class ExternalCronScheduler(CronScheduler):
+        name = "external-test"
+
+        def reconcile(self):  # pragma: no cover - replaced below
+            raise AssertionError("reconcile must be observed through the patch")
+
+        def start(self, stop_event, *, adapters=None, loop=None, interval=60):
+            self.recover_interrupted()
+            self.reconcile()
+
+    provider = ExternalCronScheduler()
     events = []
     monkeypatch.setattr(
         "cron.executions.recover_interrupted_executions",

@@ -276,7 +276,7 @@ def _xai_available() -> bool:
         from tools.xai_http import has_xai_credentials
 
         return has_xai_credentials()
-    except Exception as exc:  # noqa: BLE001 — a broken import = unavailable
+    except Exception as exc:
         logger.debug("xai credentials probe failed: %s", exc)
         return False
 

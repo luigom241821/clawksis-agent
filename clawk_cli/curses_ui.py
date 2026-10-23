@@ -340,7 +340,7 @@ def _scroll_for_cursor_variable(
     scroll_offset: int,
     cursor_pos: int,
     avail_lines: int,
-    filtered: List[int],
+    filtered: list[int],
     row_height: Callable[[int], int],
 ) -> int:
     """Scroll clamp for variable-height rows (e.g. items with a 2nd desc line).
@@ -853,7 +853,7 @@ def curses_radiolist(
     *,
     cancel_returns: int | None = None,
     description: str | None = None,
-    descriptions: List[str] | None = None,
+    descriptions: list[str] | None = None,
     searchable: bool = False,
     search_labels: list[str] | None = None,
     headings: Optional[dict[int, str]] = None,
@@ -1109,7 +1109,7 @@ def _radio_numbered_fallback(
     items: list[RadioItem],
     selected: int,
     cancel_returns: int,
-    descriptions: List[str] | None = None,
+    descriptions: list[str] | None = None,
     *,
     headings: Optional[dict[int, str]] = None,
 ) -> int:

@@ -211,7 +211,7 @@ async def _handle_scrapegraph(args, **kw):
             urls=urls,
             error=classify_scrapegraph_error(TimeoutError("timed out")),
         )
-    except Exception as exc:  # noqa: BLE001 — classify and surface user-friendly error
+    except Exception as exc:
         logger.warning("scrapegraph extraction failed: %s", exc)
         hint = classify_scrapegraph_error(exc)
         return tool_result(ok=False, urls=urls, error=hint)

@@ -31,8 +31,12 @@ def isolated_cron_profile_home(tmp_path, monkeypatch):
 
     profile_home.mkdir(parents=True)
 
-    # Upstream only resolves a named profile that carries an identity marker.
-    (profile_home / "config.yaml").write_text("{}\n", encoding="utf-8")
+    # Upstream only resolves a named profile that carries an identity marker. The model lives in
+    # the profile's own config: a fire routed to a sibling profile runs under multiplex secret
+    # semantics, so the launch process's CLAWK_MODEL is deliberately invisible to it.
+    (profile_home / "config.yaml").write_text(
+        "model:\n  default: profile-model\n", encoding="utf-8"
+    )
 
     (root / "cron").mkdir(parents=True)
 
@@ -221,73 +225,70 @@ class TestCronjobToolProfile:
 
 
 class TestRunJobProfileContext:
+    """Per-job ``profile`` through the current execution seams.
+
+    Agent jobs no longer run inside the firing thread: ``run_job`` hands the fire to the gateway
+    owner (``cron.scheduler_authority.run_canonical_job``), and the owner re-enters ``run_job``
+    in-process under ``gateway.session_cron.current_execution()``. The ``cron_owner`` fixture swaps
+    only the client transport for that real owner seam, so these tests cover the fork's profile
+    switch (``_job_profile_context`` + ``_fire_secret_scope``) where production applies it.
+    """
+
     @staticmethod
     def _install_agent_stubs(monkeypatch, observed: dict):
 
-        import sys
-
         import cron.scheduler as sched
+
+        # The owner seam imports gateway.run, whose module-level dotenv load would otherwise be
+        # recorded by the loader hook below; only per-run reloads are under test.
+        import gateway.run
+
+        def _snapshot(phase: str) -> None:
+            from agent.runtime_cwd import scoped_session_cwd
+            from agent.secret_scope import current_secret_scope_home
+            from clawk_constants import get_clawk_home
+
+            observed[f"env_home_during_{phase}"] = os.environ.get("CLAWK_HOME")
+            observed[f"profile_env_only_during_{phase}"] = os.environ.get(
+                "CLAWK_PROFILE_TEST_ONLY"
+            )
+            observed[f"profile_env_shared_during_{phase}"] = os.environ.get(
+                "CLAWK_PROFILE_TEST_SHARED"
+            )
+            observed[f"clawk_home_during_{phase}"] = str(get_clawk_home())
+            observed[f"scheduler_home_during_{phase}"] = str(sched._get_clawk_home())
+            observed[f"secret_scope_home_during_{phase}"] = current_secret_scope_home()
+            observed[f"session_cwd_during_{phase}"] = scoped_session_cwd()
 
         class FakeAgent:
             def __init__(self, **kwargs):
-
-                from clawk_constants import get_clawk_home
-
-                observed["env_home_during_init"] = os.environ.get("CLAWK_HOME")
-
-                observed["profile_env_only_during_init"] = os.environ.get(
-                    "CLAWK_PROFILE_TEST_ONLY"
-                )
-
-                observed["profile_env_shared_during_init"] = os.environ.get(
-                    "CLAWK_PROFILE_TEST_SHARED"
-                )
-
-                observed["clawk_home_during_init"] = str(get_clawk_home())
-
-                observed["scheduler_home_during_init"] = str(sched._get_clawk_home())
-
+                _snapshot("init")
+                observed["model"] = kwargs.get("model")
                 observed["skip_context_files"] = kwargs.get("skip_context_files")
 
-            def run_conversation(self, *_a, **_kw):
+            def run_conversation(self, *_a, task_id=None, **_kw):
+                from tools.terminal_tool import get_session_cwd
 
-                from clawk_constants import get_clawk_home
-
-                observed["env_home_during_run"] = os.environ.get("CLAWK_HOME")
-
-                observed["profile_env_only_during_run"] = os.environ.get(
-                    "CLAWK_PROFILE_TEST_ONLY"
-                )
-
-                observed["profile_env_shared_during_run"] = os.environ.get(
-                    "CLAWK_PROFILE_TEST_SHARED"
-                )
-
-                observed["clawk_home_during_run"] = str(get_clawk_home())
-
-                observed["scheduler_home_during_run"] = str(sched._get_clawk_home())
-
+                _snapshot("run")
+                observed["task_id"] = task_id
+                observed["task_cwd_during_run"] = get_session_cwd(task_id)
                 return {"final_response": "done", "messages": []}
 
             def get_activity_summary(self):
 
                 return {"seconds_since_activity": 0.0}
 
+            def interrupt(self, *_a, **_kw):
+                pass
+
             def close(self):
 
                 observed["closed"] = True
 
-        fake_mod = type(sys)("run_agent")
-
-        fake_mod.AIAgent = FakeAgent
-
-        monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
-
-        from clawk_cli import runtime_provider as runtime_provider
+        monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
 
         monkeypatch.setattr(
-            runtime_provider,
-            "resolve_runtime_provider",
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
             lambda **_kw: {
                 "provider": "test",
                 "api_key": "test-key",
@@ -297,26 +298,17 @@ class TestRunJobProfileContext:
         )
 
         monkeypatch.setattr(
-            sched, "_build_job_prompt", lambda job, prerun_script=None: "hi"
+            "cron.scheduler_delivery._resolve_origin", lambda *_a, **_kw: None
         )
-
-        monkeypatch.setattr(sched, "_resolve_origin", lambda job: None)
-
-        monkeypatch.setattr(sched, "_resolve_delivery_target", lambda job: None)
-
-        monkeypatch.setattr(
-            sched, "_resolve_cron_enabled_toolsets", lambda job, cfg: None
-        )
-
+        monkeypatch.setattr("tools.mcp_tool_discovery.discover_mcp_tools", list)
         monkeypatch.setattr(sched, "_clawk_home", None)
-
         monkeypatch.setenv("CLAWK_CRON_TIMEOUT", "0")
 
         # run_job re-reads the env through clawk_cli.env_loader.load_clawk_dotenv
         # (not a bare dotenv.load_dotenv) so external secret sources are
         # re-resolved per run — hook that instead.
 
-        import clawk_cli.env_loader as env_loader
+        from clawk_cli import env_loader
 
         def fake_load_clawk_dotenv(*, clawk_home=None, project_env=None):
 
@@ -328,8 +320,18 @@ class TestRunJobProfileContext:
 
         monkeypatch.setattr(env_loader, "load_clawk_dotenv", fake_load_clawk_dotenv)
 
+    @staticmethod
+    def _job(job_id: str, **fields) -> dict:
+        return {
+            "id": job_id,
+            "name": f"{job_id}-job",
+            "prompt": "hi",
+            "schedule_display": "manual",
+            **fields,
+        }
+
     def test_run_job_sets_and_restores_profile_home(
-        self, isolated_cron_profile_home, monkeypatch
+        self, isolated_cron_profile_home, monkeypatch, cron_owner
     ):
 
         import cron.scheduler as sched
@@ -340,19 +342,20 @@ class TestRunJobProfileContext:
 
         self._install_agent_stubs(monkeypatch, observed)
 
-        job = {
-            "id": "abc",
-            "name": "profile-job",
-            "profile": "support",
-            "schedule_display": "manual",
-        }
-
-        success, _output, response, error = sched.run_job(job)
+        success, _output, response, error = sched.run_job(
+            self._job("abc", profile="support")
+        )
 
         assert success is True, f"run_job failed: error={error!r} response={response!r}"
 
-        assert observed["dotenv_paths"] == [str(profile_home / ".env")]
+        assert response == "done"
 
+        # config.yaml is read from the profile home.
+        assert observed["model"] == "profile-model"
+
+        assert observed["dotenv_paths"] == [str(profile_home.resolve() / ".env")]
+
+        # The home switch is context-local: os.environ keeps the scheduler's root.
         assert observed["env_home_during_init"] == str(root)
 
         assert observed["env_home_during_run"] == str(root)
@@ -365,6 +368,11 @@ class TestRunJobProfileContext:
 
         assert observed["scheduler_home_during_run"] == str(profile_home.resolve())
 
+        # _fire_secret_scope: credentials come from the profile, not the scheduler home.
+        assert observed["secret_scope_home_during_init"] == str(profile_home.resolve())
+
+        assert observed["secret_scope_home_during_run"] == str(profile_home.resolve())
+
         assert observed["skip_context_files"] is True
 
         assert os.environ["CLAWK_HOME"] == str(root)
@@ -372,10 +380,10 @@ class TestRunJobProfileContext:
         assert sched._get_clawk_home() == root
 
     def test_profile_dotenv_environment_is_restored(
-        self, isolated_cron_profile_home, monkeypatch
+        self, isolated_cron_profile_home, monkeypatch, cron_owner
     ):
 
-        import clawk_cli.env_loader as env_loader
+        from clawk_cli import env_loader
 
         import cron.scheduler as sched
 
@@ -405,18 +413,13 @@ class TestRunJobProfileContext:
 
         monkeypatch.setattr(env_loader, "load_clawk_dotenv", fake_load_clawk_dotenv)
 
-        job = {
-            "id": "env-profile",
-            "name": "profile-env-job",
-            "profile": "support",
-            "schedule_display": "manual",
-        }
-
-        success, _output, _response, error = sched.run_job(job)
+        success, _output, _response, error = sched.run_job(
+            self._job("env-profile", profile="support")
+        )
 
         assert success is True, error
 
-        assert observed["dotenv_paths"] == [str(profile_home / ".env")]
+        assert observed["dotenv_paths"] == [str(profile_home.resolve() / ".env")]
 
         assert observed["profile_env_only_during_init"] == "profile-only"
 
@@ -474,7 +477,7 @@ class TestRunJobProfileContext:
         assert sched._get_clawk_home() == root
 
     def test_run_job_without_profile_leaves_clawk_home_untouched(
-        self, isolated_cron_profile_home, monkeypatch
+        self, isolated_cron_profile_home, monkeypatch, cron_owner
     ):
 
         import cron.scheduler as sched
@@ -485,23 +488,20 @@ class TestRunJobProfileContext:
 
         self._install_agent_stubs(monkeypatch, observed)
 
-        job = {
-            "id": "noprof",
-            "name": "no-profile-job",
-            "profile": None,
-            "schedule_display": "manual",
-        }
-
-        success, *_ = sched.run_job(job)
+        success, *_ = sched.run_job(self._job("noprof", profile=None))
 
         assert success is True
 
-        assert observed["clawk_home_during_init"] == str(root)
+        assert Path(observed["clawk_home_during_init"]).resolve() == root.resolve()
+
+        assert observed["dotenv_paths"] == [str(root.resolve() / ".env")]
 
         assert os.environ["CLAWK_HOME"] == str(root)
 
+        assert sched._get_clawk_home() == root
+
     def test_run_job_falls_back_on_missing_runtime_profile(
-        self, isolated_cron_profile_home, monkeypatch
+        self, isolated_cron_profile_home, monkeypatch, cron_owner
     ):
 
         import cron.scheduler as sched
@@ -512,33 +512,32 @@ class TestRunJobProfileContext:
 
         self._install_agent_stubs(monkeypatch, observed)
 
-        job = {
-            "id": "missing-profile",
-            "name": "missing-profile-job",
-            "profile": "missing",
-            "schedule_display": "manual",
-        }
-
         # Should succeed with fallback, not raise
 
-        success, _output, response, error = sched.run_job(job)
+        success, _output, _response, error = sched.run_job(
+            self._job("missing-profile", profile="missing")
+        )
 
         assert success is True, f"run_job should fallback, not fail: error={error!r}"
 
-        # Verify it used the default home, not the missing profile
+        # Verify it used the scheduler's home, not the missing profile
 
-        assert observed["clawk_home_during_init"] == str(root)
+        assert Path(observed["clawk_home_during_init"]).resolve() == root.resolve()
 
         assert os.environ["CLAWK_HOME"] == str(root)
+
+        assert sched._get_clawk_home() == root
 
 
 class TestTickProfilePartition:
     def test_profile_and_workdir_combined(
-        self, isolated_cron_profile_home, monkeypatch
+        self, isolated_cron_profile_home, monkeypatch, cron_owner
     ):
         """Both profile and workdir set — verify both are applied and restored."""
 
         import cron.scheduler as sched
+        from agent.runtime_cwd import scoped_session_cwd
+        from tools.terminal_tool import get_session_cwd
 
         root, profile_home = isolated_cron_profile_home
 
@@ -546,27 +545,37 @@ class TestTickProfilePartition:
 
         TestRunJobProfileContext._install_agent_stubs(monkeypatch, observed)
 
+        monkeypatch.delenv("TERMINAL_CWD", raising=False)
+
         fake_workdir = str(root / "myproject")
 
         (root / "myproject").mkdir()
 
-        job = {
-            "id": "combo",
-            "name": "combo-job",
-            "profile": "support",
-            "workdir": fake_workdir,
-            "schedule_display": "manual",
-        }
-
-        success, _output, _response, error = sched.run_job(job)
+        success, _output, _response, error = sched.run_job(
+            TestRunJobProfileContext._job(
+                "combo", profile="support", workdir=fake_workdir
+            )
+        )
 
         assert success is True, error
 
         assert observed["clawk_home_during_init"] == str(profile_home.resolve())
 
+        # The workdir is a per-run scope (session cwd + task cwd), never process-global
+        # TERMINAL_CWD, and it loads the project's context files.
+        assert observed["skip_context_files"] is False
+
+        assert observed["session_cwd_during_run"] == fake_workdir
+
+        assert observed["task_cwd_during_run"] == fake_workdir
+
         assert os.environ.get("TERMINAL_CWD", "") != fake_workdir, (
             "TERMINAL_CWD should be restored after job"
         )
+
+        assert get_session_cwd(observed["task_id"]) is None
+
+        assert scoped_session_cwd() != fake_workdir
 
         assert os.environ["CLAWK_HOME"] == str(root)
 

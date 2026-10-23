@@ -736,11 +736,15 @@ class TestRunJobSessionPersistence:
         skip_memory=False and the memory toolset is not policy-denied, so
         MEMORY.md/USER.md load and the memory tool follows normal toolset
         resolution.
+
+        Clawksis: memory is a per-job toggle (``use_memory``, off by default so
+        cron prompts don't pollute long-term memory); this pins the ON path.
         """
         job = {
             "id": "memory-enabled-job",
             "name": "test",
             "prompt": "hello",
+            "use_memory": True,
         }
         with self._run_job_patches(tmp_path) as (fake_db, mock_agent_cls):
             _run_owned_job(job, tmp_path, fake_db)

@@ -1029,7 +1029,7 @@ class WhatsAppAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             self._bridge_log = self._session_path.parent / "bridge.log"
             self._bridge_log_fh = bridge_log_fh = open(
                 self._bridge_log, "a", encoding="utf-8"
-            )  # noqa: ASYNC230 -- long-lived log handle handed to the bridge subprocess
+            )
             node = find_node_executable("node")
             if node is None:
                 raise RuntimeError(

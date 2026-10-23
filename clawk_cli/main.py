@@ -2286,7 +2286,7 @@ def _edit_home_md(path, action, seed_text=None):
         print(f"  {path}")
         return
     print(f"Opening {path} in {editor}...")
-    subprocess.run([editor, str(path)])
+    subprocess.run([editor, str(path)], check=False)
 
 
 def cmd_soul(args):
@@ -2968,13 +2968,15 @@ def _run_update_quiet(args, gateway_mode):
         git_cmd = ["git", "-c", "windows.appendAtomically=false"]
     # Same query the real update uses, fetched quietly, so the count matches.
     subprocess.run(
-        git_cmd + ["fetch", "origin"], cwd=PROJECT_ROOT, capture_output=True, text=True
+        git_cmd + ["fetch", "origin"], cwd=PROJECT_ROOT, capture_output=True, text=True,
+        check=False,
     )
     rv = subprocess.run(
         git_cmd + ["rev-list", f"HEAD..origin/{branch}", "--count"],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        check=False,
     )
     try:
         count = int(rv.stdout.strip())
@@ -2993,6 +2995,7 @@ def _run_update_quiet(args, gateway_mode):
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        check=False,
     )
     old_sha = (head.stdout or "").strip() if head.returncode == 0 else ""
 

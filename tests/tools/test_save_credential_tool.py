@@ -97,7 +97,7 @@ def test_requires_name_and_value(clawk_home):
 def test_tool_is_registered():
     """The tool self-registers and is discoverable under the credentials toolset."""
 
-    import tools.save_credential_tool  # noqa: F401 — triggers registration
+    import tools.save_credential_tool
 
     from tools.registry import registry
 

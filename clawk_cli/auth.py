@@ -2481,7 +2481,7 @@ def _tls_state_from_verify(verify: Any) -> dict[str, Any]:
 def resolve_gemini_oauth_runtime_credentials(
     *,
     force_refresh: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Resolve runtime OAuth creds for google-gemini-cli."""
     try:
         from agent.google_oauth import (
@@ -2520,7 +2520,7 @@ def resolve_gemini_oauth_runtime_credentials(
     }
 
 
-def get_gemini_oauth_auth_status() -> Dict[str, Any]:
+def get_gemini_oauth_auth_status() -> dict[str, Any]:
     """Return a status dict for `clawk auth list` / `clawk status`."""
     try:
         from agent.google_oauth import _credentials_path, load_credentials
@@ -2545,7 +2545,7 @@ def get_gemini_oauth_auth_status() -> Dict[str, Any]:
     }
 
 
-def _mark_google_gemini_cli_active(creds: Dict[str, Any]) -> None:
+def _mark_google_gemini_cli_active(creds: dict[str, Any]) -> None:
     """Set active_provider to google-gemini-cli in auth.json.
 
     The actual OAuth tokens live in the Google credential file managed by
@@ -2556,7 +2556,7 @@ def _mark_google_gemini_cli_active(creds: Dict[str, Any]) -> None:
     """
     with _auth_store_lock():
         auth_store = _load_auth_store()
-        state: Dict[str, Any] = {}
+        state: dict[str, Any] = {}
         if creds.get("email"):
             state["email"] = str(creds["email"])
         _save_provider_state(auth_store, "google-gemini-cli", state)
@@ -2699,12 +2699,12 @@ def _make_xai_callback_handler(
                 self.send_header("Access-Control-Allow-Private-Network", "true")
                 self.send_header("Vary", "Origin")
 
-        def do_OPTIONS(self) -> None:  # noqa: N802
+        def do_OPTIONS(self) -> None:
             self.send_response(204)
             self._maybe_write_cors_headers()
             self.end_headers()
 
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             parsed = urlparse(self.path)
             if parsed.path != expected_path:
                 self.send_response(404)
@@ -2787,7 +2787,7 @@ def _make_xai_callback_handler(
                 body = "<html><body><h1>xAI authorization received.</h1>You can close this tab.</body></html>"
             self.wfile.write(body.encode("utf-8"))
 
-        def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: Any) -> None:
             return
 
     return _XAICallbackHandler, result
@@ -2841,7 +2841,7 @@ def _xai_oauth_exchange_code_for_tokens(
     code_verifier: str,
     code_challenge: str,
     timeout_seconds: float = 20.0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """POST the authorization code to xAI's token endpoint and return
     the parsed JSON payload.
 
@@ -2916,7 +2916,7 @@ def _xai_oauth_exchange_code_for_tokens(
         # key fallback.  See #26847.
         if response.status_code == 403:
             raise AuthError(
-                f"xAI token exchange failed (HTTP 403)."
+                "xAI token exchange failed (HTTP 403)."
                 + (f" Response: {body}" if body else "")
                 + " This OAuth account is not authorized for xAI API"
                 " access — xAI may be restricting API/OAuth use to"

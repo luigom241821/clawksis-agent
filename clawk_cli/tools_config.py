@@ -759,7 +759,8 @@ def _npm_global_bin_dir(npm_bin: str) -> str:
 
     try:
         result = subprocess.run(
-            [npm_bin, "prefix", "-g"], capture_output=True, text=True, timeout=15
+            [npm_bin, "prefix", "-g"], capture_output=True, text=True, timeout=15,
+            check=False,
         )
     except Exception:
         return ""
@@ -823,7 +824,8 @@ def _install_npm_cli(
     _print_info(f"    Installing {label} (npm install -g {pkg})...")
     try:
         result = subprocess.run(
-            [npm_bin, "install", "-g", pkg], capture_output=True, text=True, timeout=600
+            [npm_bin, "install", "-g", pkg], capture_output=True, text=True, timeout=600,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         _print_warning(f"    {label} install timed out (>10min).")

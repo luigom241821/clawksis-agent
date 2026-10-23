@@ -118,7 +118,7 @@ def save_credential_tool(name: str, value: str) -> str:
 
 
 # --- Registry ---
-from tools.registry import registry  # noqa: E402
+from tools.registry import registry
 
 registry.register(
     name="save_credential",

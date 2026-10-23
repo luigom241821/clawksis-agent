@@ -277,7 +277,7 @@ def format_banner_version_label() -> str:
 
 def get_recent_commits(
     repo_dir: Optional[Path] = None, limit: int = 5
-) -> Optional[List[dict]]:
+) -> Optional[list[dict]]:
     """Return the most recent commits for the startup "what's new" panel.
 
     Each entry is ``{"hash": <short>, "subject": <str>, "date": <relative>}``.
@@ -303,12 +303,13 @@ def get_recent_commits(
             errors="replace",
             timeout=5,
             cwd=str(repo_dir),
+            check=False,
         )
     except Exception:
         return None
     if result.returncode != 0:
         return None
-    commits: List[dict] = []
+    commits: list[dict] = []
     for line in (result.stdout or "").splitlines():
         parts = line.split("\x1f")
         if len(parts) != 3:

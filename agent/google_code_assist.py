@@ -140,7 +140,7 @@ class CodeAssistError(RuntimeError):
         status_code: Optional[int] = None,
         response: Any = None,
         retry_after: Optional[float] = None,
-        details: Optional[Dict[str, Any]] = None,
+        details: Optional[dict[str, Any]] = None,
     ) -> None:
 
         super().__init__(message)
@@ -197,7 +197,7 @@ class ProjectIdRequiredError(CodeAssistError):
 # =============================================================================
 
 
-def _build_headers(access_token: str, *, user_agent_model: str = "") -> Dict[str, str]:
+def _build_headers(access_token: str, *, user_agent_model: str = "") -> dict[str, str]:
 
     ua = _GEMINI_CLI_USER_AGENT
 
@@ -214,7 +214,7 @@ def _build_headers(access_token: str, *, user_agent_model: str = "") -> Dict[str
     }
 
 
-def _client_metadata() -> Dict[str, str]:
+def _client_metadata() -> dict[str, str]:
     """Match Google's gemini-cli exactly — unrecognized metadata may be rejected."""
 
     return {
@@ -226,12 +226,12 @@ def _client_metadata() -> Dict[str, str]:
 
 def _post_json(
     url: str,
-    body: Dict[str, Any],
+    body: dict[str, Any],
     access_token: str,
     *,
     timeout: float = _DEFAULT_REQUEST_TIMEOUT,
     user_agent_model: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     data = json.dumps(body).encode("utf-8")
 
@@ -326,9 +326,9 @@ class CodeAssistProjectInfo:
 
     cloudaicompanion_project: str = ""  # Google-managed project (free tier)
 
-    allowed_tiers: List[str] = field(default_factory=list)
+    allowed_tiers: list[str] = field(default_factory=list)
 
-    raw: Dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 def load_code_assist(
@@ -347,7 +347,7 @@ def load_code_assist(
 
     """
 
-    body: Dict[str, Any] = {
+    body: dict[str, Any] = {
         "metadata": {
             "duetProject": project_id,
             **_client_metadata(),
@@ -394,7 +394,7 @@ def load_code_assist(
     return CodeAssistProjectInfo()
 
 
-def _parse_load_response(resp: Dict[str, Any]) -> CodeAssistProjectInfo:
+def _parse_load_response(resp: dict[str, Any]) -> CodeAssistProjectInfo:
 
     current_tier = resp.get("currentTier") or {}
 
@@ -406,7 +406,7 @@ def _parse_load_response(resp: Dict[str, Any]) -> CodeAssistProjectInfo:
 
     allowed = resp.get("allowedTiers") or []
 
-    allowed_ids: List[str] = []
+    allowed_ids: list[str] = []
 
     if isinstance(allowed, list):
         for t in allowed:
@@ -437,7 +437,7 @@ def onboard_user(
     tier_id: str,
     project_id: str = "",
     user_agent_model: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Call ``POST /v1internal:onboardUser`` to provision the user.
 
 
@@ -462,7 +462,7 @@ def onboard_user(
             "Set CLAWK_GEMINI_PROJECT_ID or GOOGLE_CLOUD_PROJECT."
         )
 
-    body: Dict[str, Any] = {
+    body: dict[str, Any] = {
         "tierId": tier_id,
         "metadata": _client_metadata(),
     }
@@ -528,7 +528,7 @@ class QuotaBucket:
 
     reset_time_iso: str = ""
 
-    raw: Dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 def retrieve_user_quota(
@@ -536,10 +536,10 @@ def retrieve_user_quota(
     *,
     project_id: str = "",
     user_agent_model: str = "",
-) -> List[QuotaBucket]:
+) -> list[QuotaBucket]:
     """Call ``POST /v1internal:retrieveUserQuota`` and parse ``buckets[]``."""
 
-    body: Dict[str, Any] = {}
+    body: dict[str, Any] = {}
 
     if project_id:
         body["project"] = project_id
@@ -550,7 +550,7 @@ def retrieve_user_quota(
 
     raw_buckets = resp.get("buckets") or []
 
-    buckets: List[QuotaBucket] = []
+    buckets: list[QuotaBucket] = []
 
     if not isinstance(raw_buckets, list):
         return buckets

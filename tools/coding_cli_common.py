@@ -62,7 +62,7 @@ def cli_available(binary: str) -> bool:
 def run_coding_cli(
     *,
     cli_label: str,
-    argv: List[str],
+    argv: list[str],
     workdir: Optional[str],
     timeout: Optional[int],
     prompt: str,
@@ -95,6 +95,7 @@ def run_coding_cli(
             timeout=eff_timeout,
             # Never inherit a stdin the CLI could block on waiting for input.
             stdin=subprocess.DEVNULL,
+            check=False,
         )
     except FileNotFoundError:
         return tool_result(

@@ -1346,7 +1346,7 @@ def cronjob(
     use_soul: Optional[bool] = None,
     use_user_md: Optional[bool] = None,
     use_memory: Optional[bool] = None,
-    fallback_models: Optional[Union[str, list]] = None,
+    fallback_models: Optional[str | list] = None,
     attach_to_session: Optional[bool] = None,
     monitor_script: Optional[str] = None,
     monitor_url: Optional[str] = None,
