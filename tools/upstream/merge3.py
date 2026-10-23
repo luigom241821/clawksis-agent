@@ -34,10 +34,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import json  # noqa: E402
-from sync import ROOT, STATE_FILE, match_eol, rebrand, show  # noqa: E402
-from mkbase import unmap_path  # noqa: E402
-from automerge import NOUS_ACTIVE  # noqa: E402
+import json
+from sync import ROOT, STATE_FILE, match_eol, rebrand, show
+from mkbase import unmap_path
+from automerge import NOUS_ACTIVE
 
 PENDING = HERE / "pending"
 
@@ -67,6 +67,7 @@ def ruff_canon(b: bytes) -> bytes:
         input=b.replace(b"\r\n", b"\n"),
         cwd=ROOT,
         capture_output=True,
+        check=False,
     )
     return res.stdout if res.returncode == 0 and res.stdout else b
 
@@ -104,6 +105,7 @@ def three_way(base: bytes, ours: bytes, theirs: bytes) -> tuple[bytes | None, in
                 str(dp / "t"),
             ],
             capture_output=True,
+            check=False,
         )
         if res.returncode < 0:
             return None, -1

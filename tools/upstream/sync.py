@@ -67,7 +67,9 @@ PATH_MAP = [
 # Reemplazos de contenido en el MISMO orden que tools/rebrand.sh del monorepo
 # (mas especifico primero). El orden importa: reproduce el transform historico
 # tal cual se aplico al fork, incluidas sus redundancias.
-_RAW = "https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts"
+_RAW = (
+    "https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts"
+)
 _PAGES = "https://samuelgradientai-sys.github.io/clawksis-agent"
 CONTENT_MAP = [
     # URLs del sitio de upstream -> equivalentes del fork (instalador en GitHub
@@ -78,8 +80,14 @@ CONTENT_MAP = [
     ("https://hermes-agent.nousresearch.com/install.cmd", f"{_RAW}/install.cmd"),
     ("https://hermes-agent.nousresearch.com/docs/", f"{_PAGES}/"),
     ("https://hermes-agent.nousresearch.com/docs", _PAGES),
-    ("https://hermes-agent.nousresearch.com/", "https://github.com/samuelgradientai-sys/clawksis-agent/"),
-    ("https://hermes-agent.nousresearch.com", "https://github.com/samuelgradientai-sys/clawksis-agent"),
+    (
+        "https://hermes-agent.nousresearch.com/",
+        "https://github.com/samuelgradientai-sys/clawksis-agent/",
+    ),
+    (
+        "https://hermes-agent.nousresearch.com",
+        "https://github.com/samuelgradientai-sys/clawksis-agent",
+    ),
     ("NousResearch/hermes-agent", "samuelgradientai-sys/clawksis-agent"),
     ("hermes_cli", "clawk_cli"),
     ("hermes_bootstrap", "clawk_bootstrap"),
@@ -251,6 +259,7 @@ def git(*args: str, check: bool = True) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        check=False,
     )
     if check and res.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} fallo:\n{res.stderr.strip()}")
@@ -263,6 +272,7 @@ def git_bytes(*args: str) -> bytes | None:
         cwd=ROOT,
         stdin=subprocess.DEVNULL,
         capture_output=True,
+        check=False,
     )
     return res.stdout if res.returncode == 0 else None
 
@@ -289,7 +299,7 @@ def rebrand(content: bytes, path: str) -> bytes:
     # imposibles en fuente) para que el blanket hermes->clawk no los corrompa.
     stash: dict[str, str] = {}
 
-    def _stash(m: "re.Match[str]") -> str:
+    def _stash(m: re.Match[str]) -> str:
         key = f"\x00MODELID{len(stash)}\x00"
         stash[key] = m.group(0)
         return key
@@ -332,7 +342,10 @@ def match_eol(new: bytes, like: bytes | None) -> bytes:
 
 def ensure_upstream() -> None:
     res = subprocess.run(
-        ["git", "remote", "get-url", "upstream"], cwd=ROOT, capture_output=True
+        ["git", "remote", "get-url", "upstream"],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
     )
     if res.returncode != 0:
         git("remote", "add", "upstream", UPSTREAM_URL)
@@ -341,7 +354,10 @@ def ensure_upstream() -> None:
 
 def rev_exists(rev: str) -> bool:
     res = subprocess.run(
-        ["git", "cat-file", "-e", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True
+        ["git", "cat-file", "-e", f"{rev}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
     )
     return res.returncode == 0
 
@@ -359,6 +375,7 @@ def fetch_rev(rev: str) -> None:
             cwd=ROOT,
             stdin=subprocess.DEVNULL,
             capture_output=True,
+            check=False,
         )
         if res.returncode == 0 and rev_exists(rev):
             return
@@ -379,6 +396,7 @@ def ensure_history(state: dict) -> None:
         cwd=ROOT,
         stdin=subprocess.DEVNULL,
         capture_output=True,
+        check=False,
     )
     if not rev_exists(last):
         raise RuntimeError(
@@ -399,6 +417,7 @@ def latest_release_tag() -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        check=False,
     )
     if res.returncode == 0 and res.stdout.strip():
         return res.stdout.strip()
@@ -471,10 +490,14 @@ def main() -> int:
         if ln.startswith("100755 ")
     }
 
+    written_py: list[str] = []
+
     def write_target(dest: Path, data: bytes, up_path: str) -> None:
         dest.write_bytes(data)
         if up_path in exec_paths:
             dest.chmod(dest.stat().st_mode | 0o111)
+        if dest.suffix == ".py":
+            written_py.append(str(dest))
 
     for status, up_path in changes:
         if any(fnmatch.fnmatch(up_path, pat) for pat in skip_patterns):
@@ -496,11 +519,13 @@ def main() -> int:
                 if args.apply:
                     dest.unlink()
             else:
-                diverged.append((
-                    fork_path,
-                    up_path,
-                    "upstream lo borra, fork lo modifico",
-                ))
+                diverged.append(
+                    (
+                        fork_path,
+                        up_path,
+                        "upstream lo borra, fork lo modifico",
+                    )
+                )
         elif ours is None:
             if base_r is None or status == "A":
                 added.append(fork_path)
@@ -508,11 +533,13 @@ def main() -> int:
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     write_target(dest, targ_r, up_path)
             else:
-                diverged.append((
-                    fork_path,
-                    up_path,
-                    "upstream lo modifica, fork lo elimino",
-                ))
+                diverged.append(
+                    (
+                        fork_path,
+                        up_path,
+                        "upstream lo modifica, fork lo elimino",
+                    )
+                )
         elif norm(ours) == norm(targ_r):
             already.append(fork_path)
         elif norm(ours) == norm(base_r):
@@ -573,6 +600,16 @@ def main() -> int:
         print(
             "  (aplicar cada .patch a mano sobre el archivo del fork y borrar pending/)\n"
         )
+
+    if args.apply and written_py:
+        # El CI del fork exige `ruff format --check .` (upstream no formatea su
+        # arbol): formatear lo que trae el sync para que no rompa el lint.
+        for i in range(0, len(written_py), 500):
+            subprocess.run(
+                ["ruff", "format", "--quiet", *written_py[i : i + 500]],
+                cwd=ROOT,
+                check=False,
+            )
 
     if args.apply:
         state["last_synced_commit"] = target_sha

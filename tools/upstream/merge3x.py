@@ -41,10 +41,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import json  # noqa: E402
-from sync import ROOT, STATE_FILE, rebrand, show  # noqa: E402
-from mkbase import unmap_path  # noqa: E402
-from automerge import NOUS_ACTIVE  # noqa: E402
+import json
+from sync import ROOT, STATE_FILE, rebrand, show
+from mkbase import unmap_path
+from automerge import NOUS_ACTIVE
 
 PENDING = HERE / "pending"
 
@@ -73,6 +73,7 @@ def ruff_canon(text: str) -> str:
         input=text.encode("utf-8"),
         cwd=ROOT,
         capture_output=True,
+        check=False,
     )
     if res.returncode == 0 and res.stdout:
         return res.stdout.decode("utf-8")
@@ -92,9 +93,12 @@ def py_trivia_lines(text: str) -> set[int]:
         return out
     for node in ast.walk(tree):
         body = getattr(node, "body", None)
-        if not isinstance(
-            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
-        ) or not body:
+        if (
+            not isinstance(
+                node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+            )
+            or not body
+        ):
             continue
         first = body[0]
         if (
@@ -221,9 +225,7 @@ def merge_text(
             a_chunk = A.keys[ia:am]
             b_chunk = T.keys[ib:bm]
             z_chunk = B.keys[iz:zm]
-            if a_chunk == b_chunk:
-                out += T.emit(ib, bm)
-            elif a_chunk == z_chunk:
+            if a_chunk == b_chunk or a_chunk == z_chunk:
                 out += T.emit(ib, bm)
             elif b_chunk == z_chunk:
                 out += A.emit(ia, am, cap=2)
@@ -370,9 +372,7 @@ def main() -> int:
         k: [] for k in ("merged", "conflict", "nocompile", "nous", "skip")
     }
     for fp in files:
-        st, text, n = merge_file(
-            fp, bmap.get(fp, base_rev), args.ours_rev, args.target
-        )
+        st, text, n = merge_file(fp, bmap.get(fp, base_rev), args.ours_rev, args.target)
         buckets[st].append(fp if st != "conflict" else f"{fp}\t{n}")
         if text is None:
             continue
@@ -396,9 +396,7 @@ def main() -> int:
         "skip": "SKIPPED",
     }
     for k, v in buckets.items():
-        (PENDING / f"MERGE3X_{names[k]}.txt").write_text(
-            "\n".join(v), encoding="utf-8"
-        )
+        (PENDING / f"MERGE3X_{names[k]}.txt").write_text("\n".join(v), encoding="utf-8")
     return 0
 
 

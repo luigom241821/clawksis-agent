@@ -75,12 +75,14 @@ def resolve(
         if _key(ours) == _key(theirs):
             pick = "theirs"
         elif prefer == "theirs":
-            if respect_del and not _key(ours):
-                pick = "ours"
-            elif (
-                nous_guard
-                and NOUS_TEXT.search("\n".join(theirs))
-                and not NOUS_TEXT.search("\n".join(ours))
+            if (
+                respect_del
+                and not _key(ours)
+                or (
+                    nous_guard
+                    and NOUS_TEXT.search("\n".join(theirs))
+                    and not NOUS_TEXT.search("\n".join(ours))
+                )
             ):
                 pick = "ours"
         stats[pick] += 1
