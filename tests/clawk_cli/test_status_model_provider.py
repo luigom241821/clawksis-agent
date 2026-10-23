@@ -1,5 +1,6 @@
 """Tests for clawk_cli.status model/provider display."""
 
+import subprocess
 from types import SimpleNamespace
 
 

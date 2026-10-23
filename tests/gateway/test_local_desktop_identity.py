@@ -29,7 +29,11 @@ class _Transport:
         pass
 
 
-async def _connect(tmp_path, monkeypatch, *, native=True, config=None):
+# Clawksis is BYOK: the Nous free tier (welcome trial) is off unless config.yaml opts in.
+FREE_TIER_OPT_IN = "nous:\n  guest: true\n"
+
+
+async def _connect(tmp_path, monkeypatch, *, native=True, config=None, free_tier=True):
     from gateway.config import GatewayConfig
     from gateway.session import SessionStore
     from gateway.session_authority import initialize_session_authority
@@ -38,6 +42,7 @@ async def _connect(tmp_path, monkeypatch, *, native=True, config=None):
 
     home = tmp_path / ".clawk"
     home.mkdir()
+    config = (FREE_TIER_OPT_IN if free_tier else "") + (config or "")
     if config:
         (home / "config.yaml").write_text(config, encoding="utf-8")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -131,6 +136,26 @@ async def test_a_fresh_install_is_offered_onboarding_once_the_desktop_says_it_is
         assert after["result"]["run"] is True and after["result"]["eligible"] is True, (
             after
         )
+    finally:
+        await conn.connection.close()
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_install_without_the_free_tier_opt_in_is_not_offered_onboarding(
+    tmp_path, monkeypatch
+):
+    """Clawksis is BYOK: on the stock config the local Desktop gets no welcome trial, so a fresh
+    install with no provider is not eligible for onboarding."""
+    conn = await _connect(tmp_path, monkeypatch, free_tier=False)
+    try:
+        await _request(
+            conn,
+            1,
+            "client.capabilities",
+            {"server_requests": True, "desktop_local": True},
+        )
+        state = await _request(conn, 2, "onboarding.state", {"assume_fresh": True})
+        assert state["result"]["eligible"] is False
     finally:
         await conn.connection.close()
 
@@ -430,7 +455,8 @@ async def test_a_chat_opened_on_the_trial_moves_to_the_provider_the_user_connect
         (
             Path(conn.authority.db.db_path).parent / "config.yaml"
         ).write_text(  # the owning profile's
-            "model:\n  provider: openrouter\n  default: anthropic/claude-sonnet-4\n",
+            FREE_TIER_OPT_IN
+            + "model:\n  provider: openrouter\n  default: anthropic/claude-sonnet-4\n",
             encoding="utf-8",
         )
         assert next_model() == "anthropic/claude-sonnet-4"

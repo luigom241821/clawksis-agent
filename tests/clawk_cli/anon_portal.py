@@ -21,8 +21,15 @@ PORTAL = "https://portal.example.test"
 def make_jwt(**claims) -> str:
     def seg(obj):
         return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
-    payload = {"sub": "nas_user:1", "client_id": "nas-anonymous", "account_tier": "anonymous",
-               "scope": "inference:invoke", "exp": int(time.time()) + 900, **claims}
+
+    payload = {
+        "sub": "nas_user:1",
+        "client_id": "nas-anonymous",
+        "account_tier": "anonymous",
+        "scope": "inference:invoke",
+        "exp": int(time.time()) + 900,
+        **claims,
+    }
     return f"{seg({'alg': 'RS256'})}.{seg(payload)}.sig"
 
 
@@ -65,7 +72,9 @@ class FakePortal:
         self.calls.append((request.method, path))
         if self.raise_transport is not None:
             raise self.raise_transport
-        if path.startswith("/api/anonymous/") and not request.headers.get("x-anonymous-api-secret"):
+        if path.startswith("/api/anonymous/") and not request.headers.get(
+            "x-anonymous-api-secret"
+        ):
             return httpx.Response(401, json={"error": "invalid_shared_secret"})
         if self.gate_closed:
             return httpx.Response(401, json={"error": "invalid_shared_secret"})
@@ -74,40 +83,87 @@ class FakePortal:
             if self.create_response is not None:
                 return self.create_response
             self.minted += 1
-            return httpx.Response(201, json={"user_id": f"nas_user:{self.minted}", "org_id": "nas_org:1",
-                                             "token": f"anon_{self.minted:04d}", "idle_ttl_days": 14})
+            return httpx.Response(
+                201,
+                json={
+                    "user_id": f"nas_user:{self.minted}",
+                    "org_id": "nas_org:1",
+                    "token": f"anon_{self.minted:04d}",
+                    "idle_ttl_days": 14,
+                },
+            )
         if path == "/api/anonymous/challenge/status":
             if self.challenge_status_errors:
-                return httpx.Response(self.challenge_status_errors.pop(0), json={"error": "blip"})
+                return httpx.Response(
+                    self.challenge_status_errors.pop(0), json={"error": "blip"}
+                )
             if self.challenge_statuses:
-                return httpx.Response(200, json={"status": self.challenge_statuses.pop(0)})
+                return httpx.Response(
+                    200, json={"status": self.challenge_statuses.pop(0)}
+                )
             if self.challenge_never_clears:
                 return httpx.Response(200, json={"status": "pending"})
             self.challenge_required = False
             return httpx.Response(200, json={"status": "none"})
         if path == "/api/anonymous/token":
             self.token_requests.append(
-                {"body": json.loads(request.content), "user_agent": request.headers.get("user-agent")})
+                {
+                    "body": json.loads(request.content),
+                    "user_agent": request.headers.get("user-agent"),
+                }
+            )
             if self.token_response is not None:
                 return self.token_response
-            connectors = self.honours_purpose and json.loads(request.content).get("purpose") == "connectors"
+            connectors = (
+                self.honours_purpose
+                and json.loads(request.content).get("purpose") == "connectors"
+            )
             token = json.loads(request.content)["token"]
-            if token in self.dead_tokens:      # NAS validates the credential before any gate
+            if (
+                token in self.dead_tokens
+            ):  # NAS validates the credential before any gate
                 return httpx.Response(404, json={"error": "unknown_token"})
             if self.challenge_required and not connectors:
-                return httpx.Response(428, json={
-                    "error": "challenge_required", "message": "A quick check first.",
-                    "challenges": [{"type": "browser", "url": self.challenge_url, "state": "pending",
-                                    "required": True, "expires_in": 600, "interval": 2}],
-                    "fallback_url": f"{PORTAL}/login"})
-            body = {"access_token": make_jwt(**({"scope": "connectors:invoke"} if connectors else {})),
-                    "token_type": "Bearer", "expires_in": 900,
-                    "user_id": "nas_user:1", "org_id": "nas_org:1"}
+                return httpx.Response(
+                    428,
+                    json={
+                        "error": "challenge_required",
+                        "message": "A quick check first.",
+                        "challenges": [
+                            {
+                                "type": "browser",
+                                "url": self.challenge_url,
+                                "state": "pending",
+                                "required": True,
+                                "expires_in": 600,
+                                "interval": 2,
+                            }
+                        ],
+                        "fallback_url": f"{PORTAL}/login",
+                    },
+                )
+            body = {
+                "access_token": make_jwt(
+                    **({"scope": "connectors:invoke"} if connectors else {})
+                ),
+                "token_type": "Bearer",
+                "expires_in": 900,
+                "user_id": "nas_user:1",
+                "org_id": "nas_org:1",
+            }
             if self.inference_base_url:
                 body["inference_base_url"] = self.inference_base_url
             if self.optional_challenge and not connectors:
-                body["challenges"] = [{"type": "browser", "url": self.challenge_url, "state": "pending",
-                                       "required": False, "expires_in": 600, "interval": 2}]
+                body["challenges"] = [
+                    {
+                        "type": "browser",
+                        "url": self.challenge_url,
+                        "state": "pending",
+                        "required": False,
+                        "expires_in": 600,
+                        "interval": 2,
+                    }
+                ]
             return httpx.Response(200, json=body)
         return httpx.Response(500, json={"error": f"unexpected {path}"})
 
@@ -124,7 +180,12 @@ def install_portal(monkeypatch, tmp_path, fake: FakePortal | None = None) -> Fak
     monkeypatch.setenv("CLAWK_PORTAL_BASE_URL", PORTAL)
     monkeypatch.setenv("CLAWK_ANON_API_SECRET", "test-secret")
     monkeypatch.setenv("CLAWK_SHARED_AUTH_DIR", str(tmp_path / "shared-store"))
-    for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "NOUS_API_KEY"):
+    for var in (
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "NOUS_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
     real_client = httpx.Client
 
@@ -133,11 +194,15 @@ def install_portal(monkeypatch, tmp_path, fake: FakePortal | None = None) -> Fak
             kw.pop("verify", None)
             kw["transport"] = httpx.MockTransport(fake.handler)
             super().__init__(*a, **kw)
+
     monkeypatch.setattr(httpx, "Client", _RoutedClient)
-    monkeypatch.setattr("agent.bedrock_adapter.has_aws_credentials", lambda *_a, **_kw: False)
+    monkeypatch.setattr(
+        "agent.bedrock_adapter.has_aws_credentials", lambda *_a, **_kw: False
+    )
     anon_auth.reset_mint_memo_for_tests()
     free_tier_bootstrap.reset_for_tests()
     from clawk_cli import anon_challenge
+
     anon_challenge.reset_for_tests()
     monkeypatch.setattr(anon_challenge, "_sleep", lambda _seconds: None)
     monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
@@ -147,19 +212,47 @@ def install_portal(monkeypatch, tmp_path, fake: FakePortal | None = None) -> Fak
     return fake
 
 
+def opt_in_free_tier() -> None:
+    """Set ``nous.guest: true`` in the active profile's config.yaml, keeping the rest of it.
+
+    Clawksis is BYOK: the Nous free tier (guest identity, welcome trial, hosted connectors) is off
+    unless the user opts in, so a test of that opt-in path turns it on first."""
+    import clawk_yaml as yaml
+    from clawk_constants import get_clawk_home
+
+    path = get_clawk_home() / "config.yaml"
+    config = (
+        yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
+    ) or {}
+    nous = config.get("nous") if isinstance(config.get("nous"), dict) else {}
+    config["nous"] = {**nous, "guest": True}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+
+
 def as_local_desktop_backend(monkeypatch) -> None:
     """Every activity in this test is work for the local Desktop (``process_identity.serving_local_desktop``),
     threads included."""
     from contextvars import ContextVar
     from clawk_cli import process_identity
-    monkeypatch.setattr(process_identity, "_SERVING_LOCAL_DESKTOP", ContextVar("serving_local_desktop_test", default=True))
+
+    monkeypatch.setattr(
+        process_identity,
+        "_SERVING_LOCAL_DESKTOP",
+        ContextVar("serving_local_desktop_test", default=True),
+    )
 
 
 def off_local_desktop(monkeypatch) -> None:
     """From here on the activity is not the local Desktop's: a CLI shell beside it, another client."""
     from contextvars import ContextVar
     from clawk_cli import process_identity
-    monkeypatch.setattr(process_identity, "_SERVING_LOCAL_DESKTOP", ContextVar("serving_local_desktop_test", default=False))
+
+    monkeypatch.setattr(
+        process_identity,
+        "_SERVING_LOCAL_DESKTOP",
+        ContextVar("serving_local_desktop_test", default=False),
+    )
 
 
 def claimed_trial(monkeypatch) -> dict:

@@ -619,18 +619,10 @@ async def test_the_drain_never_touches_the_shared_executor(monkeypatch):
     runner._login_exec.shutdown(wait=True)
 
 
-@pytest.mark.asyncio
-async def test_login_dispatches_mid_turn():
-    runner = object.__new__(GatewayRunner)
-    runner._handle_login_command = AsyncMock(return_value="started")
-    command = resolve_command("login")
-    event = _event()
-
-    assert (
-        await runner._dispatch_busy_slash_command(event, command, "", event.source)
-        == "started"
-    )
-    runner._handle_login_command.assert_awaited_once_with(event)
+def test_login_is_not_a_registered_command():
+    """Clawksis is BYOK: the Nous sign-in ``/login`` is dropped from the command registry (upstream
+    dispatched it mid-turn), so no surface offers or routes it."""
+    assert resolve_command("login") is None
 
 
 @pytest.mark.asyncio

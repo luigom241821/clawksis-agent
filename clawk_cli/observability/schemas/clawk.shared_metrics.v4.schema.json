@@ -3608,11 +3608,14 @@
           "properties": {
             "toolset": {
               "enum": [
+                "agent_comms",
                 "bot_room",
                 "browser",
                 "catalog",
                 "clarify",
+                "claude_code_cli",
                 "code_execution",
+                "codex_cli",
                 "coding",
                 "computer_use",
                 "connections",
@@ -3653,7 +3656,9 @@
                 "image_gen",
                 "kanban",
                 "memory",
+                "mirofish",
                 "onboarding",
+                "opencode_cli",
                 "project",
                 "safe",
                 "search",

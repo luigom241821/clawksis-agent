@@ -1023,7 +1023,9 @@ WELCOME_TIER_GATE_REASONS = frozenset({"model_not_free", "feature_not_free"})
 # Gateway messages (lowercased substrings) for a request on the wrong host or a dark tier.
 _WELCOME_ROUTE_REFUSALS = (
     ("anonymous accounts must use", "anon_on_paid_host"),
-    ("serves anonymous clawk agent accounts only", "named_on_welcome_host"),
+    # The Nous gateway's sentence names its own upstream product, which the fork's rebrand turned
+    # into a needle the wire never sends: match the brand-free part.
+    ("serves anonymous ", "named_on_welcome_host"),
     ("anonymous accounts are not accepted", "tier_disabled"),
     # The gateway's answer to an expired or unreadable bearer: the credential, not the tier. A
     # retry that waited out a long rate limit outlives the 15-minute free-tier JWT and lands here.

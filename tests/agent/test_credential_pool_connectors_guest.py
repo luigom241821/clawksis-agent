@@ -6,7 +6,12 @@ drop that row instead of handing its welcome-host token to the runtime.
 """
 
 from clawk_cli import anon_auth
-from tests.clawk_cli.anon_portal import claimed_trial, install_portal, off_local_desktop
+from tests.clawk_cli.anon_portal import (
+    claimed_trial,
+    install_portal,
+    off_local_desktop,
+    opt_in_free_tier,
+)
 
 
 def test_a_claimed_guest_pool_row_serves_every_surface(monkeypatch, tmp_path):
@@ -14,6 +19,7 @@ def test_a_claimed_guest_pool_row_serves_every_surface(monkeypatch, tmp_path):
     from clawk_cli.auth_nous import resolve_nous_runtime_credentials
 
     install_portal(monkeypatch, tmp_path)
+    opt_in_free_tier()  # Clawksis is BYOK: the free tier is off until nous.guest: true
     claimed_trial(monkeypatch)
     resolve_nous_runtime_credentials()  # the claimed guest now carries an inference token
     assert any(e.source == "device_code" for e in load_pool("nous").entries())

@@ -262,6 +262,8 @@ def test_read_nous_provider_state_falls_back_to_global_root_for_share_auth_profi
     root = tmp_path / ".clawk"
     profile = root / "profiles" / "work"
     profile.mkdir(parents=True)
+    # Clawksis is BYOK: a free-tier identity counts only once the profile opts in.
+    (profile / "config.yaml").write_text("nous:\n  guest: true\n", encoding="utf-8")
     (root / "auth.json").write_text(
         json.dumps(
             {

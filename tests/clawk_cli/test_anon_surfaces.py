@@ -29,7 +29,11 @@ from clawk_cli import (
 )
 from clawk_cli.auth import _load_auth_store
 from clawk_constants import get_clawk_home
-from tests.clawk_cli.anon_portal import as_local_desktop_backend, off_local_desktop
+from tests.clawk_cli.anon_portal import (
+    as_local_desktop_backend,
+    off_local_desktop,
+    opt_in_free_tier,
+)
 
 WELCOME = "https://welcome-api.nousresearch.com/v1"
 # Words that must never appear on a user-facing free-tier surface.
@@ -97,6 +101,7 @@ def isolated_store(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_SHARED_AUTH_DIR", str(tmp_path / "shared-store"))
     # The welcome trial carries inference only on the desktop's local backend.
     as_local_desktop_backend(monkeypatch)
+    opt_in_free_tier()  # Clawksis is BYOK: the free tier is off until nous.guest: true
     for var in (
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",

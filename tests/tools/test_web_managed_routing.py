@@ -8,6 +8,11 @@ import pytest
 import httpx
 
 
+# Clawksis defaults ``web.search_backend`` to keyless ddgs, which outranks ``web.backend``; these
+# tests drive the dormant managed (Nous) routing, so they clear it the way upstream's stock config has.
+STOCK_UPSTREAM_SEARCH = {"search_backend": ""}
+
+
 @pytest.fixture
 def local_gateway(monkeypatch):
     from tools import managed_tool_gateway
@@ -110,7 +115,12 @@ def test_only_managed_search_may_use_billed_fallback(
     atomic_config_write(
         tmp_path / "config.yaml",
         {
-            "web": {**selection, "keyless_rescue": False, "cache_enabled": True},
+            "web": {
+                **STOCK_UPSTREAM_SEARCH,
+                **selection,
+                "keyless_rescue": False,
+                "cache_enabled": True,
+            },
         },
     )
     if direct_key:
@@ -152,6 +162,22 @@ def test_only_managed_search_may_use_billed_fallback(
             )
 
 
+@pytest.mark.parametrize("web", [{}, {"backend": "nous"}], ids=["unset", "nous"])
+def test_the_stock_config_searches_with_ddgs_not_the_managed_gateway(
+    monkeypatch, tmp_path, local_gateway, web
+):
+    """Clawksis is BYOK: even an entitled Nous identity with ``web.backend: nous`` searches with the
+    keyless ddgs default unless ``web.search_backend`` is changed."""
+    from clawk_cli.config import atomic_config_write
+    from tools import web_tools
+
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
+    atomic_config_write(tmp_path / "config.yaml", {"web": web})
+
+    assert web_tools._get_search_backend() == "ddgs"
+    assert local_gateway == []
+
+
 def test_managed_search_without_identity_names_the_gateway(
     monkeypatch, tmp_path, local_gateway
 ):
@@ -161,7 +187,8 @@ def test_managed_search_without_identity_names_the_gateway(
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     atomic_config_write(
-        tmp_path / "config.yaml", {"web": {"backend": "nous", "keyless_rescue": False}}
+        tmp_path / "config.yaml",
+        {"web": {**STOCK_UPSTREAM_SEARCH, "backend": "nous", "keyless_rescue": False}},
     )
     monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
     monkeypatch.delenv("TOOL_GATEWAY_USER_TOKEN", raising=False)
@@ -185,7 +212,8 @@ def test_unentitled_managed_search_gets_fast_search_but_no_billed_fallback(
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     atomic_config_write(
-        tmp_path / "config.yaml", {"web": {"backend": "nous", "keyless_rescue": False}}
+        tmp_path / "config.yaml",
+        {"web": {**STOCK_UPSTREAM_SEARCH, "backend": "nous", "keyless_rescue": False}},
     )
     monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
     monkeypatch.setattr(

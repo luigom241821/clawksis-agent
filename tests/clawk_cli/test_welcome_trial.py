@@ -6,20 +6,32 @@ import contextlib
 import pytest
 
 from clawk_cli import anon_auth, install_state, welcome_trial
-from tests.clawk_cli.anon_portal import as_local_desktop_backend, claimed_trial, install_portal, off_local_desktop
+from tests.clawk_cli.anon_portal import (
+    as_local_desktop_backend,
+    claimed_trial,
+    install_portal,
+    off_local_desktop,
+    opt_in_free_tier,
+)
 
 
 @pytest.fixture
 def portal(monkeypatch, tmp_path):
-    return install_portal(monkeypatch, tmp_path)
+    fake = install_portal(monkeypatch, tmp_path)
+    opt_in_free_tier()  # Clawksis is BYOK: the free tier is off until nous.guest: true
+    return fake
 
 
-def test_a_first_install_on_the_local_desktop_backend_claims_the_trial(portal, monkeypatch):
+def test_a_first_install_on_the_local_desktop_backend_claims_the_trial(
+    portal, monkeypatch
+):
     state = claimed_trial(monkeypatch)
 
     assert state[anon_auth.WELCOME_CLAIM_FLAG] is True
     assert anon_auth.free_inference_active()
-    assert install_state.existing_install()  # the machine is marked: never claimed twice here
+    assert (
+        install_state.existing_install()
+    )  # the machine is marked: never claimed twice here
     assert welcome_trial.claim_blocker() is not None
     assert portal.creates() == 1
 
@@ -27,6 +39,7 @@ def test_a_first_install_on_the_local_desktop_backend_claims_the_trial(portal, m
 def test_the_claim_is_stamped_by_the_mint_write_itself(portal, monkeypatch):
     def lost_second_write(_flag):
         raise OSError("disk full")
+
     monkeypatch.setattr(anon_auth, "set_guest_flag", lost_second_write)
     as_local_desktop_backend(monkeypatch)
 
@@ -38,16 +51,34 @@ def test_the_claim_is_stamped_by_the_mint_write_itself(portal, monkeypatch):
 
 BLOCKED = {
     "the CLI": lambda mp, home: None,
-    "an SSH backend": lambda mp, home: (mp.setenv("CLAWK_DESKTOP", "1"), mp.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)),
-    "guests switched off": lambda mp, home: (as_local_desktop_backend(mp),
-                                              (home / "config.yaml").write_text("nous:\n  guest: false\n", encoding="utf-8")),
-    "a provider key": lambda mp, home: (as_local_desktop_backend(mp), mp.setenv("OPENROUTER_API_KEY", "sk-or-test")),
-    "a used machine": lambda mp, home: (as_local_desktop_backend(mp), install_state.mark_machine_used()),
+    "an SSH backend": lambda mp, home: (
+        mp.setenv("CLAWK_DESKTOP", "1"),
+        mp.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False),
+    ),
+    "guests switched off": lambda mp, home: (
+        as_local_desktop_backend(mp),
+        (home / "config.yaml").write_text("nous:\n  guest: false\n", encoding="utf-8"),
+    ),
+    # Clawksis is BYOK: the stock config (no nous.guest) never claims the trial.
+    "the stock config": lambda mp, home: (
+        as_local_desktop_backend(mp),
+        (home / "config.yaml").unlink(missing_ok=True),
+    ),
+    "a provider key": lambda mp, home: (
+        as_local_desktop_backend(mp),
+        mp.setenv("OPENROUTER_API_KEY", "sk-or-test"),
+    ),
+    "a used machine": lambda mp, home: (
+        as_local_desktop_backend(mp),
+        install_state.mark_machine_used(),
+    ),
 }
 
 
 @pytest.mark.parametrize("case", list(BLOCKED))
-def test_the_trial_is_never_claimed_outside_a_first_desktop_install(portal, monkeypatch, case):
+def test_the_trial_is_never_claimed_outside_a_first_desktop_install(
+    portal, monkeypatch, case
+):
     from clawk_constants import get_clawk_home
 
     BLOCKED[case](monkeypatch, get_clawk_home())
@@ -64,6 +95,7 @@ def test_a_connector_guest_neither_claims_nor_carries_inference(portal, monkeypa
     assert welcome_trial.claim_desktop_free_tier() is None
     assert not anon_auth.free_inference_active()
     from clawk_cli.auth import resolve_nous_access_token
+
     resolve_nous_access_token()
     assert [r["body"]["purpose"] for r in portal.token_requests] == ["connectors"]
 
@@ -93,13 +125,19 @@ def test_a_lost_claim_is_not_replaced(portal, monkeypatch):
     assert portal.creates() == 1
 
 
-def test_a_connector_guest_adopted_from_the_shared_store_carries_no_trial(portal, monkeypatch):
+def test_a_connector_guest_adopted_from_the_shared_store_carries_no_trial(
+    portal, monkeypatch
+):
     from clawk_cli.auth import _load_auth_store, _save_auth_store
 
     as_local_desktop_backend(monkeypatch)
-    anon_auth.ensure_portal_identity(explicit=True)  # connector mint: welcome_claim False, mirrored
+    anon_auth.ensure_portal_identity(
+        explicit=True
+    )  # connector mint: welcome_claim False, mirrored
     store = _load_auth_store()
-    store["providers"].pop("nous")  # a profile whose own identity differs adopts the shared one
+    store["providers"].pop(
+        "nous"
+    )  # a profile whose own identity differs adopts the shared one
     _save_auth_store(store)
 
     adopted = anon_auth.ensure_portal_identity(explicit=True)
@@ -111,13 +149,20 @@ def test_a_connector_guest_adopted_from_the_shared_store_carries_no_trial(portal
 
 LOSSES = {
     "reaped": (lambda: anon_auth.clear_dead_guest("anon_credential_dead"), 1),
-    "replaced_by_connector": (lambda: (anon_auth.clear_dead_guest("anon_credential_dead"),
-                                       anon_auth.ensure_portal_identity(explicit=True)), 2),
+    "replaced_by_connector": (
+        lambda: (
+            anon_auth.clear_dead_guest("anon_credential_dead"),
+            anon_auth.ensure_portal_identity(explicit=True),
+        ),
+        2,
+    ),
 }
 
 
 @pytest.mark.parametrize("loss", list(LOSSES))
-def test_a_lost_trial_is_never_claimed_again_after_a_relaunch(portal, monkeypatch, loss):
+def test_a_lost_trial_is_never_claimed_again_after_a_relaunch(
+    portal, monkeypatch, loss
+):
     from clawk_cli import free_tier_bootstrap
     from clawk_cli.auth import resolve_provider
     from clawk_cli.auth_constants import AuthError
@@ -140,9 +185,12 @@ def test_a_lost_trial_is_never_claimed_again_after_a_relaunch(portal, monkeypatc
     assert (record.provider_configured, record.free_tier_account) == (False, False)
 
 
-
 def test_a_leftover_guest_pool_row_is_not_reported_as_a_nous_login(portal, monkeypatch):
-    from clawk_cli.auth import _load_auth_store, _save_auth_store, resolve_nous_runtime_credentials
+    from clawk_cli.auth import (
+        _load_auth_store,
+        _save_auth_store,
+        resolve_nous_runtime_credentials,
+    )
     from clawk_cli.auth_nous import get_nous_auth_status_local
 
     claimed_trial(monkeypatch)
@@ -155,24 +203,38 @@ def test_a_leftover_guest_pool_row_is_not_reported_as_a_nous_login(portal, monke
     assert get_nous_auth_status_local()["logged_in"] is False
 
 
-@pytest.mark.parametrize("desktop", [True, False], ids=["local_desktop_backend", "elsewhere"])
-def test_a_connector_guest_pinned_to_nous_gets_no_inference_token(portal, monkeypatch, desktop):
+@pytest.mark.parametrize(
+    "desktop", [True, False], ids=["local_desktop_backend", "elsewhere"]
+)
+def test_a_connector_guest_pinned_to_nous_gets_no_inference_token(
+    portal, monkeypatch, desktop
+):
     from clawk_cli.auth_constants import AuthError
     from clawk_cli.runtime_provider import resolve_runtime_provider
     from clawk_constants import get_clawk_home
 
     if desktop:
         as_local_desktop_backend(monkeypatch)
-    anon_auth.ensure_portal_identity(explicit=True)  # a connector action's guest, never claimed
-    (get_clawk_home() / "config.yaml").write_text("model:\n  provider: nous\n  default: nous/welcome\n",
-                                                   encoding="utf-8")
+    anon_auth.ensure_portal_identity(
+        explicit=True
+    )  # a connector action's guest, never claimed
+    (get_clawk_home() / "config.yaml").write_text(
+        "nous:\n  guest: true\nmodel:\n  provider: nous\n  default: nous/welcome\n",
+        encoding="utf-8",
+    )
     with contextlib.suppress(AuthError):
         resolve_runtime_provider(requested="nous")
 
-    assert [r["body"].get("purpose") for r in portal.token_requests if r["body"].get("purpose") != "connectors"] == []
+    assert [
+        r["body"].get("purpose")
+        for r in portal.token_requests
+        if r["body"].get("purpose") != "connectors"
+    ] == []
 
 
-def test_the_token_seam_refuses_an_inference_token_to_a_guest_without_the_trial(portal, monkeypatch):
+def test_the_token_seam_refuses_an_inference_token_to_a_guest_without_the_trial(
+    portal, monkeypatch
+):
     import httpx
 
     from clawk_cli.auth_constants import AuthError
@@ -182,14 +244,21 @@ def test_the_token_seam_refuses_an_inference_token_to_a_guest_without_the_trial(
     with httpx.Client() as client, pytest.raises(AuthError):
         anon_auth.refresh_guest_state(state, client, purpose="inference")
 
-    assert not [r for r in portal.token_requests if r["body"].get("purpose") != "connectors"]
+    assert not [
+        r for r in portal.token_requests if r["body"].get("purpose") != "connectors"
+    ]
 
 
 def _root_run():
     from clawk_cli.config_effective import load_user_config_effective
     from clawk_constants import get_default_clawk_root
 
-    section = load_user_config_effective(get_default_clawk_root() / "config.yaml").get("onboarding") or {}
+    section = (
+        load_user_config_effective(get_default_clawk_root() / "config.yaml").get(
+            "onboarding"
+        )
+        or {}
+    )
     return section.get("run")
 
 
@@ -202,7 +271,9 @@ def _relaunch():
 
 
 @pytest.mark.parametrize("used", [False, True], ids=["fresh", "used"])
-def test_the_first_desktop_boot_records_that_onboarding_is_due(portal, monkeypatch, used):
+def test_the_first_desktop_boot_records_that_onboarding_is_due(
+    portal, monkeypatch, used
+):
     from clawk_cli.onboarding_run import set_run
 
     as_local_desktop_backend(monkeypatch)
@@ -222,8 +293,8 @@ def test_a_missed_first_launch_stays_due_and_keeps_the_trial(portal, monkeypatch
     from clawk_constants import get_clawk_home
 
     as_local_desktop_backend(monkeypatch)
-    _relaunch()                                         # first boot; the app never opened onboarding
-    _chat(get_clawk_home() / "state.db", "anthropic/claude")   # then the user chatted
+    _relaunch()  # first boot; the app never opened onboarding
+    _chat(get_clawk_home() / "state.db", "anthropic/claude")  # then the user chatted
     install_state.probe.cache_clear()
 
     assert install_state.probe().existing
@@ -233,19 +304,26 @@ def test_a_missed_first_launch_stays_due_and_keeps_the_trial(portal, monkeypatch
     assert welcome_trial.claim_blocker() == "a Nous identity exists"
 
 
-def test_a_claim_cut_off_before_its_marker_write_never_claims_twice(portal, monkeypatch):
+def test_a_claim_cut_off_before_its_marker_write_never_claims_twice(
+    portal, monkeypatch
+):
     as_local_desktop_backend(monkeypatch)
-    _relaunch()                                         # first boot: due, the trial reserved
+    _relaunch()  # first boot: due, the trial reserved
     mark = install_state.mark_machine_used
 
     def die():
         raise RuntimeError("the process died here")
-    monkeypatch.setattr(install_state, "mark_machine_used", die)  # the stamped guest is saved, then the crash
+
+    monkeypatch.setattr(
+        install_state, "mark_machine_used", die
+    )  # the stamped guest is saved, then the crash
     with pytest.raises(RuntimeError):
         welcome_trial.claim_desktop_free_tier()
     monkeypatch.setattr(install_state, "mark_machine_used", mark)
     _relaunch()
-    anon_auth.clear_dead_guest("anon_credential_dead")   # the claimed guest is reaped later
+    anon_auth.clear_dead_guest(
+        "anon_credential_dead"
+    )  # the claimed guest is reaped later
 
     assert welcome_trial.claim_desktop_free_tier() is None
     assert portal.creates() == 1
@@ -257,11 +335,17 @@ def test_two_installs_claiming_at_once_mint_one_trial(portal, monkeypatch, tmp_p
     import threading
 
     from clawk_cli import auth_nous
-    from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        get_clawk_home,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     as_local_desktop_backend(monkeypatch)
-    _relaunch()                                          # the trial is reserved for this OS user
-    monkeypatch.setattr(auth_nous, "_nous_shared_auth_dir", lambda: get_clawk_home() / "shared-nous")
+    _relaunch()  # the trial is reserved for this OS user
+    monkeypatch.setattr(
+        auth_nous, "_nous_shared_auth_dir", lambda: get_clawk_home() / "shared-nous"
+    )
     canary_root = tmp_path / "clawk-canary"
     canary_root.mkdir()
     canary: dict = {}
@@ -275,14 +359,22 @@ def test_two_installs_claiming_at_once_mint_one_trial(portal, monkeypatch, tmp_p
             reset_clawk_home_override(token)
             canary_done.set()
 
-    stable, canary_thread = threading.current_thread(), threading.Thread(target=canary_claims)
+    stable, canary_thread = (
+        threading.current_thread(),
+        threading.Thread(target=canary_claims),
+    )
     real_mint = anon_auth.ensure_portal_identity
 
     def stable_mints(**kwargs):
-        if threading.current_thread() is stable and not canary_thread.is_alive() and not canary_done.is_set():
+        if (
+            threading.current_thread() is stable
+            and not canary_thread.is_alive()
+            and not canary_done.is_set()
+        ):
             canary_thread.start()
-            canary_done.wait(timeout=2.0)                # unguarded, the canary claims in this gap
+            canary_done.wait(timeout=2.0)  # unguarded, the canary claims in this gap
         return real_mint(**kwargs)
+
     monkeypatch.setattr(anon_auth, "ensure_portal_identity", stable_mints)
 
     assert welcome_trial.claim_desktop_free_tier() is not None
@@ -296,7 +388,9 @@ def test_one_due_answer_walks_the_provider_ladder_once(portal, monkeypatch):
 
     as_local_desktop_backend(monkeypatch)
     real, calls = auth.resolve_provider, []
-    monkeypatch.setattr(auth, "resolve_provider", lambda *a, **kw: (calls.append(kw), real(*a, **kw))[1])
+    monkeypatch.setattr(
+        auth, "resolve_provider", lambda *a, **kw: (calls.append(kw), real(*a, **kw))[1]
+    )
 
     assert welcome_trial.inference_available() is True  # fresh: the trial is claimable
     assert len(calls) == 1
@@ -305,7 +399,9 @@ def test_one_due_answer_walks_the_provider_ladder_once(portal, monkeypatch):
 def _cron_model() -> str:
     from cron.scheduler import _load_cron_job_config
 
-    return _load_cron_job_config({"id": "j", "name": "j", "prompt": "x"}, "j", "j").model
+    return _load_cron_job_config(
+        {"id": "j", "name": "j", "prompt": "x"}, "j", "j"
+    ).model
 
 
 def _kanban_worker_model(monkeypatch, tmp_path) -> str:
@@ -328,12 +424,26 @@ def _kanban_worker_model(monkeypatch, tmp_path) -> str:
     workspace.mkdir()
     kb.create_board("trial")
     with closing(connect(board="trial")) as conn:
-        task_id = kb.create_task(conn, title="t", assignee="default", workspace_kind="dir", workspace_path=str(workspace))
+        task_id = kb.create_task(
+            conn,
+            title="t",
+            assignee="default",
+            workspace_kind="dir",
+            workspace_path=str(workspace),
+        )
         kb.recompute_ready(conn)
         task = kb.claim_task(conn, task_id)
-    connection = SimpleNamespace(authority=SimpleNamespace(profile_id=home), native_owner=True,
-                                 actor=Principal("owner", home, frozenset({"session:create"}), "transport"))
-    params = dict(board="trial", task_id=task.id, run_id=task.current_run_id, claim_lock=task.claim_lock)
+    connection = SimpleNamespace(
+        authority=SimpleNamespace(profile_id=home),
+        native_owner=True,
+        actor=Principal("owner", home, frozenset({"session:create"}), "transport"),
+    )
+    params = dict(
+        board="trial",
+        task_id=task.id,
+        run_id=task.current_run_id,
+        claim_lock=task.claim_lock,
+    )
     policy, _ = build_kanban_policy(connection, params, load_config())
     return restore_policy(asdict(policy)).model
 
@@ -347,25 +457,37 @@ def unconfigured_trial(portal, monkeypatch):
     off_local_desktop(monkeypatch)
     yield
     from clawk_cli.config import load_config
-    assert not (load_config().get("model") or {}).get("default")  # never persisted: a later provider wins
+
+    assert not (load_config().get("model") or {}).get(
+        "default"
+    )  # never persisted: a later provider wins
 
 
-def test_a_claimed_trial_runs_a_default_cron_job_when_no_model_is_configured(unconfigured_trial):
+def test_a_claimed_trial_runs_a_default_cron_job_when_no_model_is_configured(
+    unconfigured_trial,
+):
     assert _cron_model() == anon_auth.GUEST_MODEL
 
 
-def test_a_claimed_trial_runs_a_kanban_worker_when_no_model_is_configured(unconfigured_trial, monkeypatch, tmp_path):
+def test_a_claimed_trial_runs_a_kanban_worker_when_no_model_is_configured(
+    unconfigured_trial, monkeypatch, tmp_path
+):
     assert _kanban_worker_model(monkeypatch, tmp_path) == anon_auth.GUEST_MODEL
 
 
-def test_a_configured_model_beats_the_trial_for_cron_jobs_and_kanban_workers(portal, monkeypatch, tmp_path):
+def test_a_configured_model_beats_the_trial_for_cron_jobs_and_kanban_workers(
+    portal, monkeypatch, tmp_path
+):
     from clawk_constants import get_clawk_home
 
     monkeypatch.delenv("CLAWK_MODEL", raising=False)
     claimed_trial(monkeypatch)
     off_local_desktop(monkeypatch)
     (get_clawk_home() / "config.yaml").write_text(
-        "model:\n  provider: openrouter\n  default: anthropic/claude-sonnet-4\n", encoding="utf-8")
+        "nous:\n  guest: true\n"
+        "model:\n  provider: openrouter\n  default: anthropic/claude-sonnet-4\n",
+        encoding="utf-8",
+    )
 
     assert _cron_model() == "anthropic/claude-sonnet-4"
     assert _kanban_worker_model(monkeypatch, tmp_path) == "anthropic/claude-sonnet-4"

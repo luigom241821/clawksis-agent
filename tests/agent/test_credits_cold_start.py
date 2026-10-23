@@ -392,10 +392,18 @@ def test_bg_seed_reruns_the_policy_when_a_header_beat_it(monkeypatch):
 # ── inference-header path: the catalog goes cold again after the Nous TTL ────
 
 
-def _mixin_agent(model="openai/gpt-5.6-luna"):
-    """The real notice path (RateLimitCreditsMixin._emit_credits_notices) with a recording driver."""
+def _mixin_agent(model="openai/gpt-5.6-luna", *, notices_opt_in=True):
+    """The real notice path (RateLimitCreditsMixin._emit_credits_notices) with a recording driver.
+
+    Clawksis (BYOK) defaults ``display.credits_notices`` off, so the notice path is opted in here."""
     from agent.rate_limit_credits import RateLimitCreditsMixin
     from agent.status_output import StatusOutputMixin
+    from clawk_constants import get_clawk_home
+
+    if notices_opt_in:
+        (get_clawk_home() / "config.yaml").write_text(
+            "display:\n  credits_notices: true\n", encoding="utf-8"
+        )
 
     class _Agent(RateLimitCreditsMixin, StatusOutputMixin):
         provider = "nous"
@@ -417,6 +425,16 @@ def _join_pricing_warm(agent):
     if thread is not None:
         thread.join(timeout=10)
         assert not thread.is_alive(), "pricing warm hung"
+
+
+def test_the_stock_config_mutes_the_depleted_banner(monkeypatch):
+    """Clawksis is BYOK: with no ``display.credits_notices`` in config.yaml no credits notice shows."""
+    _cold_pricing_cache(monkeypatch)
+    agent = _mixin_agent(notices_opt_in=False)
+
+    agent._emit_credits_notices()
+    _join_pricing_warm(agent)
+    assert agent.shown == [] and agent.cleared == []
 
 
 def test_header_after_ttl_expiry_rewarms_instead_of_flashing_the_banner(monkeypatch):

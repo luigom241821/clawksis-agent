@@ -37,7 +37,10 @@ def _event(platform, text):
 
 
 class _NoNetwork:
-    """Any upload helper or socket connect fails the test."""
+    """Any upload helper or socket connect fails the test.
+
+    Clawksis has no share-with-Nous upload (``diagnostics_upload`` is not carried), so the paste
+    helpers and the socket layer are the only upload paths to guard."""
 
     def __init__(self):
         self.calls = []
@@ -54,7 +57,6 @@ async def test_local_session_debug_local_returns_the_report_without_uploading(te
     bundle = {"report": "REDACTED-REPORT-BODY", "agent.log": "FULL-LOG"}
     with (
         patch("clawk_cli.debug.upload_to_pastebin", guard),
-        patch("clawk_cli.diagnostics_upload.share_to_nous", guard),
         patch("clawk_cli.debug._schedule_auto_delete", guard),
         patch("clawk_cli.debug.collect_share_bundle", return_value=bundle),
         patch.object(socket.socket, "connect", guard),
@@ -89,7 +91,6 @@ async def test_messaging_debug_local_is_refused_without_uploading():
     guard = _NoNetwork()
     with (
         patch("clawk_cli.debug.upload_to_pastebin", guard),
-        patch("clawk_cli.diagnostics_upload.share_to_nous", guard),
         patch("clawk_cli.debug._schedule_auto_delete", guard),
         patch("clawk_cli.debug._best_effort_sweep_expired_pastes", guard),
         patch("clawk_cli.debug.collect_debug_report", guard),
@@ -109,7 +110,6 @@ async def test_local_debug_local_real_collector_opens_no_socket(tmp_path, monkey
     guard = _NoNetwork()
     with (
         patch("clawk_cli.debug.upload_to_pastebin", guard),
-        patch("clawk_cli.diagnostics_upload.share_to_nous", guard),
         patch.object(socket.socket, "connect", guard),
         patch.object(socket.socket, "connect_ex", guard),
         patch("socket.create_connection", guard),
