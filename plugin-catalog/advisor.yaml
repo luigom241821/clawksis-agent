@@ -1,5 +1,5 @@
 name: advisor
-repo: https://github.com/ljubomirj/clawk-advisor-plugin
+repo: https://github.com/ljubomirj/hermes-advisor-plugin
 sha: "37e55975611d38212cf082029ece504f207df656"
 version: "1.2.0"
 title: Advisor
@@ -8,7 +8,7 @@ maintainer: ljubomirj
 tier: community
 category: automation
 requires_clawk: ">=0.21"
-docs_url: https://github.com/ljubomirj/clawk-advisor-plugin/blob/37e55975611d38212cf082029ece504f207df656/README.md
+docs_url: https://github.com/ljubomirj/hermes-advisor-plugin/blob/37e55975611d38212cf082029ece504f207df656/README.md
 readme: true
 platforms: [linux, macos, windows]
 capabilities:

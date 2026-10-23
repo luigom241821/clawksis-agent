@@ -9,7 +9,7 @@ description: "Long-term memory for Clawksis. Capture conversations, recall usefu
 maintainer: volcengine
 tier: community
 category: memory
-docs_url: https://github.com/volcengine/OpenViking/tree/9f150ece247ad683494ab172d738023bd6dc6170/examples/clawk-plugin#readme
+docs_url: https://github.com/volcengine/OpenViking/tree/9f150ece247ad683494ab172d738023bd6dc6170/examples/hermes-plugin#readme
 capabilities:
   provides_tools: []
   provides_hooks: []

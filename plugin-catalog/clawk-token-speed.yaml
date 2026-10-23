@@ -1,5 +1,5 @@
 name: clawk-token-speed
-repo: https://github.com/Ayshinko/clawk-token-speed
+repo: https://github.com/Ayshinko/hermes-token-speed
 sha: 0c0bb14b92ea1bd7d1287a22d845393632d14a71
 subdir: ""
 description: 'Live decode tokens-per-second chip for the Clawksis Desktop status
@@ -12,7 +12,7 @@ maintainer: Ayshinko
 tier: community
 category: desktop
 version: "1.1.0"
-docs_url: https://github.com/Ayshinko/clawk-token-speed#readme
+docs_url: https://github.com/Ayshinko/hermes-token-speed#readme
 platforms: []
 capabilities:
   provides_tools: []

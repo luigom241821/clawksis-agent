@@ -1,5 +1,5 @@
 name: ample
-repo: https://github.com/ishanray/clawk-ample
+repo: https://github.com/ishanray/hermes-ample
 sha: 0f35366996a71b72ff93dc81e291bbda564b4bf0
 version: "0.1.0"
 title: Ample
@@ -8,7 +8,7 @@ maintainer: ishanray
 tier: community
 category: tools
 requires_clawk: ">=0.21.5"
-docs_url: https://github.com/ishanray/clawk-ample#readme
+docs_url: https://github.com/ishanray/hermes-ample#readme
 readme: true
 capabilities:
   provides_tools:

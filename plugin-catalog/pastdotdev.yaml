@@ -1,5 +1,5 @@
 name: pastdotdev
-repo: https://github.com/pastdotdev/clawk-plugin
+repo: https://github.com/pastdotdev/hermes-plugin
 sha: 22f7abdd1e73bebda6f876cd1f07fe383c25ada4
 subdir: past_clawk
 version: "0.2.0"
@@ -8,7 +8,7 @@ maintainer: pastdotdev
 tier: community
 category: memory
 requires_clawk: ">=0.21.0"
-docs_url: https://github.com/pastdotdev/clawk-plugin#readme
+docs_url: https://github.com/pastdotdev/hermes-plugin#readme
 capabilities:
   provides_tools: []
   provides_hooks:

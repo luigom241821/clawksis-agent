@@ -1,5 +1,5 @@
 name: yandex_calendar
-repo: https://github.com/akinfold/clawk-yandex-calendar
+repo: https://github.com/akinfold/hermes-yandex-calendar
 sha: cad2a6b8e1cad82753b9f57d4f388645210702a0
 subdir: clawk_yandex_calendar
 title: "Yandex Calendar"
@@ -9,7 +9,7 @@ tier: community
 category: tools
 requires_clawk: ">=0.21.5"
 version: "0.6.4"
-docs_url: https://github.com/akinfold/clawk-yandex-calendar#readme
+docs_url: https://github.com/akinfold/hermes-yandex-calendar#readme
 readme: true
 platforms: []
 known_issues:

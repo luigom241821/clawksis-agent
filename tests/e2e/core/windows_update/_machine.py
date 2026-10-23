@@ -72,7 +72,7 @@ UPDATE_TIMEOUT = 1200.0
 CMD_TIMEOUT = 300.0
 GATEWAY_READY_TIMEOUT = 240.0
 CANONICAL_URLS = (
-    "https://github.com/samuelgradientai-sys/clawksis-agent.git",
+    "https://github.com/NousResearch/hermes-agent.git",
     "https://github.com/samuelgradientai-sys/clawksis-agent",
     "git@github.com:samuelgradientai-sys/clawksis-agent.git",
 )

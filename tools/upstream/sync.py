@@ -227,6 +227,16 @@ _HEADER_RE = re.compile(r"(?<![\w-])([Xx]-)hermes-")
 # formas ("Clawksis" y el comando "clawk"); el blanket dejaba solo ``clawk``.
 _WAKE_WORD_RE = re.compile(r"(?<=@\?)hermes(?=\\[sb])")
 
+# URLs de repos de TERCEROS en GitHub (catalogo de plugins, docs, tests): el nombre del
+# repo es de su autor (``oxylabs/hermes-web-oxylabs``, ``NousResearch/hermes-official-plugins``);
+# rebrandearlo deja links e installs apuntando a repos que no existen. Solo el repo propio
+# de upstream (``NousResearch/hermes-agent``) se remapea al fork via CONTENT_MAP.
+_THIRD_PARTY_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?"
+    r"(?:github\.com|raw\.githubusercontent\.com|codeload\.github\.com|api\.github\.com/repos)"
+    r"/(?![Nn]ous[Rr]esearch/hermes-agent(?![\w.-]))[^\s\"'`)\]>]*[Hh][Ee][Rr][Mm][Ee][Ss][^\s\"'`)\]>]*"
+)
+
 # Datos que DEBEN quedar verbatim en un archivo puntual (el rebrand los
 # corromperia): se stashean igual que los IDs de modelo. Clave = path de upstream.
 VERBATIM = {
@@ -356,6 +366,7 @@ def rebrand(content: bytes, path: str) -> bytes:
     if path in VERBATIM:
         text = VERBATIM[path].sub(_stash, text)
     text = _MODEL_ID_RE.sub(_stash, text)
+    text = _THIRD_PARTY_URL_RE.sub(_stash, text)
     text = home_fix(text)
     if path in HOME_DIR_FILES:
         text = text.replace(".hermes", ".clawksis")

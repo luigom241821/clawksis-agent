@@ -143,7 +143,7 @@ TERMINAL_SSH_KEY=~/.ssh/id_rsa
 
 ### Singularity/Apptainer
 
-An official plugin ([`singularity`](https://github.com/NousResearch/clawk-official-plugins/tree/main/singularity)), formerly built in; `clawk update` installs it for profiles that already use it.
+An official plugin ([`singularity`](https://github.com/NousResearch/hermes-official-plugins/tree/main/singularity)), formerly built in; `clawk update` installs it for profiles that already use it.
 
 ```bash
 clawk plugins install singularity

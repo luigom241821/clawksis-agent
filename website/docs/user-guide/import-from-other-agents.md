@@ -8,7 +8,7 @@ description: "One-command import of an OpenClaw (~/.openclaw), Claude Code (~/.c
 
 `clawk import-agent` imports your existing **OpenClaw**, **Claude Code**, **OpenAI Codex CLI** or **Cursor** setup into Clawksis with one command. You always see a per-item plan before anything is written, and `--dry-run` never touches disk.
 
-The command comes from the official **`agent-importers` plugin** from the [plugin catalog](./features/plugins.md), maintained by Nous Research in [NousResearch/clawk-official-plugins](https://github.com/NousResearch/clawk-official-plugins/tree/main/agent-importers).
+The command comes from the official **`agent-importers` plugin** from the [plugin catalog](./features/plugins.md), maintained by Nous Research in [NousResearch/clawk-official-plugins](https://github.com/NousResearch/hermes-official-plugins/tree/main/agent-importers).
 
 ## The easy way: `clawk setup`
 

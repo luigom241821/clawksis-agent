@@ -1,5 +1,5 @@
 name: clawk-lang-it-full
-repo: https://github.com/gradia64/clawk-lang-it-full
+repo: https://github.com/gradia64/hermes-lang-it-full
 sha: b6a599c2f52ea90b40d48b1eef2cfd7f55395f3c
 description: >-
   Italian (Italiano) language pack for Clawksis Desktop — 5,082 of 5,085 keys on
@@ -17,7 +17,7 @@ maintainer: gradia64
 tier: community
 category: general
 requires_clawk: ">=0.21.6"
-docs_url: https://github.com/gradia64/clawk-lang-it-full#readme
+docs_url: https://github.com/gradia64/hermes-lang-it-full#readme
 version: "0.1.0"
 platforms: []
 capabilities:

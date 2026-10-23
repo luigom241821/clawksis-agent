@@ -1,5 +1,5 @@
 name: ngrok-ai-gateway
-repo: https://github.com/ngrok/clawk-ngrok
+repo: https://github.com/ngrok/hermes-ngrok
 sha: "27baaa0e85e09581f05084fc318a0755774162e1"
 subdir: model-providers/ngrok
 title: ngrok AI Gateway

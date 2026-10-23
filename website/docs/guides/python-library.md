@@ -15,7 +15,7 @@ Clawksis isn't just a CLI tool. You can import `AIAgent` directly and use it pro
 Clone Clawksis and prepare its source environment through PM. The Bash recipe is:
 
 ```bash
-git clone https://github.com/samuelgradientai-sys/clawksis-agent.git
+git clone https://github.com/NousResearch/hermes-agent.git
 cd clawksis-agent
 source ./activate
 ```

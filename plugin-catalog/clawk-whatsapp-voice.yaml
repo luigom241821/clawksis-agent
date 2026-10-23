@@ -1,5 +1,5 @@
 name: clawk-whatsapp-voice
-repo: https://github.com/ashwanthbalakrishnan5/clawk-whatsapp-voice
+repo: https://github.com/ashwanthbalakrishnan5/hermes-whatsapp-voice
 sha: e472a47dda4e9986ca44f0ad62cb1b71c893bec0
 title: WhatsApp Voice Calls
 description: >-
@@ -30,7 +30,7 @@ maintainer: ashwanthbalakrishnan5
 tier: community
 version: "0.1.12"
 category: voice
-docs_url: https://github.com/ashwanthbalakrishnan5/clawk-whatsapp-voice#readme
+docs_url: https://github.com/ashwanthbalakrishnan5/hermes-whatsapp-voice#readme
 requires_clawk: ">=0.21.6"
 platforms: [linux, macos]
 known_issues:

@@ -1,5 +1,5 @@
 name: spotify
-repo: https://github.com/NousResearch/clawk-official-plugins
+repo: https://github.com/NousResearch/hermes-official-plugins
 sha: 4d492b1dc5326af3e38bb2cf3e4b9ad6d65f0072
 subdir: spotify
 description: 'Spotify for Clawksis: seven tools (playback, devices, queue, search, playlists, albums,
@@ -11,8 +11,8 @@ tier: official
 category: tools
 requires_clawk: ">=0.21.6"
 version: "2.1.0"
-image: https://raw.githubusercontent.com/NousResearch/clawk-official-plugins/4d492b1dc5326af3e38bb2cf3e4b9ad6d65f0072/assets/spotify.jpg
-docs_url: https://github.com/NousResearch/clawk-official-plugins/tree/main/spotify
+image: https://raw.githubusercontent.com/NousResearch/hermes-official-plugins/4d492b1dc5326af3e38bb2cf3e4b9ad6d65f0072/assets/spotify.jpg
+docs_url: https://github.com/NousResearch/hermes-official-plugins/tree/main/spotify
 platforms: []
 capabilities:
   provides_tools:

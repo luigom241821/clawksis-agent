@@ -1,5 +1,5 @@
 name: xchat
-repo: https://github.com/NousResearch/clawk-official-plugins
+repo: https://github.com/NousResearch/hermes-official-plugins
 sha: f98c0999c6dd4e59680addc8f3480208018ab5b0
 subdir: xchat
 description: 'X Chat gateway platform: talk to Clawksis in X''s end-to-end encrypted DMs. Clawksis runs as the X
@@ -11,8 +11,8 @@ tier: official
 category: platform
 requires_clawk: ">=0.21.5"
 version: "0.1.0"
-image: https://raw.githubusercontent.com/NousResearch/clawk-official-plugins/f98c0999c6dd4e59680addc8f3480208018ab5b0/assets/xchat.jpg
-docs_url: https://github.com/NousResearch/clawk-official-plugins/tree/main/xchat
+image: https://raw.githubusercontent.com/NousResearch/hermes-official-plugins/f98c0999c6dd4e59680addc8f3480208018ab5b0/assets/xchat.jpg
+docs_url: https://github.com/NousResearch/hermes-official-plugins/tree/main/xchat
 platforms: []
 capabilities:
   provides_tools: []

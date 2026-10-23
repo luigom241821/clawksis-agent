@@ -5,8 +5,8 @@ import { resolvePluginSourceLinks } from './plugin-source-urls'
 describe('resolvePluginSourceLinks', () => {
   it('maps owner/repo to github browse and clone urls', () => {
     expect(resolvePluginSourceLinks('NousResearch/clawk-example-plugins')).toEqual({
-      gitUrl: 'https://github.com/NousResearch/clawk-example-plugins.git',
-      browseUrl: 'https://github.com/NousResearch/clawk-example-plugins',
+      gitUrl: 'https://github.com/NousResearch/hermes-example-plugins.git',
+      browseUrl: 'https://github.com/NousResearch/hermes-example-plugins',
       subdir: null
     })
   })

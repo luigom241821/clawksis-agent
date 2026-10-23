@@ -9,7 +9,7 @@ maintainer: georgeatparallel
 tier: community
 category: web
 requires_clawk: ">=0.20.1"
-docs_url: https://github.com/parallel-web/search-mcp#clawksis-agent
+docs_url: https://github.com/parallel-web/search-mcp#hermes-agent
 version: "0.1.2"
 platforms: []
 capabilities:

@@ -139,7 +139,7 @@ def test_public_clone_attempts_anonymously_when_credential_resolves(
 
     clone_calls: list[list[str]] = []
     real_run = subprocess.run
-    target_url = "https://github.com/robbyczgw-cla/clawksis-web-search-plus.git"
+    target_url = "https://github.com/robbyczgw-cla/hermes-web-search-plus.git"
     origin = "https://github.com"
 
     def spy_run(argv, *a, **kw):

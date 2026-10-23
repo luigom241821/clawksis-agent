@@ -1099,7 +1099,7 @@ clawk plugins install mcp-serve
 }
 ```
 
-It used to be built in as `clawk mcp serve`. An MCP client configured with `"args": ["mcp", "serve"]` changes them to `["mcp-serve"]`; the tool names and parameters are unchanged, and `clawk mcp serve` now prints the new spelling and the install line. Tools, the `--tools` mode and its safety limits are documented in the [plugin's README](https://github.com/NousResearch/clawk-official-plugins/tree/main/mcp-serve).
+It used to be built in as `clawk mcp serve`. An MCP client configured with `"args": ["mcp", "serve"]` changes them to `["mcp-serve"]`; the tool names and parameters are unchanged, and `clawk mcp serve` now prints the new spelling and the install line. Tools, the `--tools` mode and its safety limits are documented in the [plugin's README](https://github.com/NousResearch/hermes-official-plugins/tree/main/mcp-serve).
 
 ## Related docs
 

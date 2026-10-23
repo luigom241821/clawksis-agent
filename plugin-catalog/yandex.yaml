@@ -1,5 +1,5 @@
 name: yandex
-repo: https://github.com/akinfold/clawk-yandex-search-api
+repo: https://github.com/akinfold/hermes-yandex-search-api
 sha: a143ba11735622105d1b762e61c0211e887d4800
 subdir: clawk_yandex_search
 title: "Yandex Search API"
@@ -9,7 +9,7 @@ tier: community
 category: web
 requires_clawk: ">=0.18.1"
 version: "0.1.6"
-docs_url: https://github.com/akinfold/clawk-yandex-search-api#readme
+docs_url: https://github.com/akinfold/hermes-yandex-search-api#readme
 readme: true
 platforms: []
 known_issues:

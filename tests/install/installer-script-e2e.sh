@@ -284,7 +284,7 @@ assert_redirect_is_transport_only() {
   # Either official form is valid: the installer clones over SSH or HTTPS
   # depending on the environment, and both are "the official URL" as far as
   # channel resolution is concerned.
-  local official_https='https://github.com/samuelgradientai-sys/clawksis-agent.git'
+  local official_https='https://github.com/NousResearch/hermes-agent.git'
   local official_ssh='git@github.com:samuelgradientai-sys/clawksis-agent.git'
   local configured observed
   configured="$(git -C "$INSTALL_DIR" config --get remote.origin.url)"

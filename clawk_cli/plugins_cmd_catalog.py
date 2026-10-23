@@ -190,7 +190,7 @@ def _adopt_legacy_sidecar(plugin_dir: Path, record: dict) -> Optional[dict]:
 
 # Archived Nous handoff repos of providers that left core -> the catalog entry that superseded them: a URL
 # install of one is adopted as that entry, so `update` re-pins it instead of pulling the archive forever.
-_HANDOFF_REPOS = {"github.com/nousresearch/clawk-plugin-holographic": "holographic"}
+_HANDOFF_REPOS = {"github.com/nousresearch/hermes-plugin-holographic": "holographic"}
 
 
 def _adopt_handoff_install(plugin_dir: Path, record: dict) -> Optional[dict]:

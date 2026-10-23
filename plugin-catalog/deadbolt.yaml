@@ -1,5 +1,5 @@
 name: deadbolt
-repo: https://github.com/seanebones-lang/deadbolt-clawk-plugin
+repo: https://github.com/seanebones-lang/deadbolt-hermes-plugin
 sha: 177fff79a8b6308f8d182146ed8a6e21dc84c565
 description: "Review and approve exact text-artifact writes through a local DeadBolt sidecar. Protects this plugin's commit tool only."
 maintainer: seanebones-lang
@@ -8,7 +8,7 @@ category: tools
 title: "DeadBolt — reviewed artifact writes"
 version: "0.1.0"
 requires_clawk: ">=0.22.2"
-docs_url: https://github.com/seanebones-lang/deadbolt-clawk-plugin#readme
+docs_url: https://github.com/seanebones-lang/deadbolt-hermes-plugin#readme
 platforms: [linux, macos]
 readme: true
 known_issues:

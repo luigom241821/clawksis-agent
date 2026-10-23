@@ -37,7 +37,7 @@ const installDesktopPlugin = vi.fn()
 
 const BLENDER = {
   catalogName: 'blender',
-  repo: 'https://github.com/NousResearch/clawk-official-plugins#blender',
+  repo: 'https://github.com/NousResearch/hermes-official-plugins#blender',
   sha: 'abec9e822a23089943dd1d476a104bf746f19f86',
   summary: 'Build and render 3D scenes in your Blender.',
   title: 'Blender'

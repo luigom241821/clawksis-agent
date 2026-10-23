@@ -9,7 +9,7 @@ maintainer: Steven Leggett
 tier: community
 category: memory
 requires_clawk: ">=0.19"
-docs_url: https://github.com/roboticforce/sugar/tree/main/clawk-plugin
+docs_url: https://github.com/roboticforce/sugar/tree/main/hermes-plugin
 capabilities:
   provides_tools: []
   provides_hooks: []

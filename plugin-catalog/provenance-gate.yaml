@@ -1,6 +1,6 @@
 name: provenance-gate
 title: Provenance Gate
-repo: https://github.com/simin-yuan/clawk-provenance-gate
+repo: https://github.com/simin-yuan/hermes-provenance-gate
 sha: 8813469d45c82fb0f5af6724c3761169ca7c3e86
 version: "0.1.0"
 description: >-
@@ -19,7 +19,7 @@ maintainer: simin-yuan
 tier: community
 category: general
 requires_clawk: ">=0.22.2"
-docs_url: https://github.com/simin-yuan/clawk-provenance-gate#readme
+docs_url: https://github.com/simin-yuan/hermes-provenance-gate#readme
 platforms: []
 capabilities:
   provides_tools: []

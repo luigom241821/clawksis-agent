@@ -1,5 +1,5 @@
 name: little-canary
-repo: https://github.com/clawk-labs-ai/little-canary
+repo: https://github.com/hermes-labs-ai/little-canary
 sha: 61855a940a66fb8319742756c3ff72c720a89160
 subdir: integrations/clawksis-agent
 version: "0.4.0"
@@ -8,7 +8,7 @@ maintainer: roli-lpci (Clawksis Labs; independent of Nous Research)
 tier: community
 category: general
 requires_clawk: ">=0.21.3"
-docs_url: https://github.com/clawk-labs-ai/little-canary/blob/61855a940a66fb8319742756c3ff72c720a89160/integrations/clawksis-agent/README.md
+docs_url: https://github.com/hermes-labs-ai/little-canary/blob/61855a940a66fb8319742756c3ff72c720a89160/integrations/hermes-agent/README.md
 capabilities:
   provides_tools: []
   provides_hooks:

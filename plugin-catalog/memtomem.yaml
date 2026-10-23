@@ -8,7 +8,7 @@ maintainer: memtomem
 tier: community
 category: general
 requires_clawk: ">=0.21.5"
-docs_url: https://github.com/memtomem/memtomem/tree/592865456cf7670311648fbc619bbb876d002a1e/packages/memtomem-clawk-plugin
+docs_url: https://github.com/memtomem/memtomem/tree/592865456cf7670311648fbc619bbb876d002a1e/packages/memtomem-hermes-plugin
 capabilities:
   provides_tools: []
   provides_hooks: []

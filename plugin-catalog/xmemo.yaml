@@ -1,5 +1,5 @@
 name: xmemo
-repo: https://github.com/yonro/clawk-xmemo-plugin
+repo: https://github.com/yonro/hermes-xmemo-plugin
 sha: 499a383778647e897d30db3e92e8c8ad4397c799
 subdir: src/clawk_xmemo/xmemo
 description: >-
@@ -14,7 +14,7 @@ maintainer: yonro
 tier: community
 category: memory
 requires_clawk: '>=0.19'
-docs_url: https://github.com/yonro/clawk-xmemo-plugin#readme
+docs_url: https://github.com/yonro/hermes-xmemo-plugin#readme
 version: '1.2.1'
 platforms: []
 capabilities:

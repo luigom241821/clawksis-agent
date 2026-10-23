@@ -1,5 +1,5 @@
 name: freshdesk
-repo: https://github.com/aedelgod/clawk-plugin-freshdesk
+repo: https://github.com/aedelgod/hermes-plugin-freshdesk
 sha: "005bee2c6a1d0857dbafd6bfac7a2e2e37619991"
 description: "Generic Freshdesk API v2 tools for Clawksis. Unaffiliated community connector, not a Freshworks product. Disclosure: calls the account's native Freshdesk HTTPS origin with profile-scoped secrets FRESHDESK_DOMAIN and FRESHDESK_API_KEY; downloads an attachment into the Clawksis cache only from that ticket's own attachment hosts; the two write tools escalate to Clawksis human approval and fail closed when no person is present. No third-party dependencies, shell commands, telemetry, or self-updater."
 maintainer: GFORGOV
@@ -8,7 +8,7 @@ category: tools
 requires_clawk: ">=0.21.4"
 version: "0.1.1"
 readme: true
-docs_url: https://github.com/aedelgod/clawk-plugin-freshdesk#readme
+docs_url: https://github.com/aedelgod/hermes-plugin-freshdesk#readme
 platforms: []
 capabilities:
   provides_tools:

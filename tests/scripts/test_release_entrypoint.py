@@ -116,7 +116,7 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
                 [
                     {
                         "databaseId": 7,
-                        "url": "https://github.com/example/clawksis-agent/actions/runs/7",
+                        "url": "https://github.com/example/hermes-agent/actions/runs/7",
                         "headBranch": "main",
                         "displayTitle": "Stable release rc.1-v0.21.5",
                         "status": "queued",
@@ -124,7 +124,7 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
                 ]
             )
         if command[:3] == ["gh", "release", "create"]:
-            return "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd\n"
+            return "https://github.com/example/hermes-agent/releases/tag/untagged-0123abcd\n"
         return ""
 
     result = _release(
@@ -141,11 +141,11 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
     # A draft lives at the page gh reports, never at releases/tag/<claim>.
     assert (
         result["url"]
-        == "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd"
+        == "https://github.com/example/hermes-agent/releases/tag/untagged-0123abcd"
     )
     assert (
         result["final_url"]
-        == "https://github.com/example/clawksis-agent/releases/tag/v0.21.5"
+        == "https://github.com/example/hermes-agent/releases/tag/v0.21.5"
     )
     assert git(source, "rev-parse", "rc.1-v0.21.5^{commit}") == commit
     claim = tag_record(git(source, "tag", "-l", "rc.1-v0.21.5", "--format=%(contents)"))
@@ -196,7 +196,7 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
         ],
     ]
     assert (
-        result["run_url"] == "https://github.com/example/clawksis-agent/actions/runs/7"
+        result["run_url"] == "https://github.com/example/hermes-agent/actions/runs/7"
     )
     # The claim push names the claim ref and nothing else.
     pushed = git(source, "ls-remote", "origin", "refs/tags/*")
@@ -239,8 +239,8 @@ def test_release_output_names_the_ci_run_and_the_publish_step():
         "autopublish": False,
         "lanes": lane_set.DEFAULT,
         "repository": "example/clawksis-agent",
-        "run_url": "https://github.com/example/clawksis-agent/actions/runs/7",
-        "url": "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd",
+        "run_url": "https://github.com/example/hermes-agent/actions/runs/7",
+        "url": "https://github.com/example/hermes-agent/releases/tag/untagged-0123abcd",
     }
     text = next_steps(result)
     assert "Attempting release rc.1-v0.21.5 for v0.21.5." in text
@@ -287,12 +287,12 @@ def test_an_unlisted_run_points_at_the_workflow_page():
             "lanes": lane_set.DEFAULT,
             "repository": "example/clawksis-agent",
             "run_url": "",
-            "url": "https://github.com/example/clawksis-agent/releases/tag/untagged-0123abcd",
+            "url": "https://github.com/example/hermes-agent/releases/tag/untagged-0123abcd",
         }
     )
     assert "the run is not listed yet" in text
     assert (
-        "https://github.com/example/clawksis-agent/actions/workflows/stable-release.yml"
+        "https://github.com/example/hermes-agent/actions/workflows/stable-release.yml"
         in text
     )
 
@@ -300,7 +300,7 @@ def test_an_unlisted_run_points_at_the_workflow_page():
 @pytest.mark.parametrize(
     ("lists_on", "wait", "run_url", "naps"),
     [
-        (3, 30, "https://github.com/example/clawksis-agent/actions/runs/7", 2),
+        (3, 30, "https://github.com/example/hermes-agent/actions/runs/7", 2),
         (None, 4, "", 2),
     ],
 )
@@ -311,7 +311,7 @@ def test_release_looks_for_the_dispatched_run_only_within_its_wait(
         [
             {
                 "databaseId": 7,
-                "url": "https://github.com/example/clawksis-agent/actions/runs/7",
+                "url": "https://github.com/example/hermes-agent/actions/runs/7",
                 "headBranch": "main",
                 "displayTitle": "Stable release rc.1-v0.21.5",
                 "status": "queued",
@@ -569,7 +569,7 @@ def test_refusal_names_the_run_and_both_ways_out(source, capsys):
             [
                 {
                     "databaseId": 99,
-                    "url": "https://github.com/example/clawksis-agent/actions/runs/99",
+                    "url": "https://github.com/example/hermes-agent/actions/runs/99",
                     "headBranch": "main",
                     "headSha": "f" * 40,
                     "displayTitle": "Stable release rc.1-v0.21.5",
@@ -577,7 +577,7 @@ def test_refusal_names_the_run_and_both_ways_out(source, capsys):
                 },
                 {
                     "databaseId": 98,
-                    "url": "https://github.com/example/clawksis-agent/actions/runs/98",
+                    "url": "https://github.com/example/hermes-agent/actions/runs/98",
                     "headBranch": "main",
                     "headSha": "f" * 40,
                     "displayTitle": "Stable release rc.1-v0.21.4",
@@ -589,7 +589,7 @@ def test_refusal_names_the_run_and_both_ways_out(source, capsys):
     with pytest.raises(ReleaseRefused):
         _release(source, _advance(source, "later"), bump="minor", execute=execute)
     text = capsys.readouterr().err
-    assert "https://github.com/example/clawksis-agent/actions/runs/99" in text
+    assert "https://github.com/example/hermes-agent/actions/runs/99" in text
     assert "runs/98" not in text
     # The abandon command names the outstanding attempt's version, not the derived 0.22.0.
     assert "python scripts/release.py abandon --version 0.21.5 --remote origin" in text
@@ -677,7 +677,7 @@ def test_release_draft_lists_the_commits_since_the_stable_base(source, published
                 [
                     {
                         "databaseId": 7,
-                        "url": "https://github.com/example/clawksis-agent/actions/runs/7",
+                        "url": "https://github.com/example/hermes-agent/actions/runs/7",
                         "headBranch": "main",
                         "displayTitle": "Stable release rc.1-v0.21.5",
                         "status": "queued",
@@ -694,7 +694,7 @@ def test_release_draft_lists_the_commits_since_the_stable_base(source, published
     # The notes are this repository's commits from the stable base to the cut
     # commit, not GitHub's merged-PR list, which a fork leaves empty.
     assert "New in this release" in body
-    assert "https://github.com/example/clawksis-agent/pull/123" in body
+    assert "https://github.com/example/hermes-agent/pull/123" in body
     assert "hipped in the published release" not in body
     assert "compare/v0.21.4...rc.1-v0.21.5" in body
     # The stable workflow renders the download tables into this marker.
@@ -840,12 +840,12 @@ def test_publish_and_abandon_output_name_the_result():
         {
             "version": "0.21.5",
             "repository": "example/clawksis-agent",
-            "run_url": "https://github.com/example/clawksis-agent/actions/runs/9",
+            "run_url": "https://github.com/example/hermes-agent/actions/runs/9",
         }
     )
     assert "Requested publication of v0.21.5." in published
     assert (
-        "Workflow: https://github.com/example/clawksis-agent/actions/runs/9"
+        "Workflow: https://github.com/example/hermes-agent/actions/runs/9"
         in published
     )
     assert "moves the stable channel" in published

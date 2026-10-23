@@ -8,7 +8,7 @@ maintainer: Thanatos9404
 tier: community
 category: general
 requires_clawk: ">=0.21.7"
-docs_url: https://github.com/Thanatos9404/llmslim/blob/main/docs/integrations/CLAWKSIS.md
+docs_url: https://github.com/Thanatos9404/llmslim/blob/main/docs/integrations/HERMES.md
 version: "0.11.1"
 capabilities:
   provides_tools: []

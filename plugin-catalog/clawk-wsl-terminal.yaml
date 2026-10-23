@@ -1,5 +1,5 @@
 name: clawk-wsl-terminal
-repo: https://github.com/Yicheng-Mark/clawk-wsl-terminal
+repo: https://github.com/Yicheng-Mark/hermes-wsl-terminal
 sha: 9e0f0d02d28a5db04cd1f0b916f9c633279fbdfc
 description: >-
   Run Clawksis' terminal tools inside an existing WSL distro on Windows: one bash -c per
@@ -23,7 +23,7 @@ maintainer: Yicheng-Mark
 tier: community
 category: tools
 requires_clawk: ">=0.21.6"
-docs_url: https://github.com/Yicheng-Mark/clawk-wsl-terminal#readme
+docs_url: https://github.com/Yicheng-Mark/hermes-wsl-terminal#readme
 version: "0.1.0"
 platforms:
 - windows

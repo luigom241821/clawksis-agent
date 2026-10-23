@@ -1,6 +1,6 @@
 # Spotify
 
-Clawksis can control Spotify — playback, queue, search, playlists, saved tracks/albums, and listening history — through the official **`spotify` plugin** from the [plugin catalog](./plugins.md). It uses Spotify's Web API with PKCE OAuth. The plugin is maintained by Nous Research in [NousResearch/clawk-official-plugins](https://github.com/NousResearch/clawk-official-plugins/tree/main/spotify) and is not part of Clawksis core. Tokens are stored in `~/.clawksis/auth.json` and refreshed automatically on 401; you only log in once per machine (refresh tokens expire after ~6 months; re-run `clawk spotify login` when they do).
+Clawksis can control Spotify — playback, queue, search, playlists, saved tracks/albums, and listening history — through the official **`spotify` plugin** from the [plugin catalog](./plugins.md). It uses Spotify's Web API with PKCE OAuth. The plugin is maintained by Nous Research in [NousResearch/clawk-official-plugins](https://github.com/NousResearch/hermes-official-plugins/tree/main/spotify) and is not part of Clawksis core. Tokens are stored in `~/.clawksis/auth.json` and refreshed automatically on 401; you only log in once per machine (refresh tokens expire after ~6 months; re-run `clawk spotify login` when they do).
 
 Unlike Clawksis' built-in OAuth integrations, Spotify requires every user to register their own lightweight developer app. Spotify does not let third parties ship a public OAuth app that anyone can use. It takes about two minutes and `clawk spotify login` walks you through it.
 

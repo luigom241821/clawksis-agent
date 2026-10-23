@@ -335,7 +335,7 @@ nested agent work or security lifecycle events.
 
 ## Existing Consumers
 
-The official [Langfuse catalog plugin](https://github.com/NousResearch/clawk-official-plugins/tree/main/langfuse) demonstrates direct hook-based
+The official [Langfuse catalog plugin](https://github.com/NousResearch/hermes-official-plugins/tree/main/langfuse) demonstrates direct hook-based
 observability for turns, provider requests, and tool calls.
 
 The native NeMo Relay SDK integration maps Clawksis session, turn, LLM, and tool

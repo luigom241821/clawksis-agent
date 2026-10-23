@@ -1,5 +1,5 @@
 name: singularity
-repo: https://github.com/NousResearch/clawk-official-plugins
+repo: https://github.com/NousResearch/hermes-official-plugins
 sha: d46aced3031a8f533fdbf0806bc4cf0d0b28be07
 subdir: singularity
 description: 'Singularity/Apptainer terminal backend: Clawksis''s terminal, file and code tools run inside a
@@ -16,8 +16,8 @@ tier: official
 category: tools
 requires_clawk: ">=0.21.6"
 version: "1.0.0"
-image: https://raw.githubusercontent.com/NousResearch/clawk-official-plugins/d46aced3031a8f533fdbf0806bc4cf0d0b28be07/assets/singularity.jpg
-docs_url: https://github.com/NousResearch/clawk-official-plugins/tree/main/singularity
+image: https://raw.githubusercontent.com/NousResearch/hermes-official-plugins/d46aced3031a8f533fdbf0806bc4cf0d0b28be07/assets/singularity.jpg
+docs_url: https://github.com/NousResearch/hermes-official-plugins/tree/main/singularity
 platforms:
   - linux
 capabilities:

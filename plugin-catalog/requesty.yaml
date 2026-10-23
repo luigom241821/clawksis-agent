@@ -1,5 +1,5 @@
 name: requesty
-repo: https://github.com/requestyai/clawk-provider-requesty
+repo: https://github.com/requestyai/hermes-provider-requesty
 sha: "aa4e37d7f09dfc1e98b915d740d09e8b1b44c98d"
 subdir: requesty
 title: Requesty
@@ -19,7 +19,7 @@ maintainer: requestyai
 tier: community
 category: models
 requires_clawk: ">=0.21.6"
-docs_url: https://github.com/requestyai/clawk-provider-requesty#readme
+docs_url: https://github.com/requestyai/hermes-provider-requesty#readme
 version: "0.1.0"
 capabilities:
   provides_tools: []

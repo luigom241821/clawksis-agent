@@ -1,5 +1,5 @@
 name: gadget
-repo: https://github.com/Adolanium/clawk-gadget-sdk
+repo: https://github.com/Adolanium/hermes-gadget-sdk
 sha: 4a22503cd5888d00b3fe4aedde167793e1c3961a
 subdir: plugin
 title: Clawksis Gadget
@@ -10,12 +10,12 @@ category: platform
 requires_clawk: ">=0.21.6"
 docs_url: https://adolanium.github.io/clawk-gadget-sdk/docs/connect-clawk.html
 version: "0.2.0"
-image: https://raw.githubusercontent.com/Adolanium/clawk-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/banner.webp
+image: https://raw.githubusercontent.com/Adolanium/hermes-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/banner.webp
 screenshots:
-  - https://raw.githubusercontent.com/Adolanium/clawk-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/sim-window.png
-  - https://raw.githubusercontent.com/Adolanium/clawk-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/screen-listening.png
-  - https://raw.githubusercontent.com/Adolanium/clawk-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/screen-reply.png
-  - https://raw.githubusercontent.com/Adolanium/clawk-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/screen-prompt.png
+  - https://raw.githubusercontent.com/Adolanium/hermes-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/sim-window.png
+  - https://raw.githubusercontent.com/Adolanium/hermes-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/screen-listening.png
+  - https://raw.githubusercontent.com/Adolanium/hermes-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/screen-reply.png
+  - https://raw.githubusercontent.com/Adolanium/hermes-gadget-sdk/4a22503cd5888d00b3fe4aedde167793e1c3961a/docs/images/screen-prompt.png
 capabilities:
   provides_tools:
     - gadget_devices

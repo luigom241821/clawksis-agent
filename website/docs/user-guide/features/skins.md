@@ -241,9 +241,9 @@ The field is capped at 32 KiB and applies to GUI surfaces only — the CLI and T
 
 ## Clawksis Mod — Visual Skin Editor
 
-[Clawksis Mod](https://github.com/cocktailpeanut/clawk-mod) is a community-built web UI for creating and managing skins visually. Instead of writing YAML by hand, you get a point-and-click editor with live preview.
+[Clawksis Mod](https://github.com/cocktailpeanut/hermes-mod) is a community-built web UI for creating and managing skins visually. Instead of writing YAML by hand, you get a point-and-click editor with live preview.
 
-![Clawksis Mod skin editor](https://raw.githubusercontent.com/cocktailpeanut/clawk-mod/master/nous.png)
+![Clawksis Mod skin editor](https://raw.githubusercontent.com/cocktailpeanut/hermes-mod/master/nous.png)
 
 **What it does:**
 
@@ -270,7 +270,7 @@ npx -y clawk-mod
 **Option 3 — Manual:**
 
 ```bash
-git clone https://github.com/cocktailpeanut/clawk-mod.git
+git clone https://github.com/cocktailpeanut/hermes-mod.git
 cd clawk-mod/app
 npm install
 npm start

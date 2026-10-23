@@ -26,7 +26,7 @@ function mkdtemp(prefix: string) {
 describe('resolvePluginGitUrl', () => {
   it('maps owner/repo shorthand to github git url', () => {
     expect(resolvePluginGitUrl('NousResearch/clawk-example-plugins')).toEqual({
-      gitUrl: 'https://github.com/NousResearch/clawk-example-plugins.git',
+      gitUrl: 'https://github.com/NousResearch/hermes-example-plugins.git',
       subdir: null
     })
   })

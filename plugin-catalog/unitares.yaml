@@ -15,7 +15,7 @@ maintainer: cirwel
 tier: community
 category: automation
 requires_clawk: ">=0.21.0"
-docs_url: https://github.com/cirwel/unitares-host-adapter#clawksis-agent
+docs_url: https://github.com/cirwel/unitares-host-adapter#hermes-agent
 version: "0.3.3"
 readme: true
 platforms: []

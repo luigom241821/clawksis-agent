@@ -80,8 +80,8 @@ arm_source_redirect "$2" "$3" "$4"
             check=False,
         )
 
-    result = run("""[ "$(git -C "$2" remote get-url origin)" = 'https://github.com/samuelgradientai-sys/clawksis-agent.git' ]
-git clone -q https://github.com/samuelgradientai-sys/clawksis-agent.git "$3/clone"
+    result = run("""[ "$(git -C "$2" remote get-url origin)" = 'https://github.com/NousResearch/hermes-agent.git' ]
+git clone -q https://github.com/NousResearch/hermes-agent.git "$3/clone"
 [ "$(git -C "$3/clone" rev-parse HEAD)" = "$6" ]
 run_source_installer "$2" "$3" "$3" "$5" old
 run_source_installer "$2" "$3" "$3" "$6" new desktop

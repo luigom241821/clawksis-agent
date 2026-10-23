@@ -209,4 +209,4 @@ You've hit the Bedrock per-model rate limit. Clawksis automatically retries with
 
 For a fully automated deployment on EC2 with CloudFormation:
 
-**[sample-clawksis-agent-on-aws-with-bedrock](https://github.com/JiaDe-Wu/sample-clawksis-agent-on-aws-with-bedrock)** — creates VPC, IAM role, EC2 instance, and configures Bedrock automatically. Deploy in any region with one click.
+**[sample-clawksis-agent-on-aws-with-bedrock](https://github.com/JiaDe-Wu/sample-hermes-agent-on-aws-with-bedrock)** — creates VPC, IAM role, EC2 instance, and configures Bedrock automatically. Deploy in any region with one click.

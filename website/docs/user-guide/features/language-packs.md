@@ -39,7 +39,7 @@ $ clawk config set display.language pl
 ## Using a pack
 
 ```bash
-clawk plugins install https://github.com/teknium1/clawk-lang-pl   # or a catalog name
+clawk plugins install https://github.com/teknium1/hermes-lang-pl   # or a catalog name
 clawk config set display.language pl
 ```
 

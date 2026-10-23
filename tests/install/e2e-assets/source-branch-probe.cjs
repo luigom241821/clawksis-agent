@@ -11,7 +11,7 @@ function sourceProbeGit(userData, realGit, stagedUrl, platform = process.platfor
   if (!/^file:\/\/[^\s]+$/.test(stagedUrl)) throw new Error('source check must use a staged file:// Git origin')
   const file = path.join(userData, platform === 'win32' ? 'source-probe-git.cmd' : 'source-probe-git.sh')
   const args = [
-    `url.${stagedUrl}.insteadOf=https://github.com/samuelgradientai-sys/clawksis-agent.git`,
+    `url.${stagedUrl}.insteadOf=https://github.com/NousResearch/hermes-agent.git`,
     `url.${stagedUrl}.insteadOf=git@github.com:samuelgradientai-sys/clawksis-agent.git`,
   ]
   if (platform === 'win32') {
@@ -160,7 +160,7 @@ if (process.env.CLAWK_E2E_SOURCE_ROOT && process.env.CLAWK_E2E_SOURCE_GIT) {
         // The driver shadows git with a fork-detection shim that always
         // reports the official URL for remote get-url, even with -c flags.
         return spawn.call(this, process.env.CLAWK_E2E_SOURCE_REAL_GIT, [
-          '-c', `url.${staged}.insteadOf=https://github.com/samuelgradientai-sys/clawksis-agent.git`,
+          '-c', `url.${staged}.insteadOf=https://github.com/NousResearch/hermes-agent.git`,
           '-c', `url.${staged}.insteadOf=git@github.com:samuelgradientai-sys/clawksis-agent.git`,
           ...args,
         ], options)

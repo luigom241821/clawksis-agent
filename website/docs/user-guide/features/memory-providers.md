@@ -47,7 +47,7 @@ Everything Clawksis hands a provider (turns, the transcript including tool outpu
 ### Honcho
 
 :::info Plugin catalog
-Honcho is maintained by [Plastic Labs](https://github.com/plastic-labs/honcho/tree/main/clawk-plugin-honcho) and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. It is the same provider that used to ship in-tree: tools, config files and the `clawk honcho` commands are unchanged.
+Honcho is maintained by [Plastic Labs](https://github.com/plastic-labs/honcho/tree/main/hermes-plugin-honcho) and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. It is the same provider that used to ship in-tree: tools, config files and the `clawk honcho` commands are unchanged.
 :::
 
 AI-native cross-session user modeling with dialectic reasoning, session-scoped context injection, semantic search, and persistent conclusions. Base context now includes the session summary alongside user representation and peer cards, giving the agent awareness of what has already been discussed.
@@ -81,7 +81,7 @@ The legacy `clawk honcho setup` command still works (it now redirects to `clawk 
 
 **Headless / remote machines:** for cloud auth on a box without a browser (SSH, remote VM), pick **device** at the wizard's auth-method prompt. The CLI prints a short code and a verification link; open the link in a browser on any other machine, approve, and setup completes — no API key copy-paste. The wizard defaults to this option automatically when it detects no usable local browser.
 
-**Config:** `$CLAWK_HOME/honcho.json` (profile-local) or `~/.honcho/config.json` (global). Resolution order: `$CLAWK_HOME/honcho.json` > `~/.clawksis/honcho.json` > `~/.honcho/config.json`. See the [plugin README](https://github.com/plastic-labs/honcho/tree/main/clawk-plugin-honcho) and the [Honcho integration guide](https://docs.honcho.dev/v3/guides/integrations/clawk).
+**Config:** `$CLAWK_HOME/honcho.json` (profile-local) or `~/.honcho/config.json` (global). Resolution order: `$CLAWK_HOME/honcho.json` > `~/.clawksis/honcho.json` > `~/.honcho/config.json`. See the [plugin README](https://github.com/plastic-labs/honcho/tree/main/hermes-plugin-honcho) and the [Honcho integration guide](https://docs.honcho.dev/v3/guides/integrations/clawk).
 
 <details>
 <summary>Full config reference</summary>
@@ -283,7 +283,7 @@ Off-gateway these keys do nothing. `clawk memory setup` only prompts for them wh
 
 </details>
 
-See the [plugin README](https://github.com/plastic-labs/honcho/tree/main/clawk-plugin-honcho) and [Honcho integration guide](https://docs.honcho.dev/v3/guides/integrations/clawk).
+See the [plugin README](https://github.com/plastic-labs/honcho/tree/main/hermes-plugin-honcho) and [Honcho integration guide](https://docs.honcho.dev/v3/guides/integrations/clawk).
 
 #### Upgrading from the bundled Honcho
 
@@ -295,7 +295,7 @@ Earlier Clawksis releases shipped Honcho in-tree. If a profile still has `memory
 ### OpenViking
 
 :::info Plugin catalog
-OpenViking is maintained by Volcengine and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. Source: [volcengine/OpenViking — examples/clawk-plugin](https://github.com/volcengine/OpenViking/tree/main/examples/clawk-plugin). Existing setups are migrated automatically — see [Migrating from bundled OpenViking](#migrating-from-bundled-openviking).
+OpenViking is maintained by Volcengine and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. Source: [volcengine/OpenViking — examples/clawk-plugin](https://github.com/volcengine/OpenViking/tree/main/examples/hermes-plugin). Existing setups are migrated automatically — see [Migrating from bundled OpenViking](#migrating-from-bundled-openviking).
 :::
 
 Context database by Volcengine (ByteDance) with filesystem-style knowledge hierarchy, tiered retrieval, and automatic memory extraction into 6 categories.
@@ -388,7 +388,7 @@ OpenViking used to ship inside the Clawksis tree. If your `config.yaml` already 
 ### Mem0
 
 :::info Plugin catalog
-Mem0 is maintained by Mem0 and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. Source: [mem0ai/mem0 — integrations/clawk-plugin-mem0](https://github.com/mem0ai/mem0/tree/main/integrations/clawk-plugin-mem0). Existing setups are migrated automatically — see [Migrating from bundled Mem0](#migrating-from-bundled-mem0).
+Mem0 is maintained by Mem0 and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. Source: [mem0ai/mem0 — integrations/clawk-plugin-mem0](https://github.com/mem0ai/mem0/tree/main/integrations/hermes-plugin-mem0). Existing setups are migrated automatically — see [Migrating from bundled Mem0](#migrating-from-bundled-mem0).
 :::
 
 Server-side LLM fact extraction with semantic search, reranking, and automatic deduplication. Three connection modes: **Platform** (Mem0 Cloud), **self-hosted dashboard** (a Mem0 server you run via Docker), and **OSS** (Mem0 in-process with your own LLM + vector store).
@@ -552,7 +552,7 @@ Hindsight reads `$CLAWK_HOME/hindsight/config.json` (per profile home), `~/.hind
 ### Holographic
 
 :::info Plugin catalog
-Holographic is maintained by [itpartypattaya](https://github.com/itpartypattaya/clawk-plugin-holographic) and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. It is the provider that used to ship in-tree, with the same provider name, settings and database. Existing setups are migrated automatically — see [Migrating from bundled Holographic](#migrating-from-bundled-holographic).
+Holographic is maintained by [itpartypattaya](https://github.com/itpartypattaya/hermes-plugin-holographic) and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. It is the provider that used to ship in-tree, with the same provider name, settings and database. Existing setups are migrated automatically — see [Migrating from bundled Holographic](#migrating-from-bundled-holographic).
 :::
 
 Local SQLite fact store with FTS5 full-text search, trust scoring, and HRR (Holographic Reduced Representations) for compositional algebraic queries.
@@ -588,7 +588,7 @@ clawk config set memory.provider holographic
 - `contradict` — automated detection of conflicting facts
 - Trust scoring with asymmetric feedback (+0.05 helpful / -0.10 unhelpful)
 
-The catalog plugin has its own release notes and options beyond this list; see its [README](https://github.com/itpartypattaya/clawk-plugin-holographic) for the current tool actions and settings.
+The catalog plugin has its own release notes and options beyond this list; see its [README](https://github.com/itpartypattaya/hermes-plugin-holographic) for the current tool actions and settings.
 
 #### Migrating from bundled Holographic
 
@@ -661,7 +661,7 @@ clawk config set memory.provider byterover
 ### Supermemory
 
 :::info Plugin catalog
-Supermemory is maintained by Supermemory and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. Source and full configuration reference: [supermemoryai/clawk-supermemory](https://github.com/supermemoryai/clawk-supermemory). Existing setups are migrated automatically — see [Migrating from bundled Supermemory](#migrating-from-bundled-supermemory).
+Supermemory is maintained by Supermemory and installed from the [plugin catalog](./plugins.md) rather than bundled with Clawksis. Source and full configuration reference: [supermemoryai/clawk-supermemory](https://github.com/supermemoryai/hermes-supermemory). Existing setups are migrated automatically — see [Migrating from bundled Supermemory](#migrating-from-bundled-supermemory).
 :::
 
 Semantic long-term memory with profile recall, semantic search, explicit memory tools, and per-turn conversation capture (one document per session per 4-hour window).

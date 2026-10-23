@@ -1,5 +1,5 @@
 name: clawk-mobile
-repo: https://github.com/geniok1980/clawk-mobile-adapter
+repo: https://github.com/geniok1980/hermes-mobile-adapter
 sha: 91bdca089770c3ad83f157e2932d8c3d9ed55a6a
 subdir: adapter/clawk_mobile
 title: Clawksis Mobile Adapter
