@@ -163,6 +163,9 @@ _MODEL_ID_RE = re.compile(
     # Imagen publica de sandbox (computer use) de upstream en Docker Hub: el
     # fork la usa tal cual (no publica una propia).
     r"|nousresearch/hermes-sandbox"
+    # Paquetes npm del motor JS "Hermes" de Meta (hermes-parser, hermes-estree),
+    # dependencias transitivas de babel/react-compiler: no son la marca.
+    r"|\bhermes-(?:parser|estree|eslint|transform)\b"
 )
 
 # Carpeta HOME del usuario: en el fork es ``~/.clawksis``. El blanket
