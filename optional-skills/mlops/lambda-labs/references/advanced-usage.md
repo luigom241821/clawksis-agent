@@ -11,7 +11,6 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-
 def setup_distributed():
     # Environment variables set by launcher
     rank = int(os.environ["RANK"])
@@ -22,7 +21,6 @@ def setup_distributed():
 
     torch.cuda.set_device(local_rank)
     return rank, world_size, local_rank
-
 
 def main():
     rank, world_size, local_rank = setup_distributed()
@@ -39,7 +37,6 @@ def main():
             torch.save(model.module.state_dict(), f"checkpoint_{epoch}.pt")
 
     dist.destroy_process_group()
-
 
 if __name__ == "__main__":
     main()
@@ -139,7 +136,6 @@ import time
 import lambda_cloud_client
 from lambda_cloud_client.models import LaunchInstanceRequest
 
-
 class LambdaJobManager:
     def __init__(self, api_key: str):
         self.config = lambda_cloud_client.Configuration(
@@ -228,7 +224,6 @@ if gpu_type:
 import subprocess
 import paramiko
 
-
 def run_remote_job(ip: str, ssh_key_path: str, commands: list[str]):
     """Execute commands on remote instance."""
     client = paramiko.SSHClient()
@@ -242,7 +237,6 @@ def run_remote_job(ip: str, ssh_key_path: str, commands: list[str]):
             print(f"Error: {stderr.read().decode()}")
 
     client.close()
-
 
 # Submit training job
 commands = [
@@ -283,7 +277,7 @@ def monitor_job(ip: str, ssh_key_path: str, log_file: str = "train.log"):
 ### Slurm job submission
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 #SBATCH --job-name=llm-training
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
@@ -492,7 +486,6 @@ wandb.save("/lambda/nfs/storage/checkpoints/best_model.pt")
 ```python
 import os
 
-
 def save_checkpoint(model, optimizer, epoch, loss, path):
     torch.save(
         {
@@ -504,7 +497,6 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
         path,
     )
 
-
 def load_checkpoint(path, model, optimizer):
     if os.path.exists(path):
         checkpoint = torch.load(path)
@@ -512,7 +504,6 @@ def load_checkpoint(path, model, optimizer):
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         return checkpoint["epoch"], checkpoint["loss"]
     return 0, float("inf")
-
 
 # Save every N steps to filesystem
 checkpoint_path = "/lambda/nfs/storage/checkpoints/latest.pt"
@@ -553,7 +544,6 @@ def recommend_instance(model_params: int, batch_size: int, task: str) -> str:
 ```python
 import time
 from datetime import datetime, timedelta
-
 
 def auto_terminate_idle(api_key: str, idle_threshold_hours: float = 2):
     """Terminate instances idle for too long."""

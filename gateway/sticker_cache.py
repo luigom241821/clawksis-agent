@@ -1,40 +1,35 @@
+"""Sticker description cache for Telegram.
+
+Stickers are described via the vision tool once and cached by file_unique_id
+(``~/.clawksis/sticker_cache.json``) so the same image is never re-analyzed.
 """
 
-Sticker description cache for Telegram.
-
-
-
-When users send stickers, we describe them via the vision tool and cache
-
-the descriptions keyed by file_unique_id so we don't re-analyze the same
-
-sticker image on every send. Descriptions are concise (1-2 sentences).
-
-
-
-Cache location: ~/.clawksis/sticker_cache.json
-
-"""
-
+import asyncio
 import json
-
-import os
-
-import tempfile
-
+import threading
 import time
-
+from pathlib import Path
 from typing import Optional
 
-
 from clawk_cli.config import get_clawk_home
-
+from utils import atomic_json_write
 
 CACHE_PATH = get_clawk_home() / "sticker_cache.json"
+_CACHE_PATH_AT_IMPORT = CACHE_PATH
 
 
-# Vision prompt for describing stickers -- kept concise to save tokens
+def _resolve_cache_path() -> Path:
+    """Active profile's cache file at call time: the patched ``CACHE_PATH`` when a test changed
+    it, else live profile-scoped CLAWK_HOME — under the multiplexed gateway one process serves
+    every profile, so the import-time constant would pin every profile to the launch home."""
+    return (
+        CACHE_PATH
+        if CACHE_PATH != _CACHE_PATH_AT_IMPORT
+        else get_clawk_home() / "sticker_cache.json"
+    )
 
+
+# Kept concise to save tokens.
 STICKER_VISION_PROMPT = (
     "Describe this sticker in 1-2 sentences. Focus on what it depicts -- "
     "character, action, emotion. Be concise and objective."
@@ -42,138 +37,82 @@ STICKER_VISION_PROMPT = (
 
 
 def _load_cache() -> dict:
-    """Load the sticker cache from disk."""
-
-    if CACHE_PATH.exists():
+    """Load the sticker cache from disk (utf-8-sig: BOM-tolerant read fix)."""
+    path = _resolve_cache_path()
+    if path.exists():
         try:
-            return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-
-        except (json.JSONDecodeError, OSError):
+            return json.loads(path.read_text(encoding="utf-8-sig"))
+        except (json.JSONDecodeError, OSError):  # OSError covers FileNotFoundError
             return {}
-
     return {}
 
 
 def _save_cache(cache: dict) -> None:
-    """Save the sticker cache to disk atomically."""
+    atomic_json_write(_resolve_cache_path(), cache)
 
-    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    fd, tmp_path = tempfile.mkstemp(dir=str(CACHE_PATH.parent), suffix=".tmp")
-
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(cache, f, indent=2, ensure_ascii=False)
-
-            f.flush()
-
-            os.fsync(f.fileno())
-
-        os.replace(tmp_path, str(CACHE_PATH))
-
-    except BaseException:
-        try:
-            os.unlink(tmp_path)
-
-        except OSError:
-            pass
-
-        raise
+# Serializes the read-modify-write in ``cache_sticker_description``. Nothing
+# re-acquires it while held (the async wrapper only dispatches the sync form
+# to a worker thread), so a plain Lock suffices.
+_CACHE_LOCK = threading.Lock()
 
 
 def get_cached_description(file_unique_id: str) -> Optional[dict]:
-    """
-
-    Look up a cached sticker description.
-
-
-
-    Returns:
-
-        dict with keys {description, emoji, set_name, cached_at} or None.
-
-    """
-
-    cache = _load_cache()
-
-    return cache.get(file_unique_id)
+    """Return ``{description, emoji, set_name, cached_at}`` or None."""
+    return _load_cache().get(file_unique_id)
 
 
 def cache_sticker_description(
-    file_unique_id: str,
-    description: str,
-    emoji: str = "",
-    set_name: str = "",
+    file_unique_id: str, description: str, emoji: str = "", set_name: str = ""
 ) -> None:
+    """Store a vision-generated description under Telegram's stable sticker id.
+
+    Blocking: ``atomic_json_write`` ends in ``os.replace``. Callers on the event
+    loop must use :func:`cache_sticker_description_async`.
     """
-
-    Store a sticker description in the cache.
-
-
-
-    Args:
-
-        file_unique_id: Telegram's stable sticker identifier.
-
-        description:    Vision-generated description text.
-
-        emoji:          Associated emoji (e.g. "😀").
-
-        set_name:       Sticker set name if available.
-
-    """
-
-    cache = _load_cache()
-
-    cache[file_unique_id] = {
+    entry = {
         "description": description,
         "emoji": emoji,
         "set_name": set_name,
         "cached_at": time.time(),
     }
+    # The lock makes the load/mutate/save triple atomic across worker threads.
+    with _CACHE_LOCK:
+        _save_cache({**_load_cache(), file_unique_id: entry})
 
-    _save_cache(cache)
+
+async def cache_sticker_description_async(
+    file_unique_id: str, description: str, emoji: str = "", set_name: str = ""
+) -> None:
+    """Off-loop form of :func:`cache_sticker_description`.
+
+    The write ends in ``os.replace``, whose duration is unbounded under
+    filesystem pressure, and the only caller is Telegram's ``_handle_sticker``
+    -- an inbound-message coroutine. Paying the rename inline stalls every
+    adapter and every in-flight turn in the process for its duration.
+    """
+    await asyncio.to_thread(
+        cache_sticker_description, file_unique_id, description, emoji, set_name
+    )
 
 
 def build_sticker_injection(
-    description: str,
-    emoji: str = "",
-    set_name: str = "",
+    description: str, emoji: str = "", set_name: str = ""
 ) -> str:
-    """
-
-    Build the warm-style injection text for a sticker description.
-
-
-
-    Returns a string like:
-
-      [The user sent a sticker 😀 from "MyPack"~ It shows: "A cat waving" (=^.w.^=)]
-
-    """
-
-    context = ""
-
+    """Warm-style injection text, e.g.
+    ``[The user sent a sticker 😀 from "MyPack"~ It shows: "A cat waving" (=^.w.^=)]``.
+    ``set_name`` is only shown together with an emoji."""
+    context = f" {emoji}" if emoji else ""
     if set_name and emoji:
-        context = f' {emoji} from "{set_name}"'
-
-    elif emoji:
-        context = f" {emoji}"
-
+        context += f' from "{set_name}"'
     return f'[The user sent a sticker{context}~ It shows: "{description}" (=^.w.^=)]'
 
 
 def build_animated_sticker_injection(emoji: str = "") -> str:
-    """
-
-    Build injection text for animated/video stickers we can't analyze.
-
-    """
-
+    """Injection text for animated/video stickers we can't analyze."""
     if emoji:
         return (
             f"[The user sent an animated sticker {emoji}~ "
             f"I can't see animated ones yet, but the emoji suggests: {emoji}]"
         )
-
     return "[The user sent an animated sticker~ I can't see animated ones yet]"

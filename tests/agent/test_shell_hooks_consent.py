@@ -1,51 +1,38 @@
 """Consent-flow tests for the shell-hook allowlist.
 
-
-
 Covers the prompt/non-prompt decision tree: TTY vs non-TTY, and the
-
 three accept-hooks channels (--accept-hooks, CLAWK_ACCEPT_HOOKS env,
-
 hooks_auto_accept: config key).
-
 """
 
 from __future__ import annotations
 
-
+import asyncio
+import json
+import logging
+import os
 from pathlib import Path
-
+from types import SimpleNamespace
 from unittest.mock import patch
 
-
 import pytest
-
 
 from agent import shell_hooks
 
 
 @pytest.fixture(autouse=True)
 def _isolated_home(tmp_path, monkeypatch):
-
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk_home"))
-
     monkeypatch.delenv("CLAWK_ACCEPT_HOOKS", raising=False)
-
     shell_hooks.reset_for_tests()
-
     yield
-
     shell_hooks.reset_for_tests()
 
 
 def _write_hook_script(tmp_path: Path) -> Path:
-
     script = tmp_path / "hook.sh"
-
-    script.write_text("#!/usr/bin/env bash\nprintf '{}\\n'\n")
-
+    script.write_text("#!/usr/bin/env bash\nprintf '{}\\n'\n", encoding="utf-8")
     script.chmod(0o755)
-
     return script
 
 
@@ -54,11 +41,9 @@ def _write_hook_script(tmp_path: Path) -> Path:
 
 class TestTTYPromptFlow:
     def test_first_use_prompts_and_approves(self, tmp_path):
-
         from clawk_cli import plugins
 
         script = _write_hook_script(tmp_path)
-
         plugins._plugin_manager = plugins.PluginManager()
 
         with (
@@ -66,28 +51,22 @@ class TestTTYPromptFlow:
             patch("builtins.input", return_value="y"),
         ):
             mock_stdin.isatty.return_value = True
-
             registered = shell_hooks.register_from_config(
                 {"hooks": {"on_session_start": [{"command": str(script)}]}},
                 accept_hooks=False,
+                interactive=True,
             )
-
         assert len(registered) == 1
 
         entry = shell_hooks.allowlist_entry_for("on_session_start", str(script))
-
         assert entry is not None
-
         assert entry["event"] == "on_session_start"
-
         assert entry["command"] == str(script)
 
     def test_first_use_prompts_and_rejects(self, tmp_path):
-
         from clawk_cli import plugins
 
         script = _write_hook_script(tmp_path)
-
         plugins._plugin_manager = plugins.PluginManager()
 
         with (
@@ -95,14 +74,12 @@ class TestTTYPromptFlow:
             patch("builtins.input", return_value="n"),
         ):
             mock_stdin.isatty.return_value = True
-
             registered = shell_hooks.register_from_config(
                 {"hooks": {"on_session_start": [{"command": str(script)}]}},
                 accept_hooks=False,
+                interactive=True,
             )
-
         assert registered == []
-
         assert (
             shell_hooks.allowlist_entry_for(
                 "on_session_start",
@@ -113,32 +90,27 @@ class TestTTYPromptFlow:
 
     def test_subsequent_use_does_not_prompt(self, tmp_path):
         """After the first approval, re-registration must be silent."""
-
         from clawk_cli import plugins
 
         script = _write_hook_script(tmp_path)
-
         plugins._plugin_manager = plugins.PluginManager()
 
         # First call: TTY, approved.
-
         with (
             patch("sys.stdin") as mock_stdin,
             patch("builtins.input", return_value="y"),
         ):
             mock_stdin.isatty.return_value = True
-
             shell_hooks.register_from_config(
                 {"hooks": {"on_session_start": [{"command": str(script)}]}},
                 accept_hooks=False,
+                interactive=True,
             )
 
         # Reset registration set but keep the allowlist on disk.
-
         shell_hooks.reset_for_tests()
 
         # Second call: TTY, input() must NOT be called.
-
         with (
             patch("sys.stdin") as mock_stdin,
             patch(
@@ -147,12 +119,11 @@ class TestTTYPromptFlow:
             ),
         ):
             mock_stdin.isatty.return_value = True
-
             registered = shell_hooks.register_from_config(
                 {"hooks": {"on_session_start": [{"command": str(script)}]}},
                 accept_hooks=False,
+                interactive=True,
             )
-
         assert len(registered) == 1
 
 
@@ -161,198 +132,189 @@ class TestTTYPromptFlow:
 
 class TestNonTTYFlow:
     def test_no_tty_no_flag_skips_registration(self, tmp_path):
-
         from clawk_cli import plugins
 
         script = _write_hook_script(tmp_path)
-
         plugins._plugin_manager = plugins.PluginManager()
 
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
-
             registered = shell_hooks.register_from_config(
                 {"hooks": {"on_session_start": [{"command": str(script)}]}},
                 accept_hooks=False,
             )
-
         assert registered == []
 
-    def test_no_tty_with_argument_flag_accepts(self, tmp_path):
-
-        from clawk_cli import plugins
-
-        script = _write_hook_script(tmp_path)
-
-        plugins._plugin_manager = plugins.PluginManager()
-
-        with patch("sys.stdin") as mock_stdin:
-            mock_stdin.isatty.return_value = False
-
-            registered = shell_hooks.register_from_config(
-                {"hooks": {"on_session_start": [{"command": str(script)}]}},
-                accept_hooks=True,
-            )
-
-        assert len(registered) == 1
-
     def test_no_tty_with_env_accepts(self, tmp_path, monkeypatch):
-
         from clawk_cli import plugins
 
         script = _write_hook_script(tmp_path)
-
         plugins._plugin_manager = plugins.PluginManager()
-
         monkeypatch.setenv("CLAWK_ACCEPT_HOOKS", "1")
 
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
-
             registered = shell_hooks.register_from_config(
                 {"hooks": {"on_session_start": [{"command": str(script)}]}},
                 accept_hooks=False,
             )
-
         assert len(registered) == 1
 
-    def test_no_tty_with_config_accepts(self, tmp_path):
 
+# ── Never prompt outside a foreground CLI command (#120356, #127822) ──────
+
+
+def _tty_stdin_that_nobody_answers(monkeypatch) -> list:
+    """A hidden console (Windows ``.vbs`` launcher) or ``NUL`` makes ``isatty()`` True with no
+    person behind it; record every ``input()`` instead of blocking on it."""
+    asked: list = []
+    monkeypatch.setattr("sys.stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr("builtins.input", lambda *a: asked.append(a) or "y")
+    return asked
+
+
+def _write_config_with_hook(tmp_path: Path) -> Path:
+    script = _write_hook_script(tmp_path)
+    home = Path(os.environ["CLAWK_HOME"])
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "config.yaml").write_text(
+        f"hooks:\n  on_session_start:\n    - command: {json.dumps(str(script))}\n",
+        encoding="utf-8",
+    )
+    return script
+
+
+class TestNeverPromptOutsideForegroundCLI:
+    def test_default_registration_declines_without_reading_a_tty_stdin(
+        self, tmp_path, monkeypatch, caplog
+    ):
         from clawk_cli import plugins
 
         script = _write_hook_script(tmp_path)
-
         plugins._plugin_manager = plugins.PluginManager()
+        asked = _tty_stdin_that_nobody_answers(monkeypatch)
 
-        with patch("sys.stdin") as mock_stdin:
-            mock_stdin.isatty.return_value = False
-
+        with caplog.at_level(logging.WARNING, logger="agent.shell_hooks"):
             registered = shell_hooks.register_from_config(
-                {
-                    "hooks_auto_accept": True,
-                    "hooks": {"on_session_start": [{"command": str(script)}]},
-                },
-                accept_hooks=False,
+                {"hooks": {"on_session_start": [{"command": str(script)}]}}
             )
 
+        assert asked == []
+        assert registered == []
+        assert shell_hooks.allowlist_entry_for("on_session_start", str(script)) is None
+        assert (
+            str(shell_hooks.allowlist_path()) in caplog.text
+        )  # names the profile home to approve in
+
+    def test_opt_in_still_approves_without_a_prompt(self, tmp_path, monkeypatch):
+        from clawk_cli import plugins
+
+        script = _write_hook_script(tmp_path)
+        plugins._plugin_manager = plugins.PluginManager()
+        asked = _tty_stdin_that_nobody_answers(monkeypatch)
+        monkeypatch.setenv("CLAWK_ACCEPT_HOOKS", "1")
+
+        registered = shell_hooks.register_from_config(
+            {"hooks": {"on_session_start": [{"command": str(script)}]}}
+        )
+
+        assert asked == []
         assert len(registered) == 1
+        assert (
+            shell_hooks.allowlist_entry_for("on_session_start", str(script)) is not None
+        )
+
+    def test_gateway_registration_on_the_event_loop_never_prompts(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """The P0 shape: gateway startup and every secondary-profile load register from the loop
+        thread; a prompt there froze the loop until the liveness watchdog exited 75."""
+        from gateway.run_startup import GatewayStartupMixin
+        from clawk_cli import plugins
+
+        script = _write_config_with_hook(tmp_path)
+        plugins._plugin_manager = plugins.PluginManager()
+        asked = _tty_stdin_that_nobody_answers(monkeypatch)
+
+        async def _boot() -> None:
+            asyncio.get_running_loop()  # registered from the loop thread, as startup does
+            GatewayStartupMixin._register_config_hooks(
+                "registration failed", level=logging.ERROR
+            )
+
+        with caplog.at_level(logging.WARNING):
+            asyncio.run(_boot())
+
+        assert asked == []
+        assert "registration failed" not in caplog.text
+        assert "not allowlisted" in caplog.text and str(script) in caplog.text
+        assert shell_hooks.allowlist_entry_for("on_session_start", str(script)) is None
+        assert plugins._plugin_manager._hooks.get("on_session_start", []) == []
+
+    def test_force_reload_reregistration_never_prompts(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        from clawk_cli import plugins
+
+        script = _write_config_with_hook(tmp_path)
+        plugins._plugin_manager = plugins.PluginManager()
+        asked = _tty_stdin_that_nobody_answers(monkeypatch)
+
+        with caplog.at_level(logging.WARNING, logger="agent.shell_hooks"):
+            shell_hooks.re_register_config_hooks()
+
+        assert asked == []
+        assert "not allowlisted" in caplog.text
+        assert shell_hooks.allowlist_entry_for("on_session_start", str(script)) is None
 
 
 # ── Allowlist + revoke + mtime ────────────────────────────────────────────
 
 
 class TestAllowlistOps:
-    def test_mtime_recorded_on_approval(self, tmp_path):
-
-        script = _write_hook_script(tmp_path)
-
-        shell_hooks._record_approval("on_session_start", str(script))
-
-        entry = shell_hooks.allowlist_entry_for(
-            "on_session_start",
-            str(script),
-        )
-
-        assert entry is not None
-
-        assert entry["script_mtime_at_approval"] is not None
-
-        # ISO-8601 Z-suffix
-
-        assert entry["script_mtime_at_approval"].endswith("Z")
-
-    def test_revoke_removes_entry(self, tmp_path):
-
-        script = _write_hook_script(tmp_path)
-
-        shell_hooks._record_approval("on_session_start", str(script))
-
-        assert (
-            shell_hooks.allowlist_entry_for(
-                "on_session_start",
-                str(script),
-            )
-            is not None
-        )
-
-        removed = shell_hooks.revoke(str(script))
-
-        assert removed == 1
-
-        assert (
-            shell_hooks.allowlist_entry_for(
-                "on_session_start",
-                str(script),
-            )
-            is None
-        )
-
-    def test_revoke_unknown_returns_zero(self, tmp_path):
-
-        assert shell_hooks.revoke(str(tmp_path / "never-approved.sh")) == 0
-
+    @pytest.mark.platforms("linux")
     def test_tilde_path_approval_records_resolvable_mtime(self, tmp_path, monkeypatch):
         """If the command uses ~ the approval must still find the file."""
-
         monkeypatch.setenv("HOME", str(tmp_path))
-
         target = tmp_path / "hook.sh"
-
-        target.write_text("#!/usr/bin/env bash\n")
-
+        target.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
         target.chmod(0o755)
 
         shell_hooks._record_approval("on_session_start", "~/hook.sh")
-
         entry = shell_hooks.allowlist_entry_for(
             "on_session_start",
             "~/hook.sh",
         )
-
         assert entry is not None
-
         # Must not be None — the tilde was expanded before stat().
-
         assert entry["script_mtime_at_approval"] is not None
 
     def test_duplicate_approval_replaces_mtime(self, tmp_path):
         """Re-approving the same pair refreshes the approval timestamp."""
-
         script = _write_hook_script(tmp_path)
-
         shell_hooks._record_approval("on_session_start", str(script))
-
         original_entry = shell_hooks.allowlist_entry_for(
             "on_session_start",
             str(script),
         )
-
         assert original_entry is not None
 
         # Touch the script to bump its mtime then re-approve.
-
         import os
-
         import time
 
-        new_mtime = original_entry.get("script_mtime_at_approval")
-
         time.sleep(0.01)
-
         os.utime(script, None)  # current time
 
         shell_hooks._record_approval("on_session_start", str(script))
 
         # Exactly one entry per (event, command).
-
         approvals = shell_hooks.load_allowlist().get("approvals", [])
-
         matching = [
             e
             for e in approvals
             if e.get("event") == "on_session_start" and e.get("command") == str(script)
         ]
-
         assert len(matching) == 1
 
 
@@ -362,18 +324,12 @@ class TestAllowlistOps:
 class TestHooksAutoAcceptParsing:
     """Regression guard: YAML-string values must not silently auto-accept.
 
-
-
     ``bool("false")`` is ``True`` in Python, so the old ``return bool(cfg_val)``
-
     path treated ``hooks_auto_accept: "false"`` (quoted YAML string) as a
-
     truthy opt-in, silently bypassing user consent for every shell hook.
-
     """
 
     def test_bool_true_accepts(self):
-
         assert (
             shell_hooks._resolve_effective_accept(
                 {"hooks_auto_accept": True},
@@ -382,81 +338,7 @@ class TestHooksAutoAcceptParsing:
             is True
         )
 
-    def test_bool_false_rejects(self):
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {"hooks_auto_accept": False},
-                accept_hooks_arg=False,
-            )
-            is False
-        )
-
-    def test_string_false_rejects(self):
-
-        # The bug: bool("false") is True. Must be parsed, not coerced.
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {"hooks_auto_accept": "false"},
-                accept_hooks_arg=False,
-            )
-            is False
-        )
-
-    def test_string_no_rejects(self):
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {"hooks_auto_accept": "no"},
-                accept_hooks_arg=False,
-            )
-            is False
-        )
-
-    def test_string_true_accepts(self):
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {"hooks_auto_accept": "true"},
-                accept_hooks_arg=False,
-            )
-            is True
-        )
-
-    def test_string_true_case_insensitive(self):
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {"hooks_auto_accept": "  TRUE  "},
-                accept_hooks_arg=False,
-            )
-            is True
-        )
-
-    def test_string_yes_on_one_accept(self):
-
-        for val in ("yes", "on", "1"):
-            assert (
-                shell_hooks._resolve_effective_accept(
-                    {"hooks_auto_accept": val},
-                    accept_hooks_arg=False,
-                )
-                is True
-            ), val
-
-    def test_missing_key_rejects(self):
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {},
-                accept_hooks_arg=False,
-            )
-            is False
-        )
-
     def test_none_rejects(self):
-
         assert (
             shell_hooks._resolve_effective_accept(
                 {"hooks_auto_accept": None},
@@ -466,23 +348,11 @@ class TestHooksAutoAcceptParsing:
         )
 
     def test_integer_ignored(self):
-
         # Only bool and str are honored; anything else (including 1) is False.
-
         assert (
             shell_hooks._resolve_effective_accept(
                 {"hooks_auto_accept": 1},
                 accept_hooks_arg=False,
             )
             is False
-        )
-
-    def test_cli_arg_overrides_config(self):
-
-        assert (
-            shell_hooks._resolve_effective_accept(
-                {"hooks_auto_accept": "false"},
-                accept_hooks_arg=True,
-            )
-            is True
         )

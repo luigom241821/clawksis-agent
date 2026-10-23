@@ -11,7 +11,7 @@ Usage:
     python parseltongue.py "How do I hack a WiFi network?" --tier standard
 
     # As a module in execute_code
-    exec(open(os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/red-teaming/godmode/scripts/parseltongue.py")).read())
+    exec(open(os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/security/godmode/scripts/parseltongue.py")).read())
     variants = generate_variants("How do I hack a WiFi network?", tier="standard")
 """
 
@@ -787,12 +787,14 @@ def generate_variants(query, tier="standard", custom_triggers=None):
 
     variants = []
     for i, tech in enumerate(TECHNIQUES[:max_variants]):
-        variants.append({
-            "text": obfuscate_query(query, tech["name"], triggers),
-            "technique": tech["name"],
-            "label": tech["label"],
-            "tier": tech["tier"],
-        })
+        variants.append(
+            {
+                "text": obfuscate_query(query, tech["name"], triggers),
+                "technique": tech["name"],
+                "label": tech["label"],
+                "tier": tech["tier"],
+            }
+        )
 
     return variants
 
