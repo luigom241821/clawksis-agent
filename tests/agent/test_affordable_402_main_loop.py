@@ -48,6 +48,10 @@ def test_credit_limited_402_retries_once_with_the_affordable_cap(repeat_402):
 
     assert caps == [65536, 56272 - 64]
     if repeat_402:
-        assert result.get("failed") and "Billing" in (result.get("final_response") or ""), result
+        # Clawksis words this subtype precisely (_billing_headline): the account has
+        # balance, it just can't cover this max_tokens.
+        assert result.get("failed") and "Provider balance can't cover this request" in (
+            result.get("final_response") or ""
+        ), result
     else:
         assert result.get("completed") and result.get("final_response") == "answered", result
