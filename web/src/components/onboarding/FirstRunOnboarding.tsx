@@ -6,7 +6,7 @@ import {
   useState,
   type ComponentType,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import {
   Bot,
   CheckCircle2,

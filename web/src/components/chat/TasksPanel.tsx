@@ -27,7 +27,7 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { fetchJSON } from "@/lib/api";
 

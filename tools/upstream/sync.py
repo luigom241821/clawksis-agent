@@ -183,8 +183,42 @@ REBRAND_EXTS = {
     ".cfg",
     ".ini",
     ".rst",
+    # Agregados en el sync a v0.22.5: sin estos, upstream traia "hermes" en
+    # scripts de build (.mjs/.cjs), nix, Rust, CSS (clases que el TSX ya
+    # nombra "clawk-*"), shells fish, plantillas y manifests.
+    ".mjs",
+    ".cjs",
+    ".mts",
+    ".cts",
+    ".jsx",
+    ".nix",
+    ".rs",
+    ".fish",
+    ".css",
+    ".scss",
+    ".example",
+    ".ahk",
+    ".xml",
+    ".plist",
+    ".bat",
+    ".cmd",
+    ".desktop",
+    ".service",
+    ".tmpl",
+    ".h",
+    ".c",
+    ".dockerfile",
+    ".mdx",
 }
-REBRAND_BASENAMES = {"Dockerfile", "dockerfile"}
+REBRAND_BASENAMES = {"Dockerfile", "dockerfile", "activate", "justfile"}
+
+
+def _rebrandable(name: str, content: bytes) -> bool:
+    ext = ("." + name.rsplit(".", 1)[-1]).lower() if "." in name else ""
+    if ext in REBRAND_EXTS or name in REBRAND_BASENAMES:
+        return True
+    # Scripts sin extension (bin/*, s6 run, wrappers): solo si tienen shebang.
+    return not ext and content.startswith(b"#!")
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -223,8 +257,7 @@ def map_path(p: str) -> str:
 
 def rebrand(content: bytes, path: str) -> bytes:
     name = path.rsplit("/", 1)[-1]
-    ext = ("." + name.rsplit(".", 1)[-1]).lower() if "." in name else ""
-    if ext not in REBRAND_EXTS and name not in REBRAND_BASENAMES:
+    if path.startswith("contributors/") or not _rebrandable(name, content):
         return content
     try:
         text = content.decode("utf-8")

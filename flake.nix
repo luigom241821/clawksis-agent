@@ -1,6 +1,6 @@
 {
 
-  description = "Clawksis - AI agent framework by Nous Research";
+  description = "Clawksis - autonomous AI agent (fork of Hermes Agent by Nous Research)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

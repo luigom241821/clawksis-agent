@@ -154,7 +154,8 @@ def anon_failure_copy(code: str, *, retry_after: Any = None) -> str:
 
 
 def guest_allowed() -> bool:
-    """``nous.guest`` (default True) has not switched guests off: no connector guest, no trial."""
+    """``nous.guest`` is on. Clawksis is BYOK: the Nous free tier is OFF unless the user opts in
+    (``nous.guest: true``), so every fallback below answers False."""
     try:
         from clawk_cli.config import load_config_readonly
         nous_cfg = load_config_readonly().get("nous")
@@ -162,8 +163,8 @@ def guest_allowed() -> bool:
         logger.debug("guest: config unreadable, treating nous.guest as false", exc_info=True)
         return False
     if not isinstance(nous_cfg, dict):
-        return True
-    return bool(nous_cfg.get("guest", True))
+        return False
+    return bool(nous_cfg.get("guest", False))
 
 
 def is_guest_state(state: Any) -> bool:

@@ -391,7 +391,8 @@ DEFAULT_CONFIG = {
 
     "web": {
         "backend": "",           # shared fallback — applies to both search and extract
-        "search_backend": "",    # per-capability override for web_search (e.g. "searxng")
+        # Fork default: free DuckDuckGo, no key, lazy-installed on first use (search.ddgs in LAZY_DEPS).
+        "search_backend": "ddgs",  # per-capability override for web_search (e.g. "searxng")
         "extract_backend": "",   # per-capability override for web_extract (e.g. "native")
         # per-page char budget for web_extract; larger pages truncate, full text kept in cache/web
         "extract_char_limit": 15000,
@@ -420,6 +421,35 @@ DEFAULT_CONFIG = {
         "cache_exempt_hosts": [],
     },
 
+    # Capa de robustez OPT-IN ante 429 / rate limits / outages de proveedores.
+    # Todo default OFF ⇒ comportamiento byte-for-byte idéntico (el retry + rotación
+    # de credenciales + failover de proveedor ya existentes siguen siendo el camino base;
+    # esto los aumenta cuando se habilita). Ver agent/resilience/.
+    "resilience": {
+        "circuit_breaker": {
+            "enabled": False,  # corta a fallback tras N fallos transitorios seguidos (no quema todo el retry)
+            "failure_threshold": 3,  # fallos transitorios consecutivos para abrir
+            "cooldown_seconds": 60,  # segundos abierto antes del probe half-open
+        },
+        "rate_limits": {
+            "enabled": False,  # throttle preventivo para no llegar al 429
+            "use_response_headers": True,  # sembrar caps desde los x-ratelimit-* de las respuestas
+            "max_wait_seconds": 60,  # tope duro de espera por throttle (anti-stall)
+            "providers": {},  # caps estáticos, p.ej. {"anthropic": {"rpm": 50, "tpm": 40000}}
+        },
+        "adaptive_cooldown": {
+            "enabled": False,  # cooldown de credencial exhausta crece exponencial (vs fijo 1h)
+            "base_seconds": 60,
+            "max_seconds": 3600,
+        },
+        # NOTA: la reanudación al proveedor primario cuando su cooldown expira NO
+        # es un toggle — ya es built-in y siempre activa (run_conversation llama
+        # _restore_primary_runtime() al inicio de cada turno, respetando el cooldown).
+        "durable_turns": {
+            "enabled": False,  # journal de turnos en vuelo (tui_gateway) para reanudar tras crash
+            "freshness_seconds": 3600,
+        },
+    },
     "browser": {
         # "" = Browser Use mode when the browser-use CLI (or uvx) is available, else built-in tools
         # (Camofox setups always keep built-in tools: no CDP surface); "browser-use" = force one
@@ -898,7 +928,7 @@ DEFAULT_CONFIG = {
         "file_mutation_verifier": True,
         # Nous credits status-bar notices (usage bands, grant-spent, depleted/restored). False mutes
         # them; balance data and /usage keep working.
-        "credits_notices": True,
+        "credits_notices": False,  # Clawksis: sin creditos Nous (BYOK)
         # Append a one-line explanation when a turn ends with no usable reply (empty after retries,
         # truncated stream, pending tool result, iteration/budget limit) instead of the bare
         # "(empty)" sentinel.
@@ -1013,7 +1043,7 @@ DEFAULT_CONFIG = {
 
     "dashboard": {
         # Visual theme: "default" | "midnight" | "ember" | "mono" | "cyberpunk" | "rose"
-        "theme": "default",
+        "theme": "midnight",
         # Process-isolation rollout controls. Read via the raw config loader, so tui_gateway.server
         # also owns explicit defaults.
         "turn_isolation": False,
@@ -1869,6 +1899,10 @@ DEFAULT_CONFIG = {
         # Max due jobs run in parallel per tick. None/0 = unbounded (thread count only); 1 = serial.
         # Env override: CLAWK_CRON_MAX_PARALLEL.
         "max_parallel_jobs": None,
+        # Archive each cron run's chat session when the run finishes, so scheduled jobs don't
+        # flood the conversations sidebar. Transcripts stay accessible (Sessions → archived).
+        # Toggleable from the Cron page.
+        "archive_chat_sessions": False,
         # save_job_output keeps the N most recent .md files per job; 0 or negative disables pruning
         # (for externally managed cleanup).
         "output_retention": 50,
@@ -2053,7 +2087,7 @@ DEFAULT_CONFIG = {
     # release. Default URL is served by the docs-site GitHub Pages deploy.
     "model_catalog": {
         "enabled": True,
-        "url": "https://clawksis-agent.nousresearch.com/docs/api/model-catalog.json",
+        "url": "https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json",
         # Disk cache TTL in minutes. The gateway refreshes in the background on this cadence; the
         # CLI refetches on the next /model or `clawk model` once the cache is older. Network
         # failures silently use the stale cache. Legacy `ttl_hours` is honoured if set.
@@ -2702,7 +2736,9 @@ DEFAULT_CONFIG = {
         # first use (inference on nous/welcome + connectors) and offers `/login` (terminal:
         # `clawk auth upgrade`) to sign in. false turns the free tier off entirely: nothing is set
         # up and nothing is used.
-        "guest": True,
+        # Clawksis es BYOK: el free tier de Nous queda APAGADO por defecto (no se crea ninguna
+        # identidad Nous ni se usa su inferencia sin que el usuario lo pida).
+        "guest": False,
     },
     # Google Vertex AI (Gemini). Auth is OAuth2 from a service-account JSON or ADC, NOT an API key;
     # the credential path lives in .env (VERTEX_CREDENTIALS_PATH / GOOGLE_APPLICATION_CREDENTIALS).
@@ -2741,11 +2777,6 @@ from clawk_cli.config_defaults_env import _base_url, _env, _msg, _prov, _setting
 OPTIONAL_ENV_VARS = {
     # ── Provider (handled in provider selection, not shown in checklists) ──
     "NOUS_BASE_URL": _base_url("Nous Portal"),
-    "CLAWK_ANON_API_SECRET": _env(
-        "Shared secret for the Nous free-tier sign-up endpoints while they are in their gated "
-        "integration phase (not needed once the gate is removed)",
-        "Nous free-tier shared secret (leave empty unless given one)", password=True,
-        category="provider", advanced=True),
     "OPENROUTER_API_KEY": _env("OpenRouter API key (for vision, web scraping helpers, and MoA)",
         "OpenRouter API key", url="https://openrouter.ai/keys", password=True, tools=["vision_analyze"],
         category="provider", advanced=True),
