@@ -41,6 +41,11 @@ def server():
 
         mod = importlib.import_module("tui_gateway.server")
 
+    # Leaving the window drops the module from sys.modules. The resumed session's agent build
+    # thread then runs ``from tui_gateway.server import ...`` (via ``tui_gateway.entry``) and
+    # re-imports a second copy in the background, which the conftest teardown can find half
+    # initialized. Keep this copy registered so every later import reuses it.
+    sys.modules.setdefault("tui_gateway.server", mod)
     methods = dict(mod._methods)
     real_stdout = mod._real_stdout
     yield mod

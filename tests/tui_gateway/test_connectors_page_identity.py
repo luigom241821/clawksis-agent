@@ -1,7 +1,9 @@
 """The desktop Connectors page, the CLI and the agent tool, and the guest identity behind hosted connectors.
 
-Contracts, for a user with no Nous identity (the fake account service in
-``tests.clawk_cli.anon_portal``, Clawksis' real RPC handlers and CLI):
+Contracts, for a user with no Nous identity who opted in to the free tier (``nous.guest: true``;
+Clawksis is BYOK, so with the stock config hosted connectors stay unavailable and nothing is
+created), against the fake account service in ``tests.clawk_cli.anon_portal`` and Clawksis' real
+RPC handlers and CLI:
 - opening the page (list, catalog, accounts) creates no identity; the catalog comes from the Portal's
   public route, asked once and without a bearer, and rules are refused rather than invented
 - ``clawk connectors list`` and the agent's ``manage_connections`` status each create exactly one
@@ -20,13 +22,23 @@ import pytest
 
 import tui_gateway.server as srv
 from clawk_cli import free_tier_offer
-from tests.clawk_cli.anon_portal import install_portal
+from tests.clawk_cli.anon_portal import install_portal, opt_in_free_tier
 from tests.waiting import wait_until
 from tools.connectors import live
 
 ACCOUNT = {"owner": {"type": "account"}}
-CATALOG = {"connectors": [{"slug": "notion", "name": "Notion", "description": "Docs", "category": "Productivity",
-                           "logoUrl": None, "state": "live"}]}
+CATALOG = {
+    "connectors": [
+        {
+            "slug": "notion",
+            "name": "Notion",
+            "description": "Docs",
+            "category": "Productivity",
+            "logoUrl": None,
+            "state": "live",
+        }
+    ]
+}
 
 
 class _Response:
@@ -38,11 +50,18 @@ class _Response:
 
 
 @pytest.fixture
-def portal(monkeypatch, tmp_path):
+def byok_portal(monkeypatch, tmp_path):
+    """The fake account service with the stock config: the free tier, and with it guest connectors, is off."""
     fake = install_portal(monkeypatch, tmp_path)
     live.reset_for_tests()
     yield fake
     live.reset_for_tests()
+
+
+@pytest.fixture
+def portal(byok_portal):
+    opt_in_free_tier()
+    return byok_portal
 
 
 @pytest.fixture
@@ -54,7 +73,9 @@ def connector_portal(monkeypatch):
         def request(self, method, url, *, headers=None, json=None, timeout=None):
             path = "/" + url.split("://", 1)[1].split("/", 1)[1]
             requests.append((path, "Authorization" in (headers or {})))
-            return _Response({"accounts": []} if path.endswith("/accounts") else CATALOG)
+            return _Response(
+                {"accounts": []} if path.endswith("/accounts") else CATALOG
+            )
 
     monkeypatch.setattr("tools.connectors.portal.client._default_transport", Transport)
     return requests
@@ -75,17 +96,26 @@ def gateway(monkeypatch):
 
         def list_connectors(self, *, timeout=None):
             lists.append(1)
-            return [{"connector": "notion", "enabled": True, "connected": lists.connected}]
+            return [
+                {"connector": "notion", "enabled": True, "connected": lists.connected}
+            ]
 
         def connections(self, names, **_):
-            return {"results": [{"connector": name, "status": "active", "connection_id": "c1"} for name in names]}
+            return {
+                "results": [
+                    {"connector": name, "status": "active", "connection_id": "c1"}
+                    for name in names
+                ]
+            }
 
     monkeypatch.setattr("tools.connectors.gateway.client.ConnectorClient", Gateway)
     return lists
 
 
 def _call(method: str, params: dict | None = None) -> dict:
-    return srv.handle_request({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})
+    return srv.handle_request(
+        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
+    )
 
 
 def _result(method: str, params: dict | None = None) -> dict:
@@ -94,9 +124,13 @@ def _result(method: str, params: dict | None = None) -> dict:
     return response["result"]
 
 
-def test_opening_the_page_creates_no_identity_and_reads_the_public_catalog(portal, connector_portal, gateway):
+def test_opening_the_page_creates_no_identity_and_reads_the_public_catalog(
+    portal, connector_portal, gateway
+):
     assert _result("connectors.list", ACCOUNT) == {"available": True, "connectors": []}
-    assert [row["slug"] for row in _result("connectors.catalog")["connectors"]] == ["notion"]
+    assert [row["slug"] for row in _result("connectors.catalog")["connectors"]] == [
+        "notion"
+    ]
     assert _result("connectors.accounts") == {"accounts": []}
     assert _call("connectors.policy.get")["error"]["code"] == 4032
 
@@ -104,8 +138,27 @@ def test_opening_the_page_creates_no_identity_and_reads_the_public_catalog(porta
     assert portal.creates() == 0 and gateway == []
 
 
+def test_without_the_opt_in_connectors_are_unavailable_and_nothing_is_created(
+    byok_portal, gateway
+):
+    from tools.connectors.gateway.config import connectors_available
+
+    assert _result("connectors.list", ACCOUNT) == {"available": False, "connectors": []}
+    assert connectors_available() is False
+    assert (
+        _call("connectors.connect", {**ACCOUNT, "connectors": ["notion"]})["error"][
+            "code"
+        ]
+        == 4031
+    )
+
+    assert byok_portal.calls == [] and gateway == []
+
+
 @pytest.mark.parametrize("entry", ["cli", "agent"])
-def test_explicit_lists_still_create_one_identity_and_list_from_the_gateway(portal, gateway, entry):
+def test_explicit_lists_still_create_one_identity_and_list_from_the_gateway(
+    portal, gateway, entry
+):
     from clawk_cli.connectors_cmd import cmd_connectors
     from tools.connectors.gateway.config import connectors_available
     from tools.connectors.tool import manage_connections
@@ -113,22 +166,31 @@ def test_explicit_lists_still_create_one_identity_and_list_from_the_gateway(port
     if entry == "cli":
         assert cmd_connectors(Namespace(connectors_action="list")) == 0
     else:
-        result = json.loads(manage_connections({"action": "status"}, connectors_available=connectors_available))
+        result = json.loads(
+            manage_connections(
+                {"action": "status"}, connectors_available=connectors_available
+            )
+        )
         assert result["connectors"][0]["connector"] == "notion"
 
     assert portal.creates() == 1 and gateway == [1]
 
 
 def test_first_connect_creates_one_identity_then_the_page_reads_signed_in(
-        portal, connector_portal, gateway, monkeypatch):
+    portal, connector_portal, gateway, monkeypatch
+):
     monkeypatch.setattr(free_tier_offer, "_clock", lambda: 1_000_000.0)
 
     _result("connectors.connect", {**ACCOUNT, "connectors": ["notion"]})
 
-    assert wait_until(lambda: "connector_nudge_due_in" in _result("free_tier.status"), timeout=5)
+    assert wait_until(
+        lambda: "connector_nudge_due_in" in _result("free_tier.status"), timeout=5
+    )
     status = _result("free_tier.status")
     assert status["connector_nudge_due_in"] == free_tier_offer.OFFER_DELAY_S
-    assert "nudge_due_in" not in status and status["has_guest"] and not status["available"]
+    assert (
+        "nudge_due_in" not in status and status["has_guest"] and not status["available"]
+    )
 
     assert _result("connectors.list", ACCOUNT)["connectors"][0]["connector"] == "notion"
     _result("connectors.catalog")
@@ -136,7 +198,9 @@ def test_first_connect_creates_one_identity_then_the_page_reads_signed_in(
     assert portal.creates() == 1
 
 
-def test_a_connect_by_link_seen_by_a_status_read_arms_the_connector_offer(portal, gateway, monkeypatch):
+def test_a_connect_by_link_seen_by_a_status_read_arms_the_connector_offer(
+    portal, gateway, monkeypatch
+):
     """Messaging and one-shot runs connect by link and check with status; no operation watcher runs."""
     from tools.connectors.gateway.config import connectors_available
     from tools.connectors.tool import manage_connections
@@ -145,13 +209,20 @@ def test_a_connect_by_link_seen_by_a_status_read_arms_the_connector_offer(portal
     gateway.connected = True
 
     for _ in range(2):
-        manage_connections({"action": "status"}, connectors_available=connectors_available)
+        manage_connections(
+            {"action": "status"}, connectors_available=connectors_available
+        )
 
-    assert free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR) == free_tier_offer.OFFER_DELAY_S
+    assert (
+        free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR)
+        == free_tier_offer.OFFER_DELAY_S
+    )
     assert portal.creates() == 1
 
 
-def test_the_page_list_arms_the_offer_for_apps_a_guest_connected_on_an_older_clawk(portal, gateway, monkeypatch):
+def test_the_page_list_arms_the_offer_for_apps_a_guest_connected_on_an_older_clawk(
+    portal, gateway, monkeypatch
+):
     """The guest exists without the connected-app flag (an older Clawksis connected its apps); the
     first page read that lists one connected must still arm the connector offer."""
     from tools.connectors import ensure_guest_identity
@@ -162,11 +233,16 @@ def test_the_page_list_arms_the_offer_for_apps_a_guest_connected_on_an_older_cla
 
     assert _result("connectors.list", ACCOUNT)["connectors"][0]["connected"] is True
 
-    assert free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR) == free_tier_offer.OFFER_DELAY_S
+    assert (
+        free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR)
+        == free_tier_offer.OFFER_DELAY_S
+    )
     assert portal.creates() == 1
 
 
-def test_a_failed_offer_write_is_retried_on_the_next_sighting(portal, gateway, monkeypatch):
+def test_a_failed_offer_write_is_retried_on_the_next_sighting(
+    portal, gateway, monkeypatch
+):
     """The flag that ends the sightings is written only once the offer's schedule is, so a failed
     schedule write leaves the next list read to try again."""
     from tools.connectors import ensure_guest_identity
@@ -185,4 +261,7 @@ def test_a_failed_offer_write_is_retried_on_the_next_sighting(portal, gateway, m
     assert free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR) is None
 
     _result("connectors.list", ACCOUNT)
-    assert free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR) == free_tier_offer.OFFER_DELAY_S
+    assert (
+        free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR)
+        == free_tier_offer.OFFER_DELAY_S
+    )

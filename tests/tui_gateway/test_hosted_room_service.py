@@ -308,7 +308,9 @@ def _server():
     return SimpleNamespace(_methods={}, _sessions={}, _sessions_lock=threading.Lock())
 
 
-def _wait_for(predicate, timeout=2.0):
+def _wait_for(predicate, timeout=10.0):
+    # Every caller waits for something that does happen; a generous bound costs a passing run
+    # nothing and keeps a loaded runner (full suite, parallel files) from timing out at 2s.
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():

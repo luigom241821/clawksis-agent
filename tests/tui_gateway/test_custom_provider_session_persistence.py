@@ -79,7 +79,6 @@ class TestRuntimeModelConfigPersistsEntryIdentity:
         # never from the session DB.
         assert "api_key" not in config
 
-
     def test_keeps_bare_custom_when_no_entry_matches(self, monkeypatch):
         monkeypatch.setattr(rp, "load_config", dict)
 
@@ -178,7 +177,10 @@ class TestMakeAgentForwardsProviderRequestBody:
     (``user``) 400s in the app while ``clawk chat`` works."""
 
     def test_entry_extra_body_reaches_agent(self, monkeypatch):
-        entry = {**LEGACY_LIST_CONFIG["custom_providers"][0], "extra_body": {"user": "proxy-user"}}
+        entry = {
+            **LEGACY_LIST_CONFIG["custom_providers"][0],
+            "extra_body": {"user": "proxy-user"},
+        }
         config = {"custom_providers": [entry]}
         override = {"model": "mimo-v2.5-pro", "provider": "custom:mimo-v2.5-pro"}
 
@@ -230,11 +232,7 @@ class TestBareCustomNoBaseUrlHealsFromConfig:
         monkeypatch.setattr(rp, "_get_model_config", lambda: NAMED_CONFIG["model"])
 
         # No base_url to reverse-lookup → must fall back to config.model.provider.
-        assert (
-            rp.canonical_custom_identity(base_url=None)
-            == "custom:mimo-v2.5-pro"
-        )
-
+        assert rp.canonical_custom_identity(base_url=None) == "custom:mimo-v2.5-pro"
 
     def test_persist_recovers_entry_when_agent_has_no_base_url(self, monkeypatch):
         monkeypatch.setattr(rp, "load_config", lambda: NAMED_CONFIG)
@@ -266,7 +264,6 @@ class TestBareCustomNoBaseUrlHealsFromConfig:
 
         assert overrides["provider_override"] == "custom:mimo-v2.5-pro"
         assert overrides["model_override"]["provider"] == "custom:mimo-v2.5-pro"
-
 
     def test_make_agent_heals_bare_custom_no_base_url_end_to_end(self, monkeypatch):
         """The exact failing path: stored override has bare custom + no
@@ -485,9 +482,7 @@ class TestOverridesHaveRoutableProvider:
             is False
         )
         assert (
-            _overrides_have_routable_provider(
-                {"model_override": {"provider": None}}
-            )
+            _overrides_have_routable_provider({"model_override": {"provider": None}})
             is False
         )
         assert _overrides_have_routable_provider({}) is False
@@ -520,7 +515,11 @@ class TestRoomPlumbingRuntimeOverrides:
             "model": "openai/gpt-5.6-luna-pro",
             "billing_provider": "nous",
             "model_config": json.dumps(
-                {"model": "openai/gpt-5.6-luna-pro", "provider": "nous", "room_plumbing": True}
+                {
+                    "model": "openai/gpt-5.6-luna-pro",
+                    "provider": "nous",
+                    "room_plumbing": True,
+                }
             ),
         }
         assert _stored_session_runtime_overrides(row) == {}
@@ -530,7 +529,11 @@ class TestRoomPlumbingRuntimeOverrides:
 
         row = {
             "model": "openai/gpt-5.6-luna-pro",
-            "model_config": {"model": "openai/gpt-5.6-luna-pro", "provider": "nous", "room_plumbing": True},
+            "model_config": {
+                "model": "openai/gpt-5.6-luna-pro",
+                "provider": "nous",
+                "room_plumbing": True,
+            },
         }
         assert _stored_session_runtime_overrides(row) == {}
 
@@ -544,7 +547,9 @@ class TestRoomPlumbingRuntimeOverrides:
             "hidden": 1,
             "model": "openai/gpt-5.6-luna-pro",
             "billing_provider": "nous",
-            "model_config": json.dumps({"model": "openai/gpt-5.6-luna-pro", "provider": "nous"}),
+            "model_config": json.dumps(
+                {"model": "openai/gpt-5.6-luna-pro", "provider": "nous"}
+            ),
         }
         assert _stored_session_runtime_overrides(row) == {}
 
@@ -559,7 +564,11 @@ class TestRoomPlumbingRuntimeOverrides:
             "model": "glm-5.1",
             "billing_provider": "ollama-cloud",
             "model_config": json.dumps(
-                {"model": "glm-5.1", "provider": "ollama-cloud", "service_tier": "normal"}
+                {
+                    "model": "glm-5.1",
+                    "provider": "ollama-cloud",
+                    "service_tier": "normal",
+                }
             ),
         }
         overrides = _stored_session_runtime_overrides(row)
@@ -576,7 +585,9 @@ class TestRoomPlumbingRuntimeOverrides:
             "hidden": 1,
             "model": "glm-5.1",
             "billing_provider": "ollama-cloud",
-            "model_config": json.dumps({"model": "glm-5.1", "provider": "ollama-cloud"}),
+            "model_config": json.dumps(
+                {"model": "glm-5.1", "provider": "ollama-cloud"}
+            ),
         }
         overrides = _stored_session_runtime_overrides(row)
         assert overrides["model_override"]["model"] == "glm-5.1"
@@ -590,7 +601,9 @@ class TestRoomPlumbingRuntimeOverrides:
 
 
 class TestFollowProfileConfigRuntimeOverrides:
-    def test_composer_pick_on_bot_chat_survives_resume_until_profile_model_changes(self, monkeypatch, tmp_path):
+    def test_composer_pick_on_bot_chat_survives_resume_until_profile_model_changes(
+        self, monkeypatch, tmp_path
+    ):
         """Production path, A->B->A shape: a composer /model pick on a follow_profile_config Bot Chat under
         profile B persists its provenance marker into B's real SessionDB row via ``_apply_model_switch``;
         ``session.resume`` on the deferred (cold, agent-less) path restores the pin while B's config.yaml
@@ -601,17 +614,33 @@ class TestFollowProfileConfigRuntimeOverrides:
         launch, secondary = tmp_path / "a", tmp_path / "b"
         for home, model in ((launch, "launch/model"), (secondary, "profile/default")):
             home.mkdir()
-            (home / "config.yaml").write_text(f"model:\n  default: {model}\n  provider: nous\n", encoding="utf-8")
+            (home / "config.yaml").write_text(
+                f"model:\n  default: {model}\n  provider: nous\n", encoding="utf-8"
+            )
             (home / ".env").write_text("", encoding="utf-8")
         stored = "20260919-000000-botc"
         db = SessionDB(db_path=secondary / "state.db")
-        db.create_session(stored, "desktop", model="profile/default",
-                          model_config={"model": "profile/default", "provider": "nous", "follow_profile_config": True})
+        db.create_session(
+            stored,
+            "desktop",
+            model="profile/default",
+            model_config={
+                "model": "profile/default",
+                "provider": "nous",
+                "follow_profile_config": True,
+            },
+        )
         db.append_message(stored, "user", "hi")
         db.append_message(stored, "assistant", "hello")
 
         class _FakeAgent:
-            model, provider, base_url, api_key, api_mode = "profile/default", "nous", "", "", ""
+            model, provider, base_url, api_key, api_mode = (
+                "profile/default",
+                "nous",
+                "",
+                "",
+                "",
+            )
             _session_db = db
 
             def switch_model(self, **kw):
@@ -619,36 +648,74 @@ class TestFollowProfileConfigRuntimeOverrides:
 
         monkeypatch.setenv("CLAWK_HOME", str(launch))
         monkeypatch.setattr(server, "_clawk_home", str(launch))
-        monkeypatch.setattr(server, "_profile_home", lambda p: secondary if p == "b" else None)
-        monkeypatch.setattr(server, "_get_db", lambda: SessionDB(db_path=launch / "state.db"))
+        monkeypatch.setattr(
+            server, "_profile_home", lambda p: secondary if p == "b" else None
+        )
+        monkeypatch.setattr(
+            server, "_get_db", lambda: SessionDB(db_path=launch / "state.db")
+        )
         monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
         monkeypatch.setattr(server, "_schedule_resume_hydration", lambda *a, **k: None)
-        monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **k: None)
-        monkeypatch.setattr(server, "_default_session_cwd", lambda *a, **k: str(tmp_path))
+        monkeypatch.setattr(
+            server, "_schedule_session_cap_enforcement", lambda *a, **k: None
+        )
+        monkeypatch.setattr(
+            server, "_default_session_cwd", lambda *a, **k: str(tmp_path)
+        )
         monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
         monkeypatch.setattr(server, "_restart_slash_worker", lambda *a, **k: None)
         monkeypatch.setattr(server, "_session_info", lambda *a, **k: {})
-        live = {"agent": _FakeAgent(), "session_key": stored, "model_override": None,
-                "follow_profile_config": True, "profile_home": str(secondary)}
-        result = types.SimpleNamespace(success=True, error_message="", new_model="zai/glm-5.1", target_provider="zai", api_key="k", base_url="",
-                                       api_mode="", warning_message="", runtime_capabilities=None)
+        live = {
+            "agent": _FakeAgent(),
+            "session_key": stored,
+            "model_override": None,
+            "follow_profile_config": True,
+            "profile_home": str(secondary),
+        }
+        result = types.SimpleNamespace(
+            success=True,
+            error_message="",
+            new_model="zai/glm-5.1",
+            target_provider="zai",
+            api_key="k",
+            base_url="",
+            api_mode="",
+            warning_message="",
+            runtime_capabilities=None,
+        )
         known = set(server._sessions)
         try:
             with (
-                patch("clawk_cli.model_switch.resolve_persist_behavior", return_value=False),
+                patch(
+                    "clawk_cli.model_switch.resolve_persist_behavior",
+                    return_value=False,
+                ),
                 patch("clawk_cli.model_switch.switch_model", return_value=result),
                 server._profile_build_scope(secondary),
             ):
                 server._apply_model_switch("sid-live", live, "glm-5.1")
 
             row = json.loads(db.get_session(stored)["model_config"])
-            assert row["composer_override_profile"] == {"model": "profile/default", "provider": "nous"}
+            assert row["composer_override_profile"] == {
+                "model": "profile/default",
+                "provider": "nous",
+            }
             assert row["model"] == "zai/glm-5.1"
 
             def resume():
-                resp = server.handle_request({"id": "1", "method": "session.resume", "params": {
-                    "session_id": stored, "source": "desktop", "profile": "b",
-                    "defer_history": True, "omit_messages": True}})
+                resp = server.handle_request(
+                    {
+                        "id": "1",
+                        "method": "session.resume",
+                        "params": {
+                            "session_id": stored,
+                            "source": "desktop",
+                            "profile": "b",
+                            "defer_history": True,
+                            "omit_messages": True,
+                        },
+                    }
+                )
                 assert "error" not in resp, resp
                 # Pop the live record so the next resume rebuilds from the stored row instead of reusing it.
                 with server._sessions_lock:
@@ -656,9 +723,15 @@ class TestFollowProfileConfigRuntimeOverrides:
 
             record = resume()
             assert record["model_override"]["model"] == "zai/glm-5.1"
-            assert record["composer_override_profile"] == {"model": "profile/default", "provider": "nous"}
+            assert record["composer_override_profile"] == {
+                "model": "profile/default",
+                "provider": "nous",
+            }
 
-            (secondary / "config.yaml").write_text("model:\n  default: profile/new-default\n  provider: nous\n", encoding="utf-8")
+            (secondary / "config.yaml").write_text(
+                "model:\n  default: profile/new-default\n  provider: nous\n",
+                encoding="utf-8",
+            )
             assert resume().get("model_override") is None
         finally:
             db.close()
@@ -666,7 +739,9 @@ class TestFollowProfileConfigRuntimeOverrides:
                 for sid in [s for s in server._sessions if s not in known]:
                     server._sessions.pop(sid, None)
 
-    def test_create_time_composer_pick_on_bot_chat_records_owning_profile_marker(self, monkeypatch, tmp_path):
+    def test_create_time_composer_pick_on_bot_chat_records_owning_profile_marker(
+        self, monkeypatch, tmp_path
+    ):
         """A composer pick handed to ``session.create`` on a follow_profile_config chat is the same
         chat-scoped pick a mid-chat switch records: the record carries the OWNING profile's model as the
         divergence marker (not the launch profile's), the first row write persists it, and the resume read
@@ -676,23 +751,45 @@ class TestFollowProfileConfigRuntimeOverrides:
         launch, secondary = tmp_path / "a", tmp_path / "b"
         for home, model in ((launch, "launch/model"), (secondary, "profile/default")):
             home.mkdir()
-            (home / "config.yaml").write_text(f"model:\n  default: {model}\n  provider: nous\n")
+            (home / "config.yaml").write_text(
+                f"model:\n  default: {model}\n  provider: nous\n"
+            )
             (home / ".env").write_text("")
         monkeypatch.setenv("CLAWK_HOME", str(launch))
         monkeypatch.setattr(server, "_clawk_home", str(launch))
-        monkeypatch.setattr(server, "_profile_home", lambda p: secondary if p == "b" else None)
+        monkeypatch.setattr(
+            server, "_profile_home", lambda p: secondary if p == "b" else None
+        )
         monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
         monkeypatch.setattr(server, "_schedule_agent_build", lambda *a, **k: None)
-        monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **k: None)
-        monkeypatch.setattr(server, "_default_session_cwd", lambda *a, **k: str(tmp_path))
+        monkeypatch.setattr(
+            server, "_schedule_session_cap_enforcement", lambda *a, **k: None
+        )
+        monkeypatch.setattr(
+            server, "_default_session_cwd", lambda *a, **k: str(tmp_path)
+        )
         known = set(server._sessions)
         try:
-            resp = server.handle_request({"id": "1", "method": "session.create", "params": {
-                "cols": 80, "source": "desktop", "profile": "b", "model": "zai/glm-5.1", "provider": "zai",
-                "follow_profile_config": True}})
+            resp = server.handle_request(
+                {
+                    "id": "1",
+                    "method": "session.create",
+                    "params": {
+                        "cols": 80,
+                        "source": "desktop",
+                        "profile": "b",
+                        "model": "zai/glm-5.1",
+                        "provider": "zai",
+                        "follow_profile_config": True,
+                    },
+                }
+            )
             assert "error" not in resp, resp
             session = server._sessions[resp["result"]["session_id"]]
-            assert session["composer_override_profile"] == {"model": "profile/default", "provider": "nous"}
+            assert session["composer_override_profile"] == {
+                "model": "profile/default",
+                "provider": "nous",
+            }
             assert server._ensure_session_db_row(session)
             db = SessionDB(db_path=secondary / "state.db")
             try:
@@ -700,18 +797,24 @@ class TestFollowProfileConfigRuntimeOverrides:
             finally:
                 db.close()
             with server._profile_build_scope(secondary):
-                restored = server._stored_session_runtime_overrides(row)["model_override"]
+                restored = server._stored_session_runtime_overrides(row)[
+                    "model_override"
+                ]
             assert (restored["model"], restored["provider"]) == ("zai/glm-5.1", "zai")
         finally:
             with server._sessions_lock:
                 for sid in [s for s in server._sessions if s not in known]:
                     server._sessions.pop(sid, None)
 
-    def test_profile_model_change_supersedes_composer_override_on_resume_and_live(self, monkeypatch):
+    def test_profile_model_change_supersedes_composer_override_on_resume_and_live(
+        self, monkeypatch
+    ):
         """Changing the Bot profile invalidates both stored and live chat pins."""
         from tui_gateway import server
 
-        monkeypatch.setattr(server, "_config_model_target", lambda: ("profile/new-default", "nous"))
+        monkeypatch.setattr(
+            server, "_config_model_target", lambda: ("profile/new-default", "nous")
+        )
         row = {
             "title": "Bot Chat",
             "model": "openai/gpt-5.6-luna-pro",
@@ -720,16 +823,24 @@ class TestFollowProfileConfigRuntimeOverrides:
                     "model": "openai/gpt-5.6-luna-pro",
                     "provider": "nous",
                     "follow_profile_config": True,
-                    "composer_override_profile": {"model": "profile/old-default", "provider": "nous"},
+                    "composer_override_profile": {
+                        "model": "profile/old-default",
+                        "provider": "nous",
+                    },
                 }
             ),
         }
         assert server._stored_session_runtime_overrides(row) == {}
 
         session = {
-            "agent": types.SimpleNamespace(model="openai/gpt-5.6-luna-pro", provider="nous"),
+            "agent": types.SimpleNamespace(
+                model="openai/gpt-5.6-luna-pro", provider="nous"
+            ),
             "model_override": {"model": "openai/gpt-5.6-luna-pro", "provider": "nous"},
-            "composer_override_profile": {"model": "profile/old-default", "provider": "nous"},
+            "composer_override_profile": {
+                "model": "profile/old-default",
+                "provider": "nous",
+            },
             "config_model_seen": ("profile/old-default", "nous"),
         }
         apply_switch = MagicMock()
@@ -740,8 +851,12 @@ class TestFollowProfileConfigRuntimeOverrides:
         assert "model_override" not in session
         assert session["composer_override_profile"] is None
         apply_switch.assert_called_once_with(
-            "sid", session, "profile/new-default --provider nous",
-            confirm_expensive_model=True, pin_session_override=False, persist_override=False,
+            "sid",
+            session,
+            "profile/new-default --provider nous",
+            confirm_expensive_model=True,
+            pin_session_override=False,
+            persist_override=False,
             count_switch=False,
         )
 
@@ -763,8 +878,6 @@ class TestFollowProfileConfigRuntimeOverrides:
             ),
         }
         assert _stored_session_runtime_overrides(row) == {}
-
-
 
     def test_legacy_bot_chat_title_backfills_contract(self):
         """Canonical Bot Chats created BEFORE the marker existed carry no
@@ -821,12 +934,18 @@ class TestFollowProfileConfigRuntimeOverrides:
             "session_key": "key-1",
             "model_override": {"model": "glm-5.1", "provider": "ollama-cloud"},
             "follow_profile_config": True,
-            "composer_override_profile": {"model": "profile/default", "provider": "nous"},
+            "composer_override_profile": {
+                "model": "profile/default",
+                "provider": "nous",
+            },
         }
         server._ensure_session_db_row(session)
         assert captured["model_config"].get("follow_profile_config") is True
         # A pick made before the first send rides the same first-write projection as the marker.
-        assert captured["model_config"].get("composer_override_profile") == {"model": "profile/default", "provider": "nous"}
+        assert captured["model_config"].get("composer_override_profile") == {
+            "model": "profile/default",
+            "provider": "nous",
+        }
 
     def test_ensure_db_row_omits_marker_without_contract(self, monkeypatch):
         """Sessions without the contract do NOT get the marker — normal chats
@@ -935,19 +1054,20 @@ class TestRuntimeModelConfigDropsStaleKeys:
             "base_url": "https://api.venice.ai/api/v1",
         }
         config = _runtime_model_config(_agent_like(), existing)
+        # A routable BYOK provider: Clawksis removed Nous Portal as a provider, so "nous" would not
+        # resolve and the billing fallback would (correctly) drop it.
         row = {
             "model": "deepseek/deepseek-v4-flash-0731",
             "model_config": json.dumps(config),
-            "billing_provider": "nous",
+            "billing_provider": "openrouter",
         }
         overrides = _stored_session_runtime_overrides(row)
 
         assert overrides["model_override"]["model"] == "deepseek/deepseek-v4-flash-0731"
         # The stale endpoint identity is gone; resume routes through the
         # billing fallback to the profile's real provider.
-        assert overrides["model_override"]["provider"] == "nous"
-        assert overrides["provider_override"] == "nous"
-
+        assert overrides["model_override"]["provider"] == "openrouter"
+        assert overrides["provider_override"] == "openrouter"
 
     def test_existing_none_returns_only_agent_identity(self):
         """First write (no existing row): the merge starts from an empty dict
@@ -957,6 +1077,7 @@ class TestRuntimeModelConfigDropsStaleKeys:
 
         config = _runtime_model_config(_agent_like(provider="nous"), None)
 
-        assert config == {"model": "deepseek/deepseek-v4-flash-0731", "provider": "nous"}
-
-
+        assert config == {
+            "model": "deepseek/deepseek-v4-flash-0731",
+            "provider": "nous",
+        }
